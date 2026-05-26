@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}PresentAI — Upload Your Presentation{% endblock %}
+
+{% block nav_steps %}
+<span class="text-indigo-400 font-medium">Step 1 of 4 — Upload</span>
+{% endblock %}
+
+{% block content %}
+<div class="relative min-h-screen flex items-center justify-center overflow-hidden px-6 py-20">
+  <!-- Ambient orbs -->
+  <div class="orb w-96 h-96 bg-indigo-600/20 top-10 -left-20"></div>
+  <div class="orb w-72 h-72 bg-purple-600/15 bottom-20 right-10"></div>
+  <div class="orb w-48 h-48 bg-blue-600/10 top-1/2 left-1/2 -translate-x-1/2"></div>
+
+  <div class="relative z-10 w-full max-w-2xl animate-fade-in">
+    <!-- Hero -->
+    <div class="text-center mb-12">
+      <div class="inline-flex items-center gap-2 text-xs font-mono text-indigo-400 bg-indigo-950/60 border border-indigo-800/50 px-3 py-1.5 rounded-full mb-6">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+        AI-Powered Presentation Coach · For International Students
+      </div>
+      <h1 class="text-5xl font-bold mb-4 leading-tight">
+        <span class="text-white">Master Your</span><br/>
+        <span class="text-gradient">Presentation Skills</span>
+      </h1>
+      <p class="text-gray-400 text-lg max-w-lg mx-auto leading-relaxed">
+        Upload your slides and practice with an AI examiner that adapts to your audience —
+        professor, classmates, or venture capitalist.
+      </p>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="glass rounded-2xl p-8 mb-6">
+      <div id="dropzone"
+           class="relative border-2 border-dashed border-indigo-700/50 rounded-xl p-12
+                  flex flex-col items-center justify-center gap-4 cursor-pointer
+                  transition-all duration-300 hover:border-indigo-500 hover:bg-indigo-950/20
+                  group"
+           onclick="document.getElementById('fileInput').click()">
+
+        <!-- Upload icon -->
+        <div class="w-16 h-16 rounded-2xl bg-indigo-950/80 border border-indigo-700/40
+                    flex items-center justify-center group-hover:scale-105 transition-transform">
+          <svg class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+        </div>
+
+        <div class="text-center">
+          <p class="text-white font-semibold text-lg mb-1">Drop your presentation here</p>
+          <p class="text-gray-500 text-sm">PDF, PPT, or PPTX · Max 50 MB</p>
+        </div>
+
+        <div class="flex items-center gap-2 text-xs text-gray-600">
+          <div class="h-px w-12 bg-gray-800"></div>
+          or click to browse
+          <div class="h-px w-12 bg-gray-800"></div>
+        </div>
+
+        <input id="fileInput" type="file" accept=".pdf,.ppt,.pptx" class="hidden" />
+
+        <!-- Drag overlay -->
+        <div id="dragOverlay"
+             class="hidden absolute inset-0 rounded-xl bg-indigo-600/10 border-2
+                    border-indigo-400 flex items-center justify-center">
+          <p class="text-indigo-300 font-semibold text-lg">Release to upload</p>
+        </div>
+      </div>
+
+      <!-- File selected state -->
+      <div id="fileSelected" class="hidden mt-4 flex items-center gap-3 bg-indigo-950/40
+            border border-indigo-800/40 rounded-xl px-4 py-3">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600/30 flex items-center justify-center flex-shrink-0">
+          <svg class="w-4 h-4 text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="fileName" class="text-white text-sm font-medium truncate"></p>
+          <p id="fileSize" class="text-gray-500 text-xs"></p>
+        </div>
+        <button onclick="clearFile()" class="text-gray-600 hover:text-gray-400 transition-colors">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Upload Button -->
+    <button id="uploadBtn" onclick="uploadFile()"
+            class="w-full btn-primary text-white font-semibold py-4 rounded-xl text-base
+                   flex items-center justify-center gap-3 disabled:opacity-40
+                   disabled:cursor-not-allowed disabled:transform-none" disabled>
+      <span id="uploadBtnText">Select a file to continue</span>
+      <svg id="uploadArrow" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+      </svg>
+      <svg id="uploadSpinner" class="hidden w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+      </svg>
+    </button>
+
+    <!-- Error message -->
+    <div id="errorMsg" class="hidden mt-4 text-red-400 text-sm text-center bg-red-950/30
+          border border-red-900/50 rounded-xl px-4 py-3"></div>
+
+    <!-- Feature pills -->
+    <div class="flex flex-wrap justify-center gap-3 mt-8">
+      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">
+        🎯 3 Audience Personas
+      </span>
+      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">
+        ⚡ Real-time Interruptions
+      </span>
+      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">
+        📊 Dual Quality Analysis
+      </span>
+      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">
+        🗺️ Custom Training Plan
+      </span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileSelected = document.getElementById('fileSelected');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const dragOverlay = document.getElementById('dragOverlay');
+
+  let selectedFile = null;
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) setFile(e.target.files[0]);
+  });
+
+  dropzone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dragOverlay.classList.remove('hidden');
+  });
+  dropzone.addEventListener('dragleave', () => dragOverlay.classList.add('hidden'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dragOverlay.classList.add('hidden');
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+
+  function setFile(f) {
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (!['pdf','ppt','pptx'].includes(ext)) {
+      showError('Invalid file type. Please upload PDF, PPT, or PPTX.');
+      return;
+    }
+    selectedFile = f;
+    document.getElementById('fileName').textContent = f.name;
+    document.getElementById('fileSize').textContent = formatSize(f.size);
+    fileSelected.classList.remove('hidden');
+    uploadBtn.disabled = false;
+    document.getElementById('uploadBtnText').textContent = 'Upload & Analyze Presentation';
+    hideError();
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileSelected.classList.add('hidden');
+    uploadBtn.disabled = true;
+    document.getElementById('uploadBtnText').textContent = 'Select a file to continue';
+  }
+
+  async function uploadFile() {
+    if (!selectedFile) return;
+    const btn = uploadBtn;
+    btn.disabled = true;
+    document.getElementById('uploadBtnText').textContent = 'Analyzing presentation...';
+    document.getElementById('uploadArrow').classList.add('hidden');
+    document.getElementById('uploadSpinner').classList.remove('hidden');
+    hideError();
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || 'Upload failed. Please try again.'); reset(); return; }
+      window.location.href = '/config';
+    } catch (err) {
+      showError('Network error. Please try again.');
+      reset();
+    }
+  }
+
+  function reset() {
+    uploadBtn.disabled = false;
+    document.getElementById('uploadBtnText').textContent = 'Upload & Analyze Presentation';
+    document.getElementById('uploadArrow').classList.remove('hidden');
+    document.getElementById('uploadSpinner').classList.add('hidden');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function hideError() { document.getElementById('errorMsg').classList.add('hidden'); }
+  function formatSize(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    return (b/1024/1024).toFixed(1) + ' MB';
+  }
+</script>
+{% endblock %}

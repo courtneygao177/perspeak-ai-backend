@@ -1,0 +1,521 @@
+{% extends "base.html" %}
+{% block title %}PresentAI — Rehearsal Sandbox{% endblock %}
+
+{% block head %}
+<style>
+  .slide-panel {
+    background: linear-gradient(135deg, #12121f, #1a1a2e);
+    border: 1px solid rgba(99,102,241,0.2);
+  }
+  .alarm-overlay {
+    background: rgba(153, 27, 27, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    animation: alarmPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes alarmPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50%       { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  }
+  .recording-ring {
+    animation: recordPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes recordPulse {
+    0%, 100% { transform: scale(1);   opacity: 0.8; }
+    50%       { transform: scale(1.1); opacity: 1;   }
+  }
+  #qaPanel {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+</style>
+{% endblock %}
+
+{% block nav_steps %}
+<span class="text-gray-600">Upload</span>
+<span class="text-gray-700">→</span>
+<span class="text-gray-600">Configure</span>
+<span class="text-gray-700">→</span>
+<span class="text-indigo-400 font-medium">Step 3 of 4 — Rehearsal</span>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col min-h-screen pt-2 pb-0 px-4 gap-4">
+  <!-- Config bar -->
+  <div class="flex items-center justify-between px-2 py-1">
+    <div class="flex items-center gap-3 text-xs text-gray-500">
+      <span class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+        <span id="configAudience" class="text-gray-400 font-medium">{{ config.audience }}</span>
+      </span>
+      <span class="text-gray-700">·</span>
+      <span id="configScenario" class="text-gray-400">{{ config.scenario }}</span>
+      <span class="text-gray-700">·</span>
+      <span id="configDifficulty"
+            class="{% if config.difficulty == 'Hard' %}text-red-400{% elif config.difficulty == 'Medium' %}text-yellow-400{% else %}text-green-400{% endif %}">
+        {{ config.difficulty }}
+      </span>
+    </div>
+    <div class="flex items-center gap-3 text-xs font-mono">
+      <span class="text-gray-600">Slide</span>
+      <span id="pageIndicator"
+            class="text-indigo-400 font-bold bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-800/40">
+        {{ state.current_page }} / {{ total_pages }}
+      </span>
+      <span class="text-gray-600">Interruptions:</span>
+      <span id="interruptCount"
+            class="text-orange-400 font-bold bg-orange-950/30 px-2 py-0.5 rounded border border-orange-800/30">
+        {{ state.total_interruptions }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Main layout: PPT left | Controls right -->
+  <div class="flex gap-4 flex-1" style="min-height: calc(100vh - 160px);">
+    <!-- LEFT: Slide display -->
+    <div class="flex-1 flex flex-col gap-3">
+      <div id="slidePanel" class="slide-panel rounded-2xl flex-1 flex flex-col p-8 relative overflow-hidden">
+        <!-- Slide number badge -->
+        <div class="absolute top-4 left-4 flex items-center gap-2">
+          <span class="font-mono text-xs text-indigo-400 bg-indigo-950/60 px-2 py-1
+                       rounded-lg border border-indigo-800/30">
+            SLIDE <span id="slideNum">{{ state.current_page }}</span>
+          </span>
+        </div>
+
+        <!-- Slide content -->
+        <div class="flex-1 flex flex-col justify-center items-center text-center px-8 py-12">
+          <div class="w-12 h-px bg-indigo-600/40 mb-6"></div>
+          <h2 id="slideTitle"
+              class="text-3xl font-bold text-white mb-6 leading-tight">
+            {{ current_slide.title }}
+          </h2>
+          <p id="slideContent"
+             class="text-gray-400 text-base leading-relaxed max-w-lg">
+            {{ current_slide.content }}
+          </p>
+          <div class="w-12 h-px bg-indigo-600/40 mt-6"></div>
+        </div>
+
+        <!-- Progress dots -->
+        <div class="flex justify-center gap-2">
+          {% for slide in slides %}
+          <div class="slide-dot w-2 h-2 rounded-full transition-all duration-300
+                      {% if slide.page == state.current_page %}bg-indigo-400 w-5{% else %}bg-gray-700{% endif %}"
+               data-page="{{ slide.page }}"></div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- QA Alert Panel (hidden by default) -->
+      <div id="qaPanel" class="hidden alarm-overlay rounded-2xl p-6">
+        <div class="flex items-start gap-4">
+          <div class="w-10 h-10 rounded-xl bg-red-900/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-red-400 font-semibold text-sm">⚡ EXAMINER CHALLENGE</span>
+              <span id="qaRoundBadge"
+                    class="text-xs bg-red-900/40 border border-red-800/40 text-red-300
+                           px-2 py-0.5 rounded-full font-mono">Round 1</span>
+            </div>
+            <p id="qaQuestion" class="text-red-100 text-base font-medium leading-relaxed mb-4"></p>
+
+            <!-- Answer input -->
+            <div class="space-y-3">
+              <textarea id="answerInput"
+                        placeholder="Type your answer here... (or use the voice button on the right)"
+                        class="w-full bg-red-950/20 border border-red-800/40 rounded-xl px-4 py-3
+                               text-white placeholder-gray-600 resize-none text-sm focus:outline-none
+                               focus:border-red-600/60 transition-colors"
+                        rows="3"></textarea>
+              <div class="flex gap-3">
+                <button onclick="submitAnswer()"
+                        class="flex-1 bg-red-600 hover:bg-red-500 text-white font-semibold
+                               py-2.5 rounded-xl text-sm transition-all flex items-center
+                               justify-center gap-2">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                  </svg>
+                  Submit Answer
+                </button>
+                <button onclick="toggleVoice()"
+                        id="voiceBtn"
+                        class="px-4 bg-red-900/40 hover:bg-red-900/60 border border-red-800/40
+                               text-red-300 rounded-xl text-sm transition-all flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                  </svg>
+                  Voice
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Controls panel -->
+    <div class="w-72 flex flex-col gap-4">
+      <!-- Recording status -->
+      <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-sm font-semibold text-white">Recording Status</span>
+          <div id="recDot" class="flex items-center gap-1.5">
+            <div class="w-2 h-2 rounded-full bg-red-500 recording-ring"></div>
+            <span class="text-xs text-red-400 font-mono">LIVE</span>
+          </div>
+        </div>
+
+        <!-- Waveform visualizer (static decorative) -->
+        <div class="flex items-end gap-0.5 h-12 mb-4 justify-center" id="waveform">
+          {% for i in range(20) %}
+          <div class="waveBar bg-indigo-600/40 rounded-full w-1.5"
+               style="height: {{ [15, 25, 35, 28, 42, 20, 32, 45, 18, 38, 22, 40, 30, 15, 35, 28, 42, 18, 32, 25][loop.index0] }}%;
+                      animation: wave {{ [0.8, 1.1, 0.6, 1.4, 0.9, 1.2, 0.7, 1.0, 1.3, 0.8, 1.1, 0.6, 1.4, 0.9, 1.2, 0.7, 1.0, 1.3, 0.8, 1.1][loop.index0] }}s ease-in-out infinite alternate;
+                      animation-delay: {{ (loop.index0 * 0.05)|round(2) }}s;">
+          </div>
+          {% endfor %}
+        </div>
+        <style>
+          @keyframes wave {
+            from { transform: scaleY(0.4); }
+            to   { transform: scaleY(1.0); }
+          }
+        </style>
+
+        <!-- Narration input -->
+        <textarea id="narrationInput"
+                  placeholder="Optionally type your slide narration notes here..."
+                  class="w-full bg-surface-700/40 border border-gray-800/40 rounded-xl px-3 py-2
+                         text-gray-300 placeholder-gray-700 resize-none text-xs focus:outline-none
+                         focus:border-indigo-600/40 transition-colors"
+                  rows="4"></textarea>
+      </div>
+
+      <!-- Slide notes -->
+      <div class="glass rounded-2xl p-5 flex-1">
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Slide Notes</h3>
+        <div id="slideNotes" class="space-y-2 text-xs text-gray-500 leading-relaxed">
+          <div class="flex items-start gap-2">
+            <span class="text-indigo-500 mt-0.5">◆</span>
+            <span>Present your main point clearly within the first 30 seconds.</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-indigo-500 mt-0.5">◆</span>
+            <span>Support each claim with specific data or evidence.</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-indigo-500 mt-0.5">◆</span>
+            <span>Pause intentionally before key statistics.</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-indigo-500 mt-0.5">◆</span>
+            <span>Maintain eye contact with your audience persona.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Session log -->
+      <div class="glass rounded-2xl p-5">
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Session Log</h3>
+        <div id="sessionLog" class="space-y-1.5 max-h-32 overflow-y-auto text-xs text-gray-600">
+          <div class="flex gap-2">
+            <span class="text-indigo-700 font-mono flex-shrink-0">00:00</span>
+            <span>Session started</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom control bar -->
+  <div class="glass-strong rounded-2xl px-6 py-4 flex items-center justify-between sticky bottom-4 mx-0 mt-2 mb-4">
+    <div class="flex items-center gap-3">
+      <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+      <span id="statusText" class="text-sm text-gray-400">Presenting slide
+        <span id="statusPage" class="text-white font-medium">{{ state.current_page }}</span>
+        of {{ total_pages }}
+      </span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button id="finishSlideBtn" onclick="finishSlide()"
+              class="btn-primary text-white font-semibold px-6 py-2.5 rounded-xl text-sm
+                     flex items-center gap-2 transition-all">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 5l7 7-7 7"/>
+        </svg>
+        Finish current slide
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- QA Finished Toast -->
+<div id="qaFinishedToast"
+     class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50
+            bg-green-900/80 border border-green-700/50 text-green-200
+            px-6 py-3 rounded-xl text-sm font-medium shadow-xl animate-slide-up">
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ── State (mirrored from server) ──────────────────────────────────────────
+  let state = {
+    current_page: {{ state.current_page }},
+    total_pages:  {{ total_pages }},
+    in_qa_mode:   {{ 'true' if state.in_qa_mode else 'false' }},
+    follow_up_round: {{ state.follow_up_round }},
+    total_interruptions: {{ state.total_interruptions }},
+  };
+
+  let slides = {{ slides | tojson }};
+  let sessionStart = Date.now();
+  let timerInterval = setInterval(updateTimer, 1000);
+
+  function updateTimer() {
+    let elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+    let m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    let s = String(elapsed % 60).padStart(2, '0');
+    // update title to show timer
+    document.title = `[${m}:${s}] PresentAI — Slide ${state.current_page}`;
+  }
+
+  // ── Finish Slide (Step 5) ─────────────────────────────────────────────────
+  async function finishSlide() {
+    const btn = document.getElementById('finishSlideBtn');
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg> Processing...`;
+
+    const narration = document.getElementById('narrationInput').value.trim();
+
+    try {
+      const res = await fetch('/api/check-slide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ narration }),
+      });
+      const data = await res.json();
+
+      if (data.action === 'INTERRUPT') {
+        // Step 5 → 6: Trigger interrupt
+        state.in_qa_mode = true;
+        state.follow_up_round = 1;
+        showQAChallenge(data.question, 1);
+        addLog(`⚡ Challenge triggered on slide ${state.current_page}`);
+        btn.innerHTML = `<span class="text-red-400">⚡ Answer the challenge first</span>`;
+
+      } else if (data.action === 'NEXT_SLIDE') {
+        // Advance to next slide
+        state.current_page = data.page;
+        updateSlideDisplay(data.slide);
+        document.getElementById('narrationInput').value = '';
+        addLog(`✓ Slide ${state.current_page - 1} complete → Slide ${state.current_page}`);
+        resetBtn();
+
+      } else if (data.action === 'PRESENTATION_DONE') {
+        // All slides done — finish
+        addLog('✓ All slides completed — generating evaluation...');
+        await finishPresentation();
+      }
+    } catch (err) {
+      console.error(err);
+      resetBtn();
+    }
+  }
+
+  // ── Submit QA Answer (Step 6) ─────────────────────────────────────────────
+  async function submitAnswer() {
+    const answer = document.getElementById('answerInput').value.trim();
+    if (!answer) return;
+
+    const submitBtn = document.querySelector('#qaPanel button');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await fetch('/api/submit-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
+      });
+      const data = await res.json();
+      document.getElementById('answerInput').value = '';
+
+      if (data.status === 'CONTINUE_QA') {
+        // Another round
+        state.follow_up_round = data.round;
+        document.getElementById('qaRoundBadge').textContent = `Round ${data.round}`;
+        document.getElementById('qaQuestion').textContent = data.next_question;
+        addLog(`↪ Follow-up round ${data.round} triggered`);
+        if (submitBtn) submitBtn.disabled = false;
+
+      } else if (data.status === 'QA_FINISHED') {
+        // QA done — unfreeze
+        state.in_qa_mode = false;
+        state.total_interruptions++;
+        document.getElementById('interruptCount').textContent = state.total_interruptions;
+        hideQAPanel();
+        showToast(data.message || '质询结束，请继续您的 Presentation。');
+        addLog(`✅ Challenge complete — continuing presentation`);
+
+        // Update to next slide
+        if (data.next_page) {
+          state.current_page = data.next_page;
+          const nextSlide = slides.find(s => s.page === data.next_page);
+          if (nextSlide) updateSlideDisplay(nextSlide);
+        }
+
+        resetBtn();
+        if (state.current_page > state.total_pages) {
+          await finishPresentation();
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  }
+
+  // ── Finish presentation (Steps 7-8) ──────────────────────────────────────
+  async function finishPresentation() {
+    addLog('🔄 Running dual evaluation engine...');
+    const btn = document.getElementById('finishSlideBtn');
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg> Generating report...`;
+
+    try {
+      const res = await fetch('/api/finish-presentation', { method: 'POST' });
+      const data = await res.json();
+      if (data.redirect) window.location.href = data.redirect;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // ── UI Helpers ────────────────────────────────────────────────────────────
+  function showQAChallenge(question, round) {
+    document.getElementById('qaQuestion').textContent = question;
+    document.getElementById('qaRoundBadge').textContent = `Round ${round}`;
+    document.getElementById('qaPanel').classList.remove('hidden');
+    document.getElementById('finishSlideBtn').disabled = true;
+    document.getElementById('finishSlideBtn').innerHTML =
+      `<span class="text-red-400 text-xs">⚡ Answer challenge to continue</span>`;
+    // Flash the slide panel border
+    const panel = document.getElementById('slidePanel');
+    panel.style.borderColor = 'rgba(239,68,68,0.5)';
+  }
+
+  function hideQAPanel() {
+    document.getElementById('qaPanel').classList.add('hidden');
+    const panel = document.getElementById('slidePanel');
+    panel.style.borderColor = '';
+  }
+
+  function updateSlideDisplay(slide) {
+    document.getElementById('slideNum').textContent = slide.page;
+    document.getElementById('slideTitle').textContent = slide.title;
+    document.getElementById('slideContent').textContent = slide.content;
+    document.getElementById('pageIndicator').textContent =
+      `${slide.page} / ${state.total_pages}`;
+    document.getElementById('statusPage').textContent = slide.page;
+    // Update dots
+    document.querySelectorAll('.slide-dot').forEach(dot => {
+      const p = parseInt(dot.dataset.page);
+      if (p === slide.page) {
+        dot.classList.add('bg-indigo-400', 'w-5');
+        dot.classList.remove('bg-gray-700', 'w-2');
+      } else {
+        dot.classList.remove('bg-indigo-400', 'w-5');
+        dot.classList.add('bg-gray-700', 'w-2');
+      }
+    });
+    // Animate slide in
+    const panel = document.getElementById('slidePanel');
+    panel.style.opacity = '0';
+    panel.style.transform = 'translateX(15px)';
+    setTimeout(() => {
+      panel.style.transition = 'all 0.35s ease';
+      panel.style.opacity = '1';
+      panel.style.transform = 'translateX(0)';
+    }, 50);
+  }
+
+  function resetBtn() {
+    const btn = document.getElementById('finishSlideBtn');
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+      Finish current slide`;
+  }
+
+  function addLog(msg) {
+    const log = document.getElementById('sessionLog');
+    const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const s = String(elapsed % 60).padStart(2, '0');
+    const entry = document.createElement('div');
+    entry.className = 'flex gap-2 animate-fade-in';
+    entry.innerHTML = `<span class="text-indigo-700 font-mono flex-shrink-0">${m}:${s}</span><span>${msg}</span>`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('qaFinishedToast');
+    toast.textContent = msg;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 4000);
+  }
+
+  // ── Voice input (Web Speech API) ─────────────────────────────────────────
+  let recognition = null;
+  let isRecording = false;
+
+  function toggleVoice() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Speech recognition not supported. Please type your answer.');
+      return;
+    }
+    if (isRecording) {
+      recognition?.stop();
+      isRecording = false;
+      document.getElementById('voiceBtn').innerHTML = `
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+        </svg> Voice`;
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = e => {
+      let transcript = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+      }
+      document.getElementById('answerInput').value = transcript;
+    };
+    recognition.start();
+    isRecording = true;
+    document.getElementById('voiceBtn').innerHTML = `
+      <span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span> Stop`;
+  }
+</script>
+{% endblock %}

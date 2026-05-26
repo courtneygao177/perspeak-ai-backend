@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}PresentAI — AI Presentation Coach{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50:  '#f0f4ff',
+              100: '#e0e9ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#1e1b4b',
+            },
+            surface: {
+              900: '#0a0a14',
+              800: '#12121f',
+              700: '#1a1a2e',
+              600: '#1e1e35',
+              500: '#252540',
+            },
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'glow': 'glow 2s ease-in-out infinite alternate',
+            'slide-up': 'slideUp 0.4s ease-out',
+            'fade-in': 'fadeIn 0.5s ease-out',
+          },
+          keyframes: {
+            glow: {
+              from: { boxShadow: '0 0 10px #6366f150' },
+              to:   { boxShadow: '0 0 25px #6366f180, 0 0 50px #6366f130' },
+            },
+            slideUp: {
+              from: { transform: 'translateY(20px)', opacity: 0 },
+              to:   { transform: 'translateY(0)',    opacity: 1 },
+            },
+            fadeIn: {
+              from: { opacity: 0 },
+              to:   { opacity: 1 },
+            },
+          },
+        },
+      },
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    body { background-color: #0a0a14; }
+    .glass {
+      background: rgba(30, 30, 53, 0.6);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+    }
+    .glass-strong {
+      background: rgba(26, 26, 46, 0.85);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+    .gradient-border {
+      background: linear-gradient(135deg, #6366f120, #818cf820) padding-box,
+                  linear-gradient(135deg, #6366f1, #818cf8) border-box;
+      border: 1px solid transparent;
+    }
+    .text-gradient {
+      background: linear-gradient(135deg, #818cf8, #c4b5fd, #f0abfc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0a14; }
+    ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      transition: all 0.2s;
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #818cf8, #6366f1);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 25px rgba(99,102,241,0.4);
+    }
+    .btn-primary:active { transform: translateY(0); }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="text-gray-100 font-sans min-h-screen grid-bg">
+
+  <!-- Top Nav -->
+  <nav class="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-indigo-900/30">
+    <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-lg btn-primary flex items-center justify-center text-sm font-bold">P</div>
+        <span class="font-semibold text-white tracking-tight">PresentAI</span>
+        <span class="text-xs text-indigo-400 font-mono bg-indigo-950/50 px-2 py-0.5 rounded-full border border-indigo-800/40">BETA</span>
+      </a>
+      <div class="flex items-center gap-6 text-sm text-gray-400">
+        {% block nav_steps %}{% endblock %}
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-14">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
