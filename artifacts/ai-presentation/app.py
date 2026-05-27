@@ -15,19 +15,37 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"pdf", "ppt", "pptx"}
 
 # ─────────────────────────────────────────────
-# ANTHROPIC CLIENT SETUP
+# OPENAI-COMPATIBLE UNIFIED API CLIENT SETUP
+# Works with any OpenAI-compatible relay/proxy (中转站)
+# Set UNIFIED_API_KEY and UNIFIED_BASE_URL in Replit Secrets
 # ─────────────────────────────────────────────
 try:
-    import anthropic as _anthropic_module
-    _anthropic_client = _anthropic_module.Anthropic(
-        api_key=os.environ.get("ANTHROPIC_API_KEY", "")
-    )
-    AI_ENABLED = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
-except Exception:
-    _anthropic_client = None
+    from openai import OpenAI as _OpenAI
+    _UNIFIED_KEY = os.environ.get("UNIFIED_API_KEY", "").strip()
+    _UNIFIED_URL = os.environ.get("UNIFIED_BASE_URL", "").strip()
+
+    # Normalise base_url: strip whitespace, then strip any trailing
+    # /chat/completions or /completions so the SDK can append correctly.
+    # e.g. "https://api.ohmygpt.com/v1/chat/completions" → "https://api.ohmygpt.com/v1"
+    if _UNIFIED_URL:
+        for _suffix in ["/chat/completions", "/completions"]:
+            if _UNIFIED_URL.rstrip("/ ").endswith(_suffix):
+                _UNIFIED_URL = _UNIFIED_URL.rstrip("/ ")[: -len(_suffix)]
+                break
+        _UNIFIED_URL = _UNIFIED_URL.rstrip("/ ")
+
+    if _UNIFIED_KEY and _UNIFIED_URL:
+        _ai_client = _OpenAI(api_key=_UNIFIED_KEY, base_url=_UNIFIED_URL)
+        AI_ENABLED = True
+    else:
+        _ai_client = None
+        AI_ENABLED = False
+except Exception as _e:
+    _ai_client = None
     AI_ENABLED = False
 
-MODEL = "claude-sonnet-4-6"
+# Model name — change this to whatever your relay supports, e.g. "gpt-4o", "claude-3-5-sonnet"
+MODEL = os.environ.get("UNIFIED_MODEL", "gpt-4o")
 MAX_TOKENS = 8192
 
 
@@ -196,17 +214,18 @@ def extract_ppt_images_as_base64(filepath, max_pages=6):
 
 
 # ─────────────────────────────────────────────
-# CLAUDE VISION: ANALYZE SLIDES (Step 1 → internal)
+# VISION: ANALYZE SLIDES (OpenAI-compatible multimodal)
 # ─────────────────────────────────────────────
 def analyze_slides_with_claude(images_b64, filename):
     """
-    Send slide images to Claude Vision. Returns structured slide JSON.
+    Send slide images to the AI Vision endpoint (OpenAI-compatible).
     Falls back to mock data on any error.
     """
     if not AI_ENABLED or not images_b64:
         return MOCK_SLIDES, False
 
     try:
+        # Build OpenAI-compatible multimodal content list
         content_parts = [
             {
                 "type": "text",
@@ -220,36 +239,31 @@ def analyze_slides_with_claude(images_b64, filename):
                 ),
             }
         ]
-
         for img in images_b64:
             content_parts.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": img["media_type"],
-                    "data": img["base64"],
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{img['media_type']};base64,{img['base64']}"
                 },
             })
 
-        response = _anthropic_client.messages.create(
+        response = _ai_client.chat.completions.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": content_parts}],
         )
 
-        raw = response.content[0].text.strip()
-        # Strip markdown code fences if present
+        raw = response.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
         slides = json.loads(raw)
-        # Ensure page numbers
         for i, s in enumerate(slides):
             s.setdefault("page", i + 1)
             s.setdefault("key_claims", [])
         return slides, True
 
     except Exception as e:
-        app.logger.error(f"Claude slide analysis failed: {e}")
+        app.logger.error(f"AI slide analysis failed: {e}")
         return MOCK_SLIDES, False
 
 
@@ -343,12 +357,12 @@ Return ONLY valid JSON in this exact structure (no other text, no markdown):
 }}"""
 
     try:
-        response = _anthropic_client.messages.create(
+        response = _ai_client.chat.completions.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.content[0].text.strip()
+        raw = response.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
         data = json.loads(raw)
@@ -356,7 +370,6 @@ Return ONLY valid JSON in this exact structure (no other text, no markdown):
         challenge_seed = data.get("challenge_seed") or MOCK_CHALLENGE
         static_qa_bank = data.get("static_qa_bank") or []
 
-        # Enrich static_qa_bank with sequential IDs
         for i, q in enumerate(static_qa_bank):
             q["id"] = i + 1
 
@@ -416,12 +429,12 @@ TASK: Generate your NEXT follow-up question. You must:
 Return ONLY the question text. No preamble, no labels, no markdown."""
 
     try:
-        response = _anthropic_client.messages.create(
+        response = _ai_client.chat.completions.create(
             model=MODEL,
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         app.logger.error(f"Follow-up generation failed: {e}")
         used = [h["content"] for h in chat_history if h["role"] == "assistant"]
@@ -525,12 +538,12 @@ Scoring guidelines:
 - Reference specific content from what they said in the feedback fields."""
 
     try:
-        response = _anthropic_client.messages.create(
+        response = _ai_client.chat.completions.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.content[0].text.strip()
+        raw = response.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
         result = json.loads(raw)
@@ -644,12 +657,12 @@ Write a training plan with these exact sections (use ## and ### headers, markdow
 Be concise, direct, and evidence-based. Reference the actual scores above."""
 
     try:
-        response = _anthropic_client.messages.create(
+        response = _ai_client.chat.completions.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         app.logger.error(f"Training plan generation failed: {e}")
         return _template_training_plan(pq, cq, difficulty, audience, interruptions, challenge_type)
