@@ -168,31 +168,54 @@
     hideError();
 
     const steps = [
-      { pct: 20, text: 'Uploading file...' },
-      { pct: 50, text: 'Extracting slide content...' },
-      { pct: 80, text: 'Claude Vision analyzing slides...' },
-      { pct: 95, text: 'Building logic tree...' },
+      { pct: 15, text: '上传文件中...', delay: 0 },
+      { pct: 35, text: '正在提取 PDF 页面图像...', delay: 2000 },
+      { pct: 60, text: 'AI Vision 正在深度审计您的文稿，请稍候 (10-15s)...', delay: 4000 },
+      { pct: 80, text: '解析幻灯片结构与关键论点...', delay: 9000 },
+      { pct: 92, text: '构建逻辑树与挑战策略...', delay: 13000 },
     ];
-    let stepIdx = 0;
-    const stepInterval = setInterval(() => {
-      if (stepIdx < steps.length) {
-        setProgress(steps[stepIdx].pct, steps[stepIdx].text);
-        stepIdx++;
-      }
-    }, 800);
+
+    // Schedule each progress step on a timer so the UI stays alive during the long AI call
+    const timers = steps.map(s => setTimeout(() => setProgress(s.pct, s.text), s.delay));
 
     const fd = new FormData();
     fd.append('file', selectedFile);
+
+    // 60-second timeout via AbortController — AI Vision calls can take 10-20s
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     try {
-      const res = await fetch('/x/upload', { method: 'POST', body: fd });
-      clearInterval(stepInterval);
-      const data = await res.json();
-      if (!res.ok) { showError(data.error || 'Upload failed.'); resetBtn(); return; }
-      setProgress(100, data.ai_used ? '✓ AI analysis complete' : '✓ Slides parsed');
-      setTimeout(() => window.location.href = '/config', 600);
+      const res = await fetch('/x/upload', {
+        method: 'POST',
+        body: fd,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      timers.forEach(clearTimeout);
+
+      let data;
+      try { data = await res.json(); }
+      catch (_) { data = {}; }
+
+      if (!res.ok) {
+        // Show the real backend error message so it's visible
+        const msg = data.error || data.message || `服务器错误 (HTTP ${res.status})`;
+        showError(`上传失败：${msg}`);
+        resetBtn();
+        return;
+      }
+      setProgress(100, data.ai_used ? '✓ AI 分析完成！正在跳转...' : '✓ 幻灯片解析完成！');
+      setTimeout(() => window.location.href = '/config', 700);
+
     } catch (err) {
-      clearInterval(stepInterval);
-      showError('Network error. Please try again.');
+      clearTimeout(timeoutId);
+      timers.forEach(clearTimeout);
+      if (err.name === 'AbortError') {
+        showError('请求超时（60 秒）。AI Vision 分析耗时过长，请检查中转站响应速度后重试。');
+      } else {
+        showError(`网络错误：${err.message || '请检查网络连接后重试。'}`);
+      }
       resetBtn();
     }
   }

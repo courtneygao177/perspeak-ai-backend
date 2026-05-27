@@ -4,6 +4,7 @@ import random
 import base64
 import io
 import re
+import traceback
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from werkzeug.utils import secure_filename
 
@@ -11,6 +12,19 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "ai-presentation-dev-secret-2024")
 app.config["UPLOAD_FOLDER"] = os.path.join(os.path.dirname(__file__), "uploads")
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+
+# ── CORS: allow all origins so the proxied iframe can reach Flask ──────────────
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
+
+@app.route("/x/<path:p>", methods=["OPTIONS"])
+@app.route("/<path:p>", methods=["OPTIONS"])
+def options_handler(p=""):
+    return "", 204
 
 ALLOWED_EXTENSIONS = {"pdf", "ppt", "pptx"}
 
@@ -35,7 +49,8 @@ try:
         _UNIFIED_URL = _UNIFIED_URL.rstrip("/ ")
 
     if _UNIFIED_KEY and _UNIFIED_URL:
-        _ai_client = _OpenAI(api_key=_UNIFIED_KEY, base_url=_UNIFIED_URL)
+        # timeout=60s so slow relay APIs don't hang the Flask worker forever
+        _ai_client = _OpenAI(api_key=_UNIFIED_KEY, base_url=_UNIFIED_URL, timeout=60.0)
         AI_ENABLED = True
     else:
         _ai_client = None
@@ -779,48 +794,63 @@ def report():
 @app.route("/x/upload", methods=["POST"])
 def api_upload():
     """
-    Step 1: Accept file → extract page images → prepare for Claude Vision.
-    Does NOT call Claude yet (that happens in /api/start-session after config).
+    Step 1: Accept file → extract page images → Vision AI analysis.
+    Full try/except with traceback so errors are always visible in logs.
     """
-    if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
-    if not allowed_file(file.filename):
-        return jsonify({"error": "Invalid file type. Please upload PDF, PPT, or PPTX."}), 400
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        file = request.files["file"]
+        if file.filename == "":
+            return jsonify({"error": "No file selected"}), 400
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Invalid file type. Please upload PDF, PPT, or PPTX."}), 400
 
-    filename = secure_filename(file.filename)
-    save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    file.save(save_path)
+        filename = secure_filename(file.filename)
+        os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(save_path)
+        app.logger.info(f"File saved: {save_path}")
 
-    ext = filename.rsplit(".", 1)[1].lower()
+        ext = filename.rsplit(".", 1)[1].lower()
 
-    # Extract images / text for the Vision pipeline
-    images_b64 = []
-    if ext == "pdf":
-        images_b64 = extract_pdf_images_as_base64(save_path)
+        # Step 1a: PDF → base64 images for Vision
+        images_b64 = []
+        if ext == "pdf":
+            app.logger.info("Extracting PDF pages as images...")
+            images_b64 = extract_pdf_images_as_base64(save_path)
+            app.logger.info(f"Extracted {len(images_b64)} page image(s)")
 
-    # Analyse immediately with Claude Vision (PDF only; PPT falls back to mock)
-    if images_b64 and AI_ENABLED:
-        slides, ai_used = analyze_slides_with_claude(images_b64, filename)
-    else:
-        slides, ai_used = MOCK_SLIDES, False
+        # Step 1b: AI Vision analysis (PDF only; PPT/PPTX falls back to mock)
+        if images_b64 and AI_ENABLED:
+            app.logger.info("Sending to AI Vision for slide analysis...")
+            slides, ai_used = analyze_slides_with_claude(images_b64, filename)
+            app.logger.info(f"AI analysis done: {len(slides)} slides, ai_used={ai_used}")
+        else:
+            slides, ai_used = MOCK_SLIDES, False
+            app.logger.info(f"Using mock slides (AI_ENABLED={AI_ENABLED}, images={len(images_b64)})")
 
-    session["slides"] = slides
-    session["filename"] = filename
-    session["images_b64"] = [{"page": img["page"], "media_type": img["media_type"],
-                               "base64": img["base64"]} for img in images_b64]
-    session["answers"] = []
-    session["qa_bank"] = []
+        session["slides"] = slides
+        session["filename"] = filename
+        session["images_b64"] = [
+            {"page": img["page"], "media_type": img["media_type"], "base64": img["base64"]}
+            for img in images_b64
+        ]
+        session["answers"] = []
+        session["qa_bank"] = []
 
-    return jsonify({
-        "success": True,
-        "filename": filename,
-        "slides": slides,
-        "ai_used": ai_used,
-        "message": f"File parsed. {len(slides)} slides detected.",
-    })
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "slides": slides,
+            "ai_used": ai_used,
+            "message": f"File parsed. {len(slides)} slides detected.",
+        })
+
+    except Exception as e:
+        traceback.print_exc()   # Full stack trace visible in Replit workflow logs
+        app.logger.error(f"Upload failed: {e}")
+        return jsonify({"error": str(e), "status": "error"}), 500
 
 
 @app.route("/x/start-session", methods=["POST"])
