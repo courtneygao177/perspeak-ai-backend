@@ -1,37 +1,29 @@
 {% extends "base.html" %}
-{% block title %}PresentAI — Rehearsal Report{% endblock %}
+{% block title %}Perspeak AI — Rehearsal Report{% endblock %}
 
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  .score-bar {
-    background: linear-gradient(90deg, #6366f1, #818cf8);
-    border-radius: 9999px;
-    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .section-card {
-    background: rgba(18, 18, 31, 0.8);
-    border: 1px solid rgba(99,102,241,0.15);
-    border-radius: 1rem;
-  }
-  .training-plan-content h2 { font-size: 1.1rem; font-weight: 700; color: #818cf8; margin: 1.25rem 0 0.5rem; }
-  .training-plan-content h3 { font-size: 0.9rem; font-weight: 600; color: #c4b5fd; margin: 1rem 0 0.4rem; }
-  .training-plan-content p  { color: #9ca3af; font-size: 0.85rem; line-height: 1.6; margin-bottom: 0.5rem; }
-  .training-plan-content ul { list-style: none; padding: 0; }
-  .training-plan-content li { color: #9ca3af; font-size: 0.85rem; line-height: 1.7; padding-left: 1rem; position: relative; }
-  .training-plan-content li::before { content: '›'; position: absolute; left: 0; color: #6366f1; }
-  .training-plan-content strong { color: #e2e8f0; }
-  canvas { max-height: 280px; }
+  .score-bar { background: linear-gradient(90deg,#6366f1,#818cf8); border-radius:9999px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+  .section-card { background:rgba(18,18,31,.8); border:1px solid rgba(99,102,241,.15); border-radius:1rem; }
+  .tp h2 { font-size:1.05rem;font-weight:700;color:#818cf8;margin:1.25rem 0 .5rem; }
+  .tp h3 { font-size:.875rem;font-weight:600;color:#c4b5fd;margin:1rem 0 .4rem; }
+  .tp p  { color:#9ca3af;font-size:.85rem;line-height:1.65;margin-bottom:.5rem; }
+  .tp strong { color:#e2e8f0; }
+  .tp ul { list-style:none;padding:0; }
+  .tp li { color:#9ca3af;font-size:.85rem;line-height:1.7;padding-left:1rem;position:relative; }
+  .tp li::before { content:'›';position:absolute;left:0;color:#6366f1; }
+  canvas { max-height:280px; }
+  .challenge-badge { display:inline-flex;align-items:center;gap:.375rem;font-size:.7rem;
+    background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.25);
+    color:#fbbf24;padding:.25rem .625rem;border-radius:9999px;font-weight:600; }
 </style>
 {% endblock %}
 
 {% block nav_steps %}
-<span class="text-gray-600">Upload</span>
-<span class="text-gray-700">→</span>
-<span class="text-gray-600">Configure</span>
-<span class="text-gray-700">→</span>
-<span class="text-gray-600">Rehearsal</span>
-<span class="text-gray-700">→</span>
+<span class="text-gray-600">Upload</span><span class="text-gray-700">→</span>
+<span class="text-gray-600">Configure</span><span class="text-gray-700">→</span>
+<span class="text-gray-600">Rehearsal</span><span class="text-gray-700">→</span>
 <span class="text-indigo-400 font-medium">Step 4 of 4 — Report</span>
 {% endblock %}
 
@@ -41,14 +33,25 @@
   <div class="orb w-64 h-64 bg-purple-600/8 bottom-40 left-0"></div>
 
   <!-- Header -->
-  <div class="relative z-10 mb-10">
-    <div class="inline-flex items-center gap-2 text-xs font-mono text-indigo-400
-                bg-indigo-950/60 border border-indigo-800/50 px-3 py-1.5 rounded-full mb-4">
-      <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-      Session Complete ·
-      {{ evaluation.scenario }} ·
-      {{ evaluation.audience }} ·
-      {{ evaluation.difficulty }}
+  <div class="relative z-10 mb-8">
+    <div class="flex flex-wrap items-center gap-3 mb-4">
+      <div class="inline-flex items-center gap-2 text-xs font-mono text-indigo-400
+                  bg-indigo-950/60 border border-indigo-800/50 px-3 py-1.5 rounded-full">
+        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+        Session Complete · {{ evaluation.scenario }} · {{ evaluation.audience }} · {{ evaluation.difficulty }}
+      </div>
+      {% if evaluation.ai_powered %}
+      <div class="inline-flex items-center gap-2 text-xs font-mono text-green-400
+                  bg-green-950/40 border border-green-800/40 px-3 py-1.5 rounded-full">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+        AI-Powered Evaluation
+      </div>
+      {% endif %}
+      {% if evaluation.challenge_type %}
+      <div class="challenge-badge">
+        ⚡ Challenge: {{ evaluation.challenge_type }}
+      </div>
+      {% endif %}
     </div>
     <h1 class="text-4xl font-bold text-white mb-2">Rehearsal Report</h1>
     <p class="text-gray-500 text-sm">
@@ -57,15 +60,14 @@
     </p>
   </div>
 
-  <!-- Overall Scores Banner -->
-  <div class="relative z-10 grid grid-cols-2 gap-4 mb-8">
+  <!-- Overall Score Banner -->
+  <div class="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
     <div class="section-card p-6 flex items-center gap-5">
       <div class="relative w-16 h-16 flex-shrink-0">
         <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
           <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1e1e35" stroke-width="3"/>
           <circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" stroke-width="3"
-                  stroke-dasharray="{{ (evaluation.presentation_quality.overall / 10 * 100)|round }}
-                                   {{ (100 - (evaluation.presentation_quality.overall / 10 * 100))|round }}"
+                  stroke-dasharray="{{ (evaluation.presentation_quality.overall / 10 * 100)|round }} {{ (100 - (evaluation.presentation_quality.overall / 10 * 100))|round }}"
                   stroke-linecap="round"/>
         </svg>
         <div class="absolute inset-0 flex items-center justify-center">
@@ -75,17 +77,15 @@
       <div>
         <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Presentation Quality</p>
         <p class="text-2xl font-bold text-white">{{ evaluation.presentation_quality.overall }}<span class="text-gray-600 text-lg">/10</span></p>
-        <p class="text-xs text-gray-500 mt-1">{{ evaluation.presentation_quality.feedback[:80] }}...</p>
+        <p class="text-xs text-gray-500 mt-1 leading-relaxed">{{ evaluation.presentation_quality.feedback[:100] }}…</p>
       </div>
     </div>
-
     <div class="section-card p-6 flex items-center gap-5">
       <div class="relative w-16 h-16 flex-shrink-0">
         <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
           <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1e1e35" stroke-width="3"/>
           <circle cx="18" cy="18" r="15.9" fill="none" stroke="#c4b5fd" stroke-width="3"
-                  stroke-dasharray="{{ (evaluation.communication_quality.overall / 10 * 100)|round }}
-                                   {{ (100 - (evaluation.communication_quality.overall / 10 * 100))|round }}"
+                  stroke-dasharray="{{ (evaluation.communication_quality.overall / 10 * 100)|round }} {{ (100 - (evaluation.communication_quality.overall / 10 * 100))|round }}"
                   stroke-linecap="round"/>
         </svg>
         <div class="absolute inset-0 flex items-center justify-center">
@@ -95,42 +95,64 @@
       <div>
         <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Communication Quality</p>
         <p class="text-2xl font-bold text-white">{{ evaluation.communication_quality.overall }}<span class="text-gray-600 text-lg">/10</span></p>
-        <p class="text-xs text-gray-500 mt-1">{{ evaluation.communication_quality.feedback[:80] }}...</p>
+        <p class="text-xs text-gray-500 mt-1 leading-relaxed">{{ evaluation.communication_quality.feedback[:100] }}…</p>
       </div>
     </div>
   </div>
 
+  <!-- Challenge Type Performance callout -->
+  {% if evaluation.challenge_type and (evaluation.presentation_quality.get('challenge_type_performance') or evaluation.communication_quality.get('challenge_type_performance')) %}
+  <div class="relative z-10 section-card p-5 mb-8 border border-yellow-900/30">
+    <div class="flex items-start gap-3">
+      <div class="w-8 h-8 rounded-lg bg-yellow-900/30 flex items-center justify-center flex-shrink-0">
+        <span class="text-yellow-400 text-sm">⚡</span>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold text-yellow-400 mb-2">Challenge Type Performance: {{ evaluation.challenge_type }}</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-gray-400 leading-relaxed">
+          {% if evaluation.presentation_quality.get('challenge_type_performance') %}
+          <div>
+            <p class="text-indigo-400 font-semibold mb-1 uppercase tracking-widest text-xs">In Your Narration</p>
+            <p>{{ evaluation.presentation_quality.challenge_type_performance }}</p>
+          </div>
+          {% endif %}
+          {% if evaluation.communication_quality.get('challenge_type_performance') %}
+          <div>
+            <p class="text-purple-400 font-semibold mb-1 uppercase tracking-widest text-xs">Under Direct Challenge</p>
+            <p>{{ evaluation.communication_quality.challenge_type_performance }}</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Charts Row -->
   <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-    <!-- Radar Chart: Presentation Quality -->
     <div class="section-card p-6">
       <h2 class="text-sm font-semibold text-white mb-1">Presentation Quality — Radar</h2>
-      <p class="text-xs text-gray-600 mb-5">6-dimension breakdown of your delivery</p>
+      <p class="text-xs text-gray-600 mb-5">6-dimension delivery breakdown</p>
       <canvas id="radarPQ"></canvas>
     </div>
-
-    <!-- Radar Chart: Communication Quality -->
     <div class="section-card p-6">
       <h2 class="text-sm font-semibold text-white mb-1">Communication Quality — Radar</h2>
-      <p class="text-xs text-gray-600 mb-5">5-dimension Q&amp;A performance analysis</p>
+      <p class="text-xs text-gray-600 mb-5">5-dimension Q&amp;A performance</p>
       <canvas id="radarCQ"></canvas>
     </div>
   </div>
 
-  <!-- Bar Chart: Combined -->
+  <!-- Bar Chart -->
   <div class="relative z-10 section-card p-6 mb-8">
     <h2 class="text-sm font-semibold text-white mb-1">Score Comparison — All Dimensions</h2>
-    <p class="text-xs text-gray-600 mb-5">Side-by-side view of all evaluated dimensions</p>
-    <canvas id="barChart" style="max-height: 320px;"></canvas>
+    <p class="text-xs text-gray-600 mb-5">Side-by-side across both evaluation axes</p>
+    <canvas id="barChart" style="max-height:320px;"></canvas>
   </div>
 
-  <!-- Dimension Score Bars -->
+  <!-- Dimension Bars -->
   <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-    <!-- PQ Breakdown -->
     <div class="section-card p-6">
-      <h2 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-5">
-        Presentation Quality — Detail
-      </h2>
+      <h2 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-5">Presentation Quality — Detail</h2>
       <div class="space-y-4">
         {% for dim, score in evaluation.presentation_quality.dimensions.items() %}
         <div>
@@ -139,8 +161,7 @@
             <span class="text-xs font-mono text-white font-bold">{{ score }}</span>
           </div>
           <div class="h-1.5 bg-surface-500 rounded-full overflow-hidden">
-            <div class="score-bar h-full" style="width: 0%"
-                 data-target="{{ (score / 10 * 100)|round }}%"></div>
+            <div class="score-bar h-full" style="width:0%" data-target="{{ (score/10*100)|round }}%"></div>
           </div>
         </div>
         {% endfor %}
@@ -150,11 +171,8 @@
       </div>
     </div>
 
-    <!-- CQ Breakdown -->
     <div class="section-card p-6">
-      <h2 class="text-sm font-semibold text-purple-400 uppercase tracking-widest mb-5">
-        Communication Quality — Detail
-      </h2>
+      <h2 class="text-sm font-semibold text-purple-400 uppercase tracking-widest mb-5">Communication Quality — Detail</h2>
       <div class="space-y-4">
         {% for dim, score in evaluation.communication_quality.dimensions.items() %}
         <div>
@@ -163,8 +181,8 @@
             <span class="text-xs font-mono text-white font-bold">{{ score }}</span>
           </div>
           <div class="h-1.5 bg-surface-500 rounded-full overflow-hidden">
-            <div class="score-bar h-full" style="width: 0%; background: linear-gradient(90deg, #9333ea, #c4b5fd);"
-                 data-target="{{ (score / 10 * 100)|round }}%"></div>
+            <div class="score-bar h-full" style="width:0%;background:linear-gradient(90deg,#9333ea,#c4b5fd);"
+                 data-target="{{ (score/10*100)|round }}%"></div>
           </div>
         </div>
         {% endfor %}
@@ -175,28 +193,28 @@
     </div>
   </div>
 
-  <!-- Q&A Bank (if generated) -->
+  <!-- Q&A Bank -->
   {% if qa_bank %}
   <div class="relative z-10 section-card p-6 mb-8">
     <h2 class="text-sm font-semibold text-white mb-1">Post-Presentation Q&amp;A Bank</h2>
     <p class="text-xs text-gray-600 mb-5">
-      AI-generated high-frequency questions for <strong class="text-gray-400">{{ evaluation.scenario }}</strong>.
-      Prepare answers to these before your actual presentation.
+      {% if ai_enabled %}Claude-generated{% else %}Pre-set{% endif %}
+      questions for <strong class="text-gray-400">{{ evaluation.scenario }}</strong>.
+      Prepare answers before your actual presentation.
     </p>
     <div class="space-y-4">
       {% for q in qa_bank %}
       <div class="gradient-border rounded-xl p-4">
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-lg bg-indigo-600/30 flex items-center justify-center
-                      text-xs font-mono font-bold text-indigo-400 flex-shrink-0 mt-0.5">
-            {{ q.id }}
-          </div>
+                      text-xs font-mono font-bold text-indigo-400 flex-shrink-0 mt-0.5">{{ q.id }}</div>
           <div class="flex-1">
-            <div class="flex items-center gap-2 mb-1.5">
+            <div class="flex items-center gap-2 mb-1.5 flex-wrap">
               <span class="text-xs text-gray-500 bg-surface-600 px-2 py-0.5 rounded">{{ q.category }}</span>
-              <span class="text-xs {% if q.difficulty == 'Hard' %}text-red-400 bg-red-950/30{% else %}text-yellow-400 bg-yellow-950/30{% endif %} px-2 py-0.5 rounded">
-                {{ q.difficulty }}
-              </span>
+              <span class="text-xs {% if q.difficulty == 'Hard' %}text-red-400 bg-red-950/30{% else %}text-yellow-400 bg-yellow-950/30{% endif %} px-2 py-0.5 rounded">{{ q.difficulty }}</span>
+              {% if q.challenge_type %}
+              <span class="challenge-badge">⚡ {{ q.challenge_type }}</span>
+              {% endif %}
             </div>
             <p class="text-gray-300 text-sm leading-relaxed">{{ q.question }}</p>
           </div>
@@ -218,19 +236,20 @@
       </div>
       <div>
         <h2 class="text-sm font-semibold text-white">Personalized Training Plan</h2>
-        <p class="text-xs text-gray-600">Generated based on your session performance and identified weaknesses</p>
+        <p class="text-xs text-gray-600">
+          {% if ai_enabled %}AI-generated based on your session + challenge type performance.{% else %}Template-based training plan.{% endif %}
+        </p>
       </div>
     </div>
-    <div class="training-plan-content bg-surface-800/50 rounded-xl p-5 border border-gray-800/40">
+    <div class="tp bg-surface-800/50 rounded-xl p-5 border border-gray-800/40">
       {{ evaluation.training_plan | replace('\n', '<br>') | safe }}
     </div>
   </div>
 
   <!-- CTA -->
   <div class="relative z-10 flex gap-4 pb-10">
-    <a href="/"
-       class="flex-1 btn-primary text-white font-semibold py-4 rounded-xl text-sm
-              flex items-center justify-center gap-2">
+    <a href="/" class="flex-1 btn-primary text-white font-semibold py-4 rounded-xl text-sm
+                       flex items-center justify-center gap-2">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -252,122 +271,65 @@
 
 {% block scripts %}
 <script>
-  // ── Data from server ──────────────────────────────────────────────────────
-  const pqDims   = {{ evaluation.presentation_quality.dimensions | tojson }};
-  const cqDims   = {{ evaluation.communication_quality.dimensions | tojson }};
-  const pqScore  = {{ evaluation.presentation_quality.overall }};
-  const cqScore  = {{ evaluation.communication_quality.overall }};
-
-  const chartDefaults = {
-    plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
-    scales: {},
-  };
+  const pqDims  = {{ evaluation.presentation_quality.dimensions | tojson }};
+  const cqDims  = {{ evaluation.communication_quality.dimensions | tojson }};
 
   const radarOptions = {
     responsive: true,
     plugins: { legend: { display: false } },
     scales: {
       r: {
-        min: 0, max: 10,
-        ticks: { color: '#4b5563', stepSize: 2, backdropColor: 'transparent', font: { size: 10 } },
-        grid: { color: 'rgba(99,102,241,0.1)' },
-        pointLabels: { color: '#9ca3af', font: { size: 11 } },
-        angleLines: { color: 'rgba(99,102,241,0.1)' },
-      },
-    },
+        min:0, max:10,
+        ticks: { color:'#4b5563', stepSize:2, backdropColor:'transparent', font:{size:10} },
+        grid: { color:'rgba(99,102,241,0.1)' },
+        pointLabels: { color:'#9ca3af', font:{size:11} },
+        angleLines: { color:'rgba(99,102,241,0.1)' },
+      }
+    }
   };
 
-  // Radar: Presentation Quality
   new Chart(document.getElementById('radarPQ'), {
-    type: 'radar',
-    data: {
-      labels: Object.keys(pqDims),
-      datasets: [{
-        label: 'Presentation Quality',
-        data: Object.values(pqDims),
-        backgroundColor: 'rgba(99,102,241,0.15)',
-        borderColor: '#6366f1',
-        pointBackgroundColor: '#6366f1',
-        pointBorderColor: '#1e1e35',
-        pointRadius: 4,
-        borderWidth: 2,
-      }],
-    },
+    type:'radar',
+    data:{ labels:Object.keys(pqDims), datasets:[{
+      label:'PQ', data:Object.values(pqDims),
+      backgroundColor:'rgba(99,102,241,0.15)', borderColor:'#6366f1',
+      pointBackgroundColor:'#6366f1', pointBorderColor:'#1e1e35', pointRadius:4, borderWidth:2,
+    }]},
     options: radarOptions,
   });
 
-  // Radar: Communication Quality
   new Chart(document.getElementById('radarCQ'), {
-    type: 'radar',
-    data: {
-      labels: Object.keys(cqDims),
-      datasets: [{
-        label: 'Communication Quality',
-        data: Object.values(cqDims),
-        backgroundColor: 'rgba(196,181,253,0.12)',
-        borderColor: '#c4b5fd',
-        pointBackgroundColor: '#c4b5fd',
-        pointBorderColor: '#1e1e35',
-        pointRadius: 4,
-        borderWidth: 2,
-      }],
-    },
+    type:'radar',
+    data:{ labels:Object.keys(cqDims), datasets:[{
+      label:'CQ', data:Object.values(cqDims),
+      backgroundColor:'rgba(196,181,253,0.12)', borderColor:'#c4b5fd',
+      pointBackgroundColor:'#c4b5fd', pointBorderColor:'#1e1e35', pointRadius:4, borderWidth:2,
+    }]},
     options: radarOptions,
   });
 
-  // Bar: All dimensions combined
   const allLabels = [...Object.keys(pqDims), ...Object.keys(cqDims)];
-  const pqValues  = [...Object.values(pqDims), ...Array(Object.keys(cqDims).length).fill(null)];
-  const cqValues  = [...Array(Object.keys(pqDims).length).fill(null), ...Object.values(cqDims)];
+  const pqVals = [...Object.values(pqDims), ...Array(Object.keys(cqDims).length).fill(null)];
+  const cqVals = [...Array(Object.keys(pqDims).length).fill(null), ...Object.values(cqDims)];
 
   new Chart(document.getElementById('barChart'), {
-    type: 'bar',
-    data: {
-      labels: allLabels,
-      datasets: [
-        {
-          label: 'Presentation Quality',
-          data: pqValues,
-          backgroundColor: 'rgba(99,102,241,0.7)',
-          borderColor: '#6366f1',
-          borderWidth: 1,
-          borderRadius: 6,
-        },
-        {
-          label: 'Communication Quality',
-          data: cqValues,
-          backgroundColor: 'rgba(196,181,253,0.7)',
-          borderColor: '#c4b5fd',
-          borderWidth: 1,
-          borderRadius: 6,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
-        tooltip: { callbacks: { label: ctx => ` Score: ${ctx.parsed.y}/10` } },
-      },
-      scales: {
-        x: {
-          ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 30 },
-          grid: { color: 'rgba(99,102,241,0.06)' },
-        },
-        y: {
-          min: 0, max: 10,
-          ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 2 },
-          grid: { color: 'rgba(99,102,241,0.06)' },
-        },
-      },
-    },
+    type:'bar',
+    data:{ labels:allLabels, datasets:[
+      { label:'Presentation Quality', data:pqVals, backgroundColor:'rgba(99,102,241,0.7)', borderColor:'#6366f1', borderWidth:1, borderRadius:6 },
+      { label:'Communication Quality', data:cqVals, backgroundColor:'rgba(196,181,253,0.7)', borderColor:'#c4b5fd', borderWidth:1, borderRadius:6 },
+    ]},
+    options:{
+      responsive:true,
+      plugins:{ legend:{labels:{color:'#9ca3af',font:{size:11}}}, tooltip:{callbacks:{label:c=>` Score: ${c.parsed.y}/10`}} },
+      scales:{
+        x:{ ticks:{color:'#6b7280',font:{size:10},maxRotation:30}, grid:{color:'rgba(99,102,241,0.06)'} },
+        y:{ min:0,max:10, ticks:{color:'#6b7280',font:{size:10},stepSize:2}, grid:{color:'rgba(99,102,241,0.06)'} },
+      }
+    }
   });
 
-  // Animate score bars on load
   setTimeout(() => {
-    document.querySelectorAll('.score-bar[data-target]').forEach(bar => {
-      bar.style.width = bar.dataset.target;
-    });
+    document.querySelectorAll('.score-bar[data-target]').forEach(bar => { bar.style.width = bar.dataset.target; });
   }, 300);
 </script>
 {% endblock %}

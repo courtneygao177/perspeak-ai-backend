@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}PresentAI — Configure Your Rehearsal{% endblock %}
+{% block title %}Perspeak AI — Configure Your Rehearsal{% endblock %}
 
 {% block nav_steps %}
 <span class="text-gray-600">Upload</span>
@@ -17,20 +17,19 @@
       <div class="inline-flex items-center gap-2 text-xs font-mono text-green-400
                   bg-green-950/40 border border-green-800/50 px-3 py-1.5 rounded-full mb-5">
         <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-        Presentation parsed · 3 slides detected
+        Presentation parsed · {{ slides|length }} slides detected
+        {% if ai_enabled %} · Claude Vision analyzed{% endif %}
       </div>
       <h2 class="text-4xl font-bold text-white mb-3">Configure Your Rehearsal</h2>
-      <p class="text-gray-400 text-base">Choose your audience, scenario, and pressure level to personalize the simulation.</p>
+      <p class="text-gray-400 text-base">Choose audience, scenario, and pressure level. The AI examiner will be calibrated accordingly.</p>
     </div>
 
-    <!-- Slide Preview Pills -->
+    <!-- Slide Preview -->
     <div class="flex gap-3 mb-10 overflow-x-auto pb-2 justify-center flex-wrap">
       {% for slide in slides %}
       <div class="flex-shrink-0 glass rounded-xl px-4 py-3 flex items-center gap-3 min-w-[180px]">
         <div class="w-7 h-7 rounded-lg bg-indigo-600/30 flex items-center justify-center
-                    text-xs font-mono font-bold text-indigo-300 flex-shrink-0">
-          {{ slide.page }}
-        </div>
+                    text-xs font-mono font-bold text-indigo-300 flex-shrink-0">{{ slide.page }}</div>
         <div>
           <p class="text-white text-sm font-medium leading-tight">{{ slide.title }}</p>
           <p class="text-gray-600 text-xs mt-0.5">Slide {{ slide.page }}</p>
@@ -48,17 +47,14 @@
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set audiences = [
-            ('Professor', '🎓', 'Rigorous academic scrutiny. Demands citations, methodology, and logical coherence.'),
-            ('Classmates', '👥', 'Curious and relatable. Asks about applications, clarity, and personal relevance.'),
-            ('VC', '💼', 'Laser-focused on market size, defensibility, unit economics, and return potential.'),
+            ('Professor', '🎓', 'Rigorous academic scrutiny. Long, multi-clause questions probing methodology, causality, and evidence.'),
+            ('Classmates', '👥', 'Friendly and curious. Practical questions about applications and real-world relevance.'),
+            ('VC', '💼', 'Cold and results-oriented. Short, sharp questions on market size, moat, and unit economics.'),
           ] %}
           {% for val, icon, desc in audiences %}
           <label class="config-card cursor-pointer group" data-group="audience" data-value="{{ val }}">
-            <input type="radio" name="audience" value="{{ val }}" class="sr-only"
-                   {% if val == 'Professor' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 border-transparent
-                        transition-all duration-200 group-hover:border-indigo-600/50
-                        selected:border-indigo-500 h-full">
+            <input type="radio" name="audience" value="{{ val }}" class="sr-only" {% if val == 'Professor' %}checked{% endif %}>
+            <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
               <div class="text-2xl mb-3">{{ icon }}</div>
               <div class="font-semibold text-white mb-2">{{ val }}</div>
               <p class="text-gray-500 text-xs leading-relaxed">{{ desc }}</p>
@@ -76,25 +72,21 @@
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set scenarios = [
-            ('Academic Presentation', '📖', 'No interruptions', 'Present all slides uninterrupted. AI evaluates at the end.', False),
-            ('Thesis Defense', '🔬', 'Mid-session challenges', 'AI examiner interrupts at critical slides to challenge your data.', True),
-            ('MBA Case Pitch', '📈', 'High-pressure challenges', 'Aggressive investor-style interruptions. Simulate board room pressure.', True),
+            ('Academic Presentation', '📖', False, 'No mid-session interruptions. AI pre-generates 3 deep questions for a post-presentation Q&A round.'),
+            ('Thesis Defense', '🔬', True, 'AI interrupts at the most vulnerable slide with a targeted challenge. Challenge type is pre-mapped.'),
+            ('MBA Case Pitch', '📈', True, 'Investor-style interruptions. Business-focused challenge classification. High commercial pressure.'),
           ] %}
-          {% for val, icon, badge, desc, has_interrupt in scenarios %}
+          {% for val, icon, has_interrupt, desc in scenarios %}
           <label class="config-card cursor-pointer group" data-group="scenario" data-value="{{ val }}">
-            <input type="radio" name="scenario" value="{{ val }}" class="sr-only"
-                   {% if val == 'Academic Presentation' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 border-transparent
-                        transition-all duration-200 group-hover:border-indigo-600/50 h-full">
+            <input type="radio" name="scenario" value="{{ val }}" class="sr-only" {% if val == 'Academic Presentation' %}checked{% endif %}>
+            <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
               <div class="text-2xl mb-3">{{ icon }}</div>
               <div class="flex items-start justify-between mb-2">
                 <div class="font-semibold text-white leading-tight">{{ val }}</div>
                 {% if has_interrupt %}
-                <span class="text-xs bg-orange-900/40 text-orange-400 border border-orange-800/40
-                             px-2 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ Interrupts</span>
+                <span class="text-xs bg-orange-900/40 text-orange-400 border border-orange-800/40 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ Interrupts</span>
                 {% else %}
-                <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/30
-                             px-2 py-0.5 rounded-full ml-2 flex-shrink-0">✓ Smooth</span>
+                <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">✓ Smooth</span>
                 {% endif %}
               </div>
               <p class="text-gray-500 text-xs leading-relaxed">{{ desc }}</p>
@@ -112,16 +104,14 @@
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set difficulties = [
-            ('Easy', '🟢', 'Supportive', 'Constructive, encouraging feedback. Great for first-time practice.'),
-            ('Medium', '🟡', 'Normal', 'Balanced challenge. Realistic academic or professional setting.'),
-            ('Hard', '🔴', 'Aggressive', 'Relentless scrutiny. Stress-tests your weakest arguments mercilessly.'),
+            ('Easy', '🟢', 'Supportive', '1 gentle follow-up round. Encouraging language. Great for first-time practice.'),
+            ('Medium', '🟡', 'Normal', '1–2 follow-up rounds. Balanced challenge. Realistic professional setting.'),
+            ('Hard', '🔴', 'Aggressive', '2+ relentless follow-up rounds. Skeptical, cold, never satisfied. No compliments.'),
           ] %}
           {% for val, dot, sub, desc in difficulties %}
           <label class="config-card cursor-pointer group" data-group="difficulty" data-value="{{ val }}">
-            <input type="radio" name="difficulty" value="{{ val }}" class="sr-only"
-                   {% if val == 'Medium' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 border-transparent
-                        transition-all duration-200 group-hover:border-indigo-600/50 h-full">
+            <input type="radio" name="difficulty" value="{{ val }}" class="sr-only" {% if val == 'Medium' %}checked{% endif %}>
+            <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
               <div class="text-2xl mb-3">{{ dot }}</div>
               <div class="font-semibold text-white mb-0.5">{{ val }}
                 <span class="text-xs text-gray-500 font-normal ml-1">· {{ sub }}</span>
@@ -133,6 +123,18 @@
         </div>
       </div>
 
+      <!-- Master Engine notice -->
+      {% if ai_enabled %}
+      <div class="glass rounded-xl px-5 py-4 flex items-start gap-3 border border-indigo-800/30">
+        <span class="text-indigo-400 mt-0.5">✨</span>
+        <div class="text-xs text-gray-500 leading-relaxed">
+          <strong class="text-indigo-400">Claude Master Engine</strong> — When you click Start Rehearsal,
+          Claude will analyse your slides + configuration and pre-map the most devastating challenge
+          question from the Academic or Business challenge type dictionary before the session begins.
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Submit -->
       <div class="pt-2">
         <button type="submit"
@@ -141,11 +143,17 @@
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          Start Rehearsal
+          <span id="submitText">Start Rehearsal</span>
+          <svg id="submitSpinner" class="hidden w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
         </button>
+        <p id="engineStatus" class="hidden text-center text-xs text-indigo-400 mt-3 animate-pulse">
+          ✨ Claude is calibrating your examiner persona and mapping challenge vulnerabilities…
+        </p>
       </div>
     </form>
   </div>
@@ -154,50 +162,27 @@
 
 {% block scripts %}
 <script>
-  // Card selection highlight
   document.querySelectorAll('.config-card').forEach(card => {
     const radio = card.querySelector('input[type="radio"]');
     const inner = card.querySelector('.glass');
-
     function updateState() {
       document.querySelectorAll(`[data-group="${card.dataset.group}"] .glass`).forEach(d => {
         d.classList.remove('border-indigo-500', 'bg-indigo-950/20');
         d.classList.add('border-transparent');
       });
-      if (radio.checked) {
-        inner.classList.add('border-indigo-500', 'bg-indigo-950/20');
-        inner.classList.remove('border-transparent');
-      }
+      if (radio.checked) { inner.classList.add('border-indigo-500', 'bg-indigo-950/20'); inner.classList.remove('border-transparent'); }
     }
-
-    card.addEventListener('click', () => {
-      radio.checked = true;
-      updateState();
-    });
-
+    card.addEventListener('click', () => { radio.checked = true; updateState(); });
     if (radio.checked) updateState();
-  });
-
-  // Initialize default selected states
-  document.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
-    const card = radio.closest('.config-card');
-    if (card) {
-      const inner = card.querySelector('.glass');
-      inner.classList.add('border-indigo-500', 'bg-indigo-950/20');
-      inner.classList.remove('border-transparent');
-    }
   });
 
   document.getElementById('configForm').addEventListener('submit', async e => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true;
-    btn.innerHTML = `
-      <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-      </svg>
-      Launching simulation...`;
+    document.getElementById('submitText').textContent = 'Calibrating AI examiner…';
+    document.getElementById('submitSpinner').classList.remove('hidden');
+    document.getElementById('engineStatus').classList.remove('hidden');
 
     const fd = new FormData(e.target);
     const body = {
@@ -205,7 +190,6 @@
       scenario:   fd.get('scenario')   || 'Academic Presentation',
       difficulty: fd.get('difficulty') || 'Medium',
     };
-
     const res = await fetch('/api/start-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
