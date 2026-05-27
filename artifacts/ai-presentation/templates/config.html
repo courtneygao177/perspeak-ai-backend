@@ -190,7 +190,7 @@
       scenario:   fd.get('scenario')   || 'Academic Presentation',
       difficulty: fd.get('difficulty') || 'Medium',
     };
-    const res = await fetch('/api/start-session', {
+    const res = await fetch('/x/start-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

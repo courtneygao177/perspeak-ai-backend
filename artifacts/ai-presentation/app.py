@@ -776,7 +776,7 @@ def report():
 # API ROUTES
 # ─────────────────────────────────────────────
 
-@app.route("/api/upload", methods=["POST"])
+@app.route("/x/upload", methods=["POST"])
 def api_upload():
     """
     Step 1: Accept file → extract page images → prepare for Claude Vision.
@@ -823,7 +823,7 @@ def api_upload():
     })
 
 
-@app.route("/api/start-session", methods=["POST"])
+@app.route("/x/start-session", methods=["POST"])
 def api_start_session():
     """
     Steps 2 → 3: Receive config → call Master Engine (Claude) →
@@ -866,7 +866,7 @@ def api_start_session():
     return jsonify({"success": True, "redirect": "/sandbox"})
 
 
-@app.route("/api/session-state", methods=["GET"])
+@app.route("/x/session-state", methods=["GET"])
 def api_session_state():
     return jsonify({
         "state": session.get("state", {}),
@@ -875,7 +875,7 @@ def api_session_state():
     })
 
 
-@app.route("/api/check-slide", methods=["POST"])
+@app.route("/x/check-slide", methods=["POST"])
 def api_check_slide():
     """
     Step 5: Core State Machine — user clicked 'Finish current slide'.
@@ -934,7 +934,7 @@ def api_check_slide():
     return jsonify({"action": "NEXT_SLIDE", "page": next_page, "slide": current_slide})
 
 
-@app.route("/api/submit-answer", methods=["POST"])
+@app.route("/x/submit-answer", methods=["POST"])
 def api_submit_answer():
     """
     Step 6: Dynamic multi-round follow-up with Claude AI.
@@ -1007,7 +1007,7 @@ def api_submit_answer():
         })
 
 
-@app.route("/api/finish-presentation", methods=["POST"])
+@app.route("/x/finish-presentation", methods=["POST"])
 def api_finish_presentation():
     """
     Steps 7 & 8: Generate QA bank (non-MBA) + run AI dual evaluation + training plan.

@@ -249,7 +249,7 @@
 
     const narration = document.getElementById('narrationInput').value.trim();
     try {
-      const res = await fetch('/api/check-slide', {
+      const res = await fetch('/x/check-slide', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ narration }),
       });
@@ -287,7 +287,7 @@
     </svg> AI generating follow-up…`;
 
     try {
-      const res = await fetch('/api/submit-answer', {
+      const res = await fetch('/x/submit-answer', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ answer }),
       });
@@ -332,7 +332,7 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg> Generating AI report…`;
     addLog('🔄 Running dual evaluation engine…');
-    const res = await fetch('/api/finish-presentation', { method: 'POST' });
+    const res = await fetch('/x/finish-presentation', { method: 'POST' });
     const data = await res.json();
     if (data.redirect) window.location.href = data.redirect;
   }

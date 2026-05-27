@@ -184,7 +184,7 @@
     const fd = new FormData();
     fd.append('file', selectedFile);
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const res = await fetch('/x/upload', { method: 'POST', body: fd });
       clearInterval(stepInterval);
       const data = await res.json();
       if (!res.ok) { showError(data.error || 'Upload failed.'); resetBtn(); return; }
