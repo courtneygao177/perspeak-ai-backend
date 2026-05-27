@@ -814,37 +814,31 @@ def api_upload():
 
         ext = filename.rsplit(".", 1)[1].lower()
 
-        # Step 1a: PDF → base64 images for Vision
+        # Step 1a: PDF → base64 images (fast — no AI call here)
         images_b64 = []
         if ext == "pdf":
             app.logger.info("Extracting PDF pages as images...")
             images_b64 = extract_pdf_images_as_base64(save_path)
             app.logger.info(f"Extracted {len(images_b64)} page image(s)")
 
-        # Step 1b: AI Vision analysis (PDF only; PPT/PPTX falls back to mock)
-        if images_b64 and AI_ENABLED:
-            app.logger.info("Sending to AI Vision for slide analysis...")
-            slides, ai_used = analyze_slides_with_claude(images_b64, filename)
-            app.logger.info(f"AI analysis done: {len(slides)} slides, ai_used={ai_used}")
-        else:
-            slides, ai_used = MOCK_SLIDES, False
-            app.logger.info(f"Using mock slides (AI_ENABLED={AI_ENABLED}, images={len(images_b64)})")
-
-        session["slides"] = slides
+        # IMPORTANT: do NOT store base64 images in the session cookie —
+        # Flask uses a signed cookie (4 KB max). A 5-page PDF produces ~7 MB of
+        # base64 data which silently breaks the session.
+        # Instead we store just the file path; start-session re-reads from disk.
+        session["slides"]   = MOCK_SLIDES   # placeholder until Vision runs
         session["filename"] = filename
-        session["images_b64"] = [
-            {"page": img["page"], "media_type": img["media_type"], "base64": img["base64"]}
-            for img in images_b64
-        ]
-        session["answers"] = []
-        session["qa_bank"] = []
+        session["filepath"] = save_path     # used by start-session to re-extract
+        session["answers"]  = []
+        session["qa_bank"]  = []
+        # images_b64 intentionally NOT stored in session
 
+        page_count = len(images_b64) if images_b64 else len(MOCK_SLIDES)
         return jsonify({
-            "success": True,
-            "filename": filename,
-            "slides": slides,
-            "ai_used": ai_used,
-            "message": f"File parsed. {len(slides)} slides detected.",
+            "success":    True,
+            "filename":   filename,
+            "page_count": page_count,
+            "ai_pending": AI_ENABLED and bool(images_b64),
+            "message":    f"File uploaded. {page_count} page(s) ready for AI analysis.",
         })
 
     except Exception as e:
@@ -856,40 +850,65 @@ def api_upload():
 @app.route("/x/start-session", methods=["POST"])
 def api_start_session():
     """
-    Steps 2 → 3: Receive config → call Master Engine (Claude) →
-    build challenge seed + QA bank → init state machine → redirect to sandbox.
+    Steps 2 → 3: Receive config → Vision analysis (if PDF) → Master Engine → sandbox.
+    AI Vision is deferred here (not in /x/upload) to avoid proxy timeout on upload.
     """
-    data = request.get_json()
-    audience = data.get("audience", "Professor")
-    scenario = data.get("scenario", "Academic Presentation")
+    data = request.get_json() or {}
+    audience   = data.get("audience",   "Professor")
+    scenario   = data.get("scenario",   "Academic Presentation")
     difficulty = data.get("difficulty", "Medium")
 
-    slides = session.get("slides", MOCK_SLIDES)
+    # ── Step 2: Vision analysis — re-read file from disk (images never stored in cookie) ──
+    filepath = session.get("filepath", "")
+    filename = session.get("filename", "")
+    slides   = MOCK_SLIDES
+    try:
+        if filepath and os.path.exists(filepath) and AI_ENABLED:
+            ext = filepath.rsplit(".", 1)[-1].lower()
+            if ext == "pdf":
+                app.logger.info(f"Re-extracting PDF images from {filepath}…")
+                images_b64 = extract_pdf_images_as_base64(filepath)
+                app.logger.info(f"Vision: analysing {len(images_b64)} page(s)…")
+                slides, _ = analyze_slides_with_claude(images_b64, filename)
+                app.logger.info(f"Vision done: {len(slides)} slide(s)")
+            else:
+                slides = session.get("slides", MOCK_SLIDES)
+            session["slides"] = slides
+        else:
+            slides = session.get("slides", MOCK_SLIDES)
+            app.logger.info(f"Skipping Vision (filepath={filepath!r}, AI_ENABLED={AI_ENABLED})")
+    except Exception as e:
+        traceback.print_exc()
+        app.logger.error(f"Vision failed, using mock: {e}")
+        slides = MOCK_SLIDES
+        session["slides"] = MOCK_SLIDES
 
-    # Step 3: Master Engine — Claude analyses slides + config
-    challenge_seed, static_qa_bank = build_master_engine(slides, audience, scenario, difficulty)
+    # ── Step 3: Master Engine (Challenge seed + QA bank) ──────────────────────────
+    try:
+        challenge_seed, static_qa_bank = build_master_engine(
+            slides, audience, scenario, difficulty
+        )
+    except Exception as e:
+        traceback.print_exc()
+        app.logger.error(f"Master engine failed, using mock: {e}")
+        challenge_seed, static_qa_bank = MOCK_CHALLENGE, MOCK_QA_BANK
 
     session["config"] = {
-        "audience": audience,
-        "scenario": scenario,
+        "audience":  audience,
+        "scenario":  scenario,
         "difficulty": difficulty,
-        "persona": AUDIENCE_PERSONA.get(audience, AUDIENCE_PERSONA["Professor"]),
+        "persona":   AUDIENCE_PERSONA.get(audience, AUDIENCE_PERSONA["Professor"]),
     }
     session["challenge_seed"] = challenge_seed
-    # For Academic Presentation, store the pre-generated QA bank now
-    if scenario == "Academic Presentation":
-        session["qa_bank"] = static_qa_bank
-    else:
-        session["qa_bank"] = []
+    session["qa_bank"] = static_qa_bank if scenario == "Academic Presentation" else []
 
     max_rounds = MAX_FOLLOWUP_ROUNDS.get(difficulty, 2)
-
     session["state"] = {
-        "current_page": 1,
+        "current_page":        1,
         "total_interruptions": 0,
-        "in_qa_mode": False,
-        "follow_up_round": 0,
-        "chat_history": [],
+        "in_qa_mode":          False,
+        "follow_up_round":     0,
+        "chat_history":        [],
         "max_follow_up_rounds": max_rounds,
     }
 

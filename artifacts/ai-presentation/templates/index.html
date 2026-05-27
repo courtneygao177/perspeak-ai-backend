@@ -167,15 +167,13 @@
     document.getElementById('uploadProgress').classList.remove('hidden');
     hideError();
 
+    // Upload is fast now (just save + extract page images, no AI call)
+    // AI Vision + Master Engine run during the config step
     const steps = [
-      { pct: 15, text: '上传文件中...', delay: 0 },
-      { pct: 35, text: '正在提取 PDF 页面图像...', delay: 2000 },
-      { pct: 60, text: 'AI Vision 正在深度审计您的文稿，请稍候 (10-15s)...', delay: 4000 },
-      { pct: 80, text: '解析幻灯片结构与关键论点...', delay: 9000 },
-      { pct: 92, text: '构建逻辑树与挑战策略...', delay: 13000 },
+      { pct: 20, text: '上传文件中...', delay: 0 },
+      { pct: 60, text: '正在提取 PDF 页面图像...', delay: 1000 },
+      { pct: 90, text: '准备完毕，即将进入配置页...', delay: 2500 },
     ];
-
-    // Schedule each progress step on a timer so the UI stays alive during the long AI call
     const timers = steps.map(s => setTimeout(() => setProgress(s.pct, s.text), s.delay));
 
     const fd = new FormData();

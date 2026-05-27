@@ -180,9 +180,23 @@
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true;
-    document.getElementById('submitText').textContent = 'Calibrating AI examiner…';
     document.getElementById('submitSpinner').classList.remove('hidden');
     document.getElementById('engineStatus').classList.remove('hidden');
+
+    // Staged loading messages — Vision + Master Engine can take 20-40s
+    const stages = [
+      { delay: 0,     text: '✨ Claude Vision 正在读取您的幻灯片内容…' },
+      { delay: 8000,  text: '🔍 识别关键论点与数据漏洞…' },
+      { delay: 16000, text: '⚡ Master Engine 正在选择最犀利的挑战问题…' },
+      { delay: 24000, text: '🎯 生成 Q&A 题库与训练计划…' },
+      { delay: 32000, text: '⏳ AI 处理中，请稍候（最长 60 秒）…' },
+    ];
+    const stageTimers = stages.map(s =>
+      setTimeout(() => {
+        document.getElementById('engineStatus').textContent = s.text;
+        document.getElementById('submitText').textContent = s.text;
+      }, s.delay)
+    );
 
     const fd = new FormData(e.target);
     const body = {
@@ -190,13 +204,34 @@
       scenario:   fd.get('scenario')   || 'Academic Presentation',
       difficulty: fd.get('difficulty') || 'Medium',
     };
-    const res = await fetch('/x/start-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (data.redirect) window.location.href = data.redirect;
+
+    // 90-second timeout — Vision (15s) + Master Engine (15s) + network overhead
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 90000);
+
+    try {
+      const res = await fetch('/x/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeoutId);
+      stageTimers.forEach(clearTimeout);
+      const data = await res.json();
+      if (data.redirect) window.location.href = data.redirect;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      stageTimers.forEach(clearTimeout);
+      const msg = err.name === 'AbortError'
+        ? 'AI 分析超时（90 秒）。请检查中转站响应速度后重试。'
+        : `网络错误：${err.message}`;
+      document.getElementById('engineStatus').textContent = '❌ ' + msg;
+      document.getElementById('engineStatus').classList.add('text-red-400');
+      document.getElementById('submitText').textContent = '重试';
+      document.getElementById('submitSpinner').classList.add('hidden');
+      btn.disabled = false;
+    }
   });
 </script>
 {% endblock %}
