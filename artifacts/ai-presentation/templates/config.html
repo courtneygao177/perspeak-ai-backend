@@ -203,6 +203,7 @@
 
 {% block scripts %}
 <script>
+  // ── Card selection highlight ─────────────────────────────────────────────
   document.querySelectorAll('.config-card').forEach(card => {
     const radio = card.querySelector('input[type="radio"]');
     const inner = card.querySelector('.glass');
@@ -213,9 +214,61 @@
       });
       if (radio.checked) { inner.classList.add('border-indigo-500', 'bg-indigo-950/20'); inner.classList.remove('border-transparent'); }
     }
-    card.addEventListener('click', () => { radio.checked = true; updateState(); });
+    card.addEventListener('click', () => {
+      if (card.dataset.disabled === 'true') return;   // block disabled cards
+      radio.checked = true;
+      updateState();
+      if (card.dataset.group === 'scenario') syncAudienceConstraints();
+    });
     if (radio.checked) updateState();
   });
+
+  // ── Audience × Scenario dependency ───────────────────────────────────────
+  // Academic Presentation / Thesis Defense → VC not applicable → disable it
+  // MBA Case Pitch → all audience options available
+  function syncAudienceConstraints() {
+    const scenario = document.querySelector('input[name="scenario"]:checked')?.value || '';
+    const vcCard   = document.querySelector('[data-group="audience"][data-value="VC"]');
+    if (!vcCard) return;
+
+    const vcRadio = vcCard.querySelector('input[type="radio"]');
+    const vcInner = vcCard.querySelector('.glass');
+
+    if (scenario === 'MBA Case Pitch') {
+      // Enable VC
+      vcCard.dataset.disabled = 'false';
+      vcCard.classList.remove('opacity-40', 'cursor-not-allowed');
+      vcCard.classList.add('cursor-pointer');
+      vcInner.classList.remove('grayscale');
+    } else {
+      // Disable VC for Academic / Thesis
+      vcCard.dataset.disabled = 'true';
+      vcCard.classList.add('opacity-40', 'cursor-not-allowed');
+      vcCard.classList.remove('cursor-pointer');
+      vcInner.classList.add('grayscale');
+      // If VC was selected, reset to Professor
+      if (vcRadio.checked) {
+        vcRadio.checked = false;
+        const profCard  = document.querySelector('[data-group="audience"][data-value="Professor"]');
+        const profRadio = profCard?.querySelector('input[type="radio"]');
+        if (profRadio) { profRadio.checked = true; }
+        // Refresh all audience card highlights
+        document.querySelectorAll('[data-group="audience"] .glass').forEach(d => {
+          d.classList.remove('border-indigo-500', 'bg-indigo-950/20');
+          d.classList.add('border-transparent');
+        });
+        profCard?.querySelector('.glass')?.classList.add('border-indigo-500', 'bg-indigo-950/20');
+        profCard?.querySelector('.glass')?.classList.remove('border-transparent');
+      }
+    }
+  }
+
+  // Wire scenario cards to also trigger the constraint check
+  document.querySelectorAll('[data-group="scenario"]').forEach(card => {
+    card.addEventListener('click', syncAudienceConstraints);
+  });
+  // Run once on load to apply initial state
+  syncAudienceConstraints();
 
   document.getElementById('configForm').addEventListener('submit', async e => {
     e.preventDefault();

@@ -214,8 +214,8 @@ def extract_pdf_images_as_base64(filepath, max_pages=6):
         return []
 
 
-def extract_ppt_images_as_base64(filepath, max_pages=6):
-    """For PPT/PPTX files — extract text per slide as fallback (Vision not available for PPTX)."""
+def extract_ppt_images_as_base64(filepath, max_pages=20):
+    """For PPT/PPTX files — extract text per slide."""
     try:
         from pptx import Presentation
         prs = Presentation(filepath)
@@ -231,6 +231,54 @@ def extract_ppt_images_as_base64(filepath, max_pages=6):
         return slides
     except Exception:
         return []
+
+
+def extract_pdf_text_slides(filepath, max_pages=20):
+    """
+    Fast text extraction from PDF pages — no AI, no base64 encoding.
+    Used to populate session["slides"] immediately after upload so the config
+    page shows the REAL page count and titles instead of the 3-page mock.
+    Falls back to MOCK_SLIDES only if the file cannot be opened at all.
+    """
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(filepath)
+        slides = []
+        for i, page in enumerate(doc):
+            if i >= max_pages:
+                break
+            text = page.get_text("text").strip()
+            lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+            # First non-empty line becomes the title; next few lines become content
+            title   = lines[0][:80] if lines else f"Slide {i + 1}"
+            content = " ".join(lines[1:6]) if len(lines) > 1 else "(No text detected on this page)"
+            slides.append({
+                "page":       i + 1,
+                "title":      title,
+                "content":    content,
+                "key_claims": [],
+            })
+        doc.close()
+        return slides if slides else MOCK_SLIDES
+    except Exception as e:
+        app.logger.warning(f"extract_pdf_text_slides failed: {e}")
+        return MOCK_SLIDES
+
+
+def pptx_to_slides(pptx_data):
+    """Convert extract_ppt_images_as_base64 output to the standard slides format."""
+    result = []
+    for s in pptx_data:
+        lines   = [ln.strip() for ln in s["text"].split("\n") if ln.strip()]
+        title   = lines[0][:80] if lines else f"Slide {s['page']}"
+        content = " ".join(lines[1:6]) if len(lines) > 1 else ""
+        result.append({
+            "page":       s["page"],
+            "title":      title,
+            "content":    content,
+            "key_claims": [],
+        })
+    return result if result else MOCK_SLIDES
 
 
 # ─────────────────────────────────────────────
@@ -863,18 +911,25 @@ def api_upload():
             images_b64 = extract_pdf_images_as_base64(save_path)
             app.logger.info(f"Extracted {len(images_b64)} page image(s)")
 
-        # IMPORTANT: do NOT store base64 images in the session cookie —
-        # Flask uses a signed cookie (4 KB max). A 5-page PDF produces ~7 MB of
-        # base64 data which silently breaks the session.
-        # Instead we store just the file path; start-session re-reads from disk.
-        session["slides"]   = MOCK_SLIDES   # placeholder until Vision runs
+        # Build real (text-extracted) slide previews immediately — no AI call.
+        # These give the config page the REAL page count + titles.
+        # Vision analysis in /x/start-session will REPLACE these with richer AI output.
+        # We NEVER store base64 images in the Flask session (4 KB cookie limit).
+        if ext == "pdf":
+            slides_preview = extract_pdf_text_slides(save_path)
+        elif ext in ("ppt", "pptx"):
+            ppt_data = extract_ppt_images_as_base64(save_path)
+            slides_preview = pptx_to_slides(ppt_data) if ppt_data else MOCK_SLIDES
+        else:
+            slides_preview = MOCK_SLIDES
+
+        session["slides"]   = slides_preview   # real page count, real text
         session["filename"] = filename
-        session["filepath"] = save_path     # used by start-session to re-extract
+        session["filepath"] = save_path        # start-session re-reads from disk
         session["answers"]  = []
         session["qa_bank"]  = []
-        # images_b64 intentionally NOT stored in session
 
-        page_count = len(images_b64) if images_b64 else len(MOCK_SLIDES)
+        page_count = len(slides_preview)
         return jsonify({
             "success":    True,
             "filename":   filename,
@@ -903,7 +958,8 @@ def api_start_session():
     # ── Step 2: Vision analysis — re-read file from disk (images never stored in cookie) ──
     filepath = session.get("filepath", "")
     filename = session.get("filename", "")
-    slides   = MOCK_SLIDES
+    # Start with whatever text-extracted slides were stored during upload (real page count)
+    slides   = session.get("slides", MOCK_SLIDES)
     try:
         if filepath and os.path.exists(filepath) and AI_ENABLED:
             ext = filepath.rsplit(".", 1)[-1].lower()
@@ -911,19 +967,26 @@ def api_start_session():
                 app.logger.info(f"Re-extracting PDF images from {filepath}…")
                 images_b64 = extract_pdf_images_as_base64(filepath)
                 app.logger.info(f"Vision: analysing {len(images_b64)} page(s)…")
-                slides, _ = analyze_slides_with_claude(images_b64, filename)
-                app.logger.info(f"Vision done: {len(slides)} slide(s)")
-            else:
-                slides = session.get("slides", MOCK_SLIDES)
+                ai_slides, ok = analyze_slides_with_claude(images_b64, filename)
+                if ok and ai_slides:
+                    slides = ai_slides
+                    app.logger.info(f"Vision done: {len(slides)} slide(s) — AI-enhanced")
+                else:
+                    app.logger.info("Vision returned empty — keeping text-extracted slides")
+            elif ext in ("ppt", "pptx"):
+                ppt_data = extract_ppt_images_as_base64(filepath)
+                if ppt_data:
+                    slides = pptx_to_slides(ppt_data)
             session["slides"] = slides
         else:
-            slides = session.get("slides", MOCK_SLIDES)
             app.logger.info(f"Skipping Vision (filepath={filepath!r}, AI_ENABLED={AI_ENABLED})")
+            # slides already loaded from session above
     except Exception as e:
         traceback.print_exc()
-        app.logger.error(f"Vision failed, using mock: {e}")
-        slides = MOCK_SLIDES
-        session["slides"] = MOCK_SLIDES
+        app.logger.error(f"Vision failed — keeping text-extracted slides: {e}")
+        # Do NOT overwrite with MOCK_SLIDES; keep the real text-extracted slides from upload
+        slides = session.get("slides", MOCK_SLIDES)
+        session["slides"] = slides
 
     # ── Step 3: Master Engine (Challenge seed + QA bank) ──────────────────────────
     try:
