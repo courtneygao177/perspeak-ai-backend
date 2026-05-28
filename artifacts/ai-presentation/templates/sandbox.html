@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Perspeak AI — Rehearsal Sandbox{% endblock %}
+{% block title %}Perspeak AI — Rehearsal{% endblock %}
 
 {% block head %}
 <style>
@@ -7,6 +7,8 @@
   .alarm-overlay { background: rgba(153,27,27,0.15); border: 1px solid rgba(239,68,68,0.4); animation: alarmPulse 1.5s ease-in-out infinite; }
   @keyframes alarmPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } }
   @keyframes wave { from { transform: scaleY(0.4); } to { transform: scaleY(1.0); } }
+  #slideImg { display:block; width:100%; height:100%; object-fit:contain; border-radius:0.5rem; min-height:220px; }
+  .progress-bar-fill { transition: width 0.4s ease; }
 </style>
 {% endblock %}
 
@@ -30,43 +32,60 @@
       <span class="text-gray-400">{{ config.scenario }}</span>
       <span class="text-gray-700">·</span>
       <span class="{% if config.difficulty == 'Hard' %}text-red-400{% elif config.difficulty == 'Medium' %}text-yellow-400{% else %}text-green-400{% endif %}">{{ config.difficulty }}</span>
-      {% if ai_enabled %}
-      <span class="text-gray-700">·</span>
-      <span class="text-indigo-500 text-xs">✨ AI Live</span>
-      {% endif %}
+      {% if ai_enabled %}<span class="text-gray-700">·</span><span class="text-indigo-500 text-xs">✨ AI Live</span>{% endif %}
     </div>
     <div class="flex items-center gap-3 text-xs font-mono">
-      <span class="text-gray-600">Slide</span>
-      <span id="pageIndicator" class="text-indigo-400 font-bold bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-800/40">
-        {{ state.current_page }} / {{ total_pages }}
-      </span>
-      <span class="text-gray-600">Interruptions:</span>
-      <span id="interruptCount" class="text-orange-400 font-bold bg-orange-950/30 px-2 py-0.5 rounded border border-orange-800/30">
-        {{ state.total_interruptions }}
+      <span id="interruptBadge" class="{% if state.total_interruptions > 0 %}text-orange-400 bg-orange-950/30 border border-orange-800/30{% else %}text-gray-700{% endif %} px-2 py-0.5 rounded">
+        ⚡ {{ state.total_interruptions }} challenge(s)
       </span>
     </div>
   </div>
 
   <!-- Main layout -->
-  <div class="flex gap-4 flex-1" style="min-height: calc(100vh - 160px);">
-    <!-- LEFT: Slide + QA -->
+  <div class="flex gap-4 flex-1" style="min-height: calc(100vh - 180px);">
+
+    <!-- LEFT: Slide viewer -->
     <div class="flex-1 flex flex-col gap-3">
-      <div id="slidePanel" class="slide-panel rounded-2xl flex-1 flex flex-col p-8 relative overflow-hidden">
-        <div class="absolute top-4 left-4 flex items-center gap-2">
-          <span class="font-mono text-xs text-indigo-400 bg-indigo-950/60 px-2 py-1 rounded-lg border border-indigo-800/30">
+
+      <!-- Slide image panel -->
+      <div id="slidePanel" class="slide-panel rounded-2xl flex-1 flex flex-col relative overflow-hidden">
+        <!-- Label -->
+        <div class="absolute top-3 left-3 z-10 flex items-center gap-2">
+          <span class="font-mono text-xs text-indigo-400 bg-indigo-950/80 px-2 py-1 rounded-lg border border-indigo-800/30">
             SLIDE <span id="slideNum">{{ state.current_page }}</span>
           </span>
         </div>
-        <div class="flex-1 flex flex-col justify-center items-center text-center px-8 py-12">
-          <div class="w-12 h-px bg-indigo-600/40 mb-6"></div>
-          <h2 id="slideTitle" class="text-3xl font-bold text-white mb-6 leading-tight">{{ current_slide.title }}</h2>
-          <p id="slideContent" class="text-gray-400 text-base leading-relaxed max-w-lg">{{ current_slide.content }}</p>
-          <div class="w-12 h-px bg-indigo-600/40 mt-6"></div>
+
+        <!-- Actual slide image -->
+        <div class="flex-1 flex items-center justify-center p-4 pt-10">
+          <img id="slideImg"
+               src="/x/slide-image/{{ state.current_page }}"
+               alt="Slide {{ state.current_page }}"
+               onerror="this.style.display='none'; document.getElementById('slideFallback').style.display='flex';">
+          <!-- Fallback text view (hidden when image loads) -->
+          <div id="slideFallback" class="hidden flex-col justify-center items-center text-center px-8 py-8 w-full">
+            <h2 id="slideTitle" class="text-2xl font-bold text-white mb-4 leading-tight">{{ current_slide.title }}</h2>
+            <p id="slideContent" class="text-gray-400 text-sm leading-relaxed max-w-lg">{{ current_slide.content }}</p>
+          </div>
         </div>
-        <div class="flex justify-center gap-2">
+
+        <!-- Progress bar -->
+        <div class="px-6 pb-4">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs text-gray-600">Slide <span id="progCurrent">{{ state.current_page }}</span> of {{ total_pages }}</span>
+            <span class="text-xs text-gray-700 font-mono" id="progPct">{{ ((state.current_page / total_pages) * 100)|round|int }}%</span>
+          </div>
+          <div class="h-1 bg-surface-500 rounded-full overflow-hidden">
+            <div id="progressFill" class="progress-bar-fill h-full bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full"
+                 style="width: {{ ((state.current_page / total_pages) * 100)|round|int }}%"></div>
+          </div>
+        </div>
+
+        <!-- Dot nav -->
+        <div class="flex justify-center gap-2 pb-4">
           {% for slide in slides %}
-          <div class="slide-dot w-2 h-2 rounded-full transition-all duration-300
-                      {% if slide.page == state.current_page %}bg-indigo-400 w-5{% else %}bg-gray-700{% endif %}"
+          <div class="slide-dot transition-all duration-300 rounded-full
+                      {% if slide.page == state.current_page %}bg-indigo-400 w-5 h-2{% else %}bg-gray-700 w-2 h-2{% endif %}"
                data-page="{{ slide.page }}"></div>
           {% endfor %}
         </div>
@@ -77,7 +96,8 @@
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-xl bg-red-900/50 flex items-center justify-center flex-shrink-0 mt-0.5">
             <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
             </svg>
           </div>
           <div class="flex-1">
@@ -89,14 +109,13 @@
             <p id="qaQuestion" class="text-red-100 text-base font-medium leading-relaxed mb-4"></p>
             <div class="space-y-3">
               <textarea id="answerInput"
-                        placeholder="Type your answer... or use Voice input on the right"
+                        placeholder="Type your answer here, or use Voice input on the right"
                         class="w-full bg-red-950/20 border border-red-800/40 rounded-xl px-4 py-3
                                text-white placeholder-gray-600 resize-none text-sm focus:outline-none
                                focus:border-red-600/60 transition-colors"
                         rows="3"></textarea>
               <div class="flex gap-3">
-                <button onclick="submitAnswer()"
-                        id="submitAnswerBtn"
+                <button onclick="submitAnswer()" id="submitAnswerBtn"
                         class="flex-1 bg-red-600 hover:bg-red-500 text-white font-semibold
                                py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -122,18 +141,18 @@
 
     <!-- RIGHT: Controls -->
     <div class="w-72 flex flex-col gap-4">
+
       <!-- Recording -->
       <div class="glass rounded-2xl p-5">
         <div class="flex items-center justify-between mb-4">
-          <span class="text-sm font-semibold text-white">Recording Status</span>
+          <span class="text-sm font-semibold text-white">Recording</span>
           <div class="flex items-center gap-1.5">
             <div class="w-2 h-2 rounded-full bg-red-500" style="animation: recordPulse 1.5s ease-in-out infinite;"></div>
             <span class="text-xs text-red-400 font-mono">LIVE</span>
           </div>
         </div>
         <style>@keyframes recordPulse { 0%,100% { transform:scale(1);opacity:0.8;} 50%{transform:scale(1.1);opacity:1;}}</style>
-
-        <div class="flex items-end gap-0.5 h-12 mb-4 justify-center">
+        <div class="flex items-end gap-0.5 h-10 mb-4 justify-center">
           {% for i in range(20) %}
           <div class="bg-indigo-600/40 rounded-full w-1.5"
                style="height:{{ [15,25,35,28,42,20,32,45,18,38,22,40,30,15,35,28,42,18,32,25][loop.index0] }}%;
@@ -141,16 +160,15 @@
                       animation-delay:{{ (loop.index0*0.05)|round(2) }}s;"></div>
           {% endfor %}
         </div>
-
         <textarea id="narrationInput"
-                  placeholder="Optionally type your narration notes here…"
+                  placeholder="Type your narration notes here…"
                   class="w-full bg-surface-700/40 border border-gray-800/40 rounded-xl px-3 py-2
                          text-gray-300 placeholder-gray-700 resize-none text-xs focus:outline-none
                          focus:border-indigo-600/40 transition-colors"
                   rows="4"></textarea>
       </div>
 
-      <!-- Voice Input for main narration -->
+      <!-- Voice input -->
       <div class="glass rounded-2xl p-5">
         <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Voice Input</h3>
         <button onclick="toggleNarrationVoice()" id="narrationVoiceBtn"
@@ -162,31 +180,28 @@
           </svg>
           Start Voice Recording
         </button>
-        <p class="text-xs text-gray-700 mt-2 text-center">Browser speech-to-text. Real Whisper API stub ready in backend.</p>
       </div>
 
-      <!-- Slide notes -->
-      <div class="glass rounded-2xl p-5 flex-1">
-        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Coaching Tips</h3>
-        <div class="space-y-2 text-xs text-gray-500 leading-relaxed">
-          <div class="flex items-start gap-2"><span class="text-indigo-500 mt-0.5">◆</span><span>State your main point in the first 30 seconds.</span></div>
-          <div class="flex items-start gap-2"><span class="text-indigo-500 mt-0.5">◆</span><span>Back every claim with data or evidence.</span></div>
-          <div class="flex items-start gap-2"><span class="text-indigo-500 mt-0.5">◆</span><span>Pause before key statistics for emphasis.</span></div>
-          <div class="flex items-start gap-2"><span class="text-indigo-500 mt-0.5">◆</span><span>If challenged: Answer → Evidence → Implication (BLUF).</span></div>
-          <div class="flex items-start gap-2"><span class="text-orange-500 mt-0.5">⚡</span><span id="scenarioTip" class="text-orange-400/70">
-            {% if config.scenario in ['Thesis Defense', 'MBA Case Pitch'] %}
-              Interruption armed on slide 2. Stay composed.
-            {% else %}
-              No interruptions. Focus on structure and fluency.
-            {% endif %}
-          </span></div>
+      <!-- Timer -->
+      <div class="glass rounded-2xl p-5">
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Timer</h3>
+        <div class="flex items-center justify-center">
+          <div class="text-center">
+            <div id="timerDisplay"
+                 class="text-3xl font-mono font-bold text-white tracking-wider mb-1">00:00</div>
+            <div id="timerStatus" class="text-xs text-green-400">Presenting</div>
+          </div>
+        </div>
+        <div class="mt-3 flex justify-center">
+          <button onclick="resetTimer()"
+                  class="text-xs text-gray-600 hover:text-gray-400 underline transition-colors">Reset</button>
         </div>
       </div>
 
       <!-- Session log -->
-      <div class="glass rounded-2xl p-5">
+      <div class="glass rounded-2xl p-5 flex-1">
         <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Session Log</h3>
-        <div id="sessionLog" class="space-y-1.5 max-h-32 overflow-y-auto text-xs text-gray-600">
+        <div id="sessionLog" class="space-y-1.5 max-h-36 overflow-y-auto text-xs text-gray-600">
           <div class="flex gap-2">
             <span class="text-indigo-700 font-mono flex-shrink-0">00:00</span>
             <span>Session started</span>
@@ -201,51 +216,115 @@
     <div class="flex items-center gap-3">
       <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
       <span id="statusText" class="text-sm text-gray-400">
-        Presenting slide <span id="statusPage" class="text-white font-medium">{{ state.current_page }}</span> of {{ total_pages }}
+        Slide <span id="statusPage" class="text-white font-medium">{{ state.current_page }}</span> of {{ total_pages }}
       </span>
     </div>
-    <button id="finishSlideBtn" onclick="finishSlide()"
-            class="btn-primary text-white font-semibold px-6 py-2.5 rounded-xl text-sm
-                   flex items-center gap-2">
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-      </svg>
-      Finish current slide
-    </button>
+    <div class="flex items-center gap-3">
+      <button id="endPresentationBtn" onclick="triggerFinish()"
+              class="glass border border-gray-700/40 text-gray-400 hover:text-white
+                     font-medium px-4 py-2 rounded-xl text-sm transition-all">
+        End Presentation
+      </button>
+      <button id="finishSlideBtn" onclick="finishSlide()"
+              class="btn-primary text-white font-semibold px-6 py-2.5 rounded-xl text-sm
+                     flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        Next Slide
+      </button>
+    </div>
   </div>
 </div>
 
+<!-- QA finished toast -->
 <div id="qaFinishedToast"
      class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-900/80
             border border-green-700/50 text-green-200 px-6 py-3 rounded-xl text-sm
-            font-medium shadow-xl animate-slide-up">
+            font-medium shadow-xl">
 </div>
+
+<!-- Full-screen loading overlay (shown while AI generates report) -->
+<div id="reportLoading"
+     class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center
+            bg-gray-950/95 backdrop-blur-sm">
+  <div class="text-center max-w-sm px-6">
+    <div class="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-700/40
+                flex items-center justify-center mx-auto mb-6">
+      <svg class="w-8 h-8 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+      </svg>
+    </div>
+    <h2 class="text-xl font-bold text-white mb-3">AI Auditing Your Session</h2>
+    <p id="reportLoadingStatus" class="text-gray-400 text-sm leading-relaxed animate-pulse">
+      Gemini is reviewing all your slides and answers…
+    </p>
+    <div class="mt-6 h-1 bg-surface-500 rounded-full overflow-hidden">
+      <div id="reportLoadingBar"
+           class="h-full bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full
+                  transition-all duration-1000" style="width: 5%"></div>
+    </div>
+    <p class="text-xs text-gray-700 mt-3">This may take 30–60 seconds. Please wait.</p>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+  // ── State ─────────────────────────────────────────────────────────────────
   let state = {
-    current_page: {{ state.current_page }},
-    total_pages:  {{ total_pages }},
-    in_qa_mode:   {{ 'true' if state.in_qa_mode else 'false' }},
-    follow_up_round: {{ state.follow_up_round }},
-    total_interruptions: {{ state.total_interruptions }},
-    challenge_type: '',
+    current_page:       {{ state.current_page }},
+    total_pages:        {{ total_pages }},
+    in_qa_mode:         {{ 'true' if state.in_qa_mode else 'false' }},
+    follow_up_round:    {{ state.follow_up_round }},
+    total_interruptions:{{ state.total_interruptions }},
+    challenge_type:     '',
   };
-  let slides = {{ slides | tojson }};
-  let sessionStart = Date.now();
-  setInterval(() => {
-    let e = Math.floor((Date.now()-sessionStart)/1000);
-    document.title = `[${String(Math.floor(e/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}] Perspeak AI`;
+  let slides     = {{ slides | tojson }};
+  let hasFile    = {{ 'true' if has_file else 'false' }};
+
+  // ── Timer ─────────────────────────────────────────────────────────────────
+  let timerSeconds  = 0;
+  let timerPaused   = false;
+  let timerInterval = setInterval(() => {
+    if (!timerPaused) {
+      timerSeconds++;
+      document.getElementById('timerDisplay').textContent = formatTime(timerSeconds);
+    }
   }, 1000);
 
+  function formatTime(s) {
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }
+  function pauseTimer() {
+    timerPaused = true;
+    document.getElementById('timerStatus').textContent = 'Paused — Q&A';
+    document.getElementById('timerStatus').className = 'text-xs text-orange-400';
+    document.getElementById('timerDisplay').classList.add('text-orange-400');
+    document.getElementById('timerDisplay').classList.remove('text-white');
+  }
+  function resumeTimer() {
+    timerPaused = false;
+    document.getElementById('timerStatus').textContent = 'Presenting';
+    document.getElementById('timerStatus').className = 'text-xs text-green-400';
+    document.getElementById('timerDisplay').classList.remove('text-orange-400');
+    document.getElementById('timerDisplay').classList.add('text-white');
+  }
+  function resetTimer() {
+    timerSeconds = 0;
+    document.getElementById('timerDisplay').textContent = '00:00';
+  }
+
+  // ── Slide navigation ──────────────────────────────────────────────────────
   async function finishSlide() {
     const btn = document.getElementById('finishSlideBtn');
     btn.disabled = true;
     btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-    </svg> Processing...`;
+    </svg>`;
 
     const narration = document.getElementById('narrationInput').value.trim();
     try {
@@ -256,26 +335,29 @@
       const data = await res.json();
 
       if (data.action === 'INTERRUPT') {
-        state.in_qa_mode = true; state.follow_up_round = 1;
-        state.challenge_type = data.challenge_type || '';
+        state.in_qa_mode     = true;
+        state.follow_up_round = 1;
+        state.challenge_type  = data.challenge_type || '';
         showQAChallenge(data.question, 1, data.challenge_type);
-        addLog(`⚡ Challenge triggered: ${data.challenge_type || 'Unknown'}`);
-        btn.innerHTML = `<span class="text-red-400 text-xs">⚡ Answer challenge first</span>`;
+        addLog(`⚡ Challenge: ${data.challenge_type || 'Unknown'}`);
+        pauseTimer();
+        btn.innerHTML = `<span class="text-red-400 text-xs">⚡ Answer first</span>`;
 
       } else if (data.action === 'NEXT_SLIDE') {
         state.current_page = data.page;
         updateSlideDisplay(data.slide);
         document.getElementById('narrationInput').value = '';
-        addLog(`✓ Slide ${state.current_page - 1} → Slide ${state.current_page}`);
+        addLog(`✓ Slide ${state.current_page - 1} → ${state.current_page}`);
         resetBtn();
 
       } else if (data.action === 'PRESENTATION_DONE') {
-        addLog('✓ All slides complete — generating AI evaluation…');
+        addLog('✓ All slides done — generating report…');
         await finishPresentation();
       }
     } catch(err) { console.error(err); resetBtn(); }
   }
 
+  // ── Q&A ───────────────────────────────────────────────────────────────────
   async function submitAnswer() {
     const answer = document.getElementById('answerInput').value.trim();
     if (!answer) return;
@@ -284,7 +366,7 @@
     btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-    </svg> AI generating follow-up…`;
+    </svg> AI thinking…`;
 
     try {
       const res = await fetch('/x/submit-answer', {
@@ -297,22 +379,24 @@
       if (data.status === 'CONTINUE_QA') {
         state.follow_up_round = data.round;
         document.getElementById('qaRoundBadge').textContent = `Round ${data.round}`;
-        document.getElementById('qaQuestion').textContent = data.next_question;
-        addLog(`↪ AI follow-up round ${data.round}`);
+        document.getElementById('qaQuestion').textContent   = data.next_question;
+        addLog(`↪ Follow-up round ${data.round}`);
         btn.disabled = false;
         btn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>Submit Answer`;
 
       } else if (data.status === 'QA_FINISHED') {
         state.in_qa_mode = false; state.total_interruptions++;
-        document.getElementById('interruptCount').textContent = state.total_interruptions;
+        document.getElementById('interruptBadge').textContent = `⚡ ${state.total_interruptions} challenge(s)`;
+        document.getElementById('interruptBadge').className = 'text-orange-400 bg-orange-950/30 border border-orange-800/30 px-2 py-0.5 rounded text-xs font-mono';
         hideQAPanel();
-        showToast(data.message || '质询结束，请继续您的 Presentation。');
+        showToast(data.message || 'Challenge done. Continue your presentation.');
         addLog(`✅ Challenge complete`);
+        resumeTimer();
         if (data.next_page) {
           state.current_page = data.next_page;
-          const nextSlide = slides.find(s => s.page === data.next_page);
-          if (nextSlide) updateSlideDisplay(nextSlide);
+          const ns = slides.find(s => s.page === data.next_page);
+          if (ns) updateSlideDisplay(ns);
         }
         resetBtn();
         if (state.current_page > state.total_pages) await finishPresentation();
@@ -324,27 +408,56 @@
     }
   }
 
-  async function finishPresentation() {
-    const btn = document.getElementById('finishSlideBtn');
-    btn.disabled = true;
-    btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-    </svg> Generating AI report…`;
-    addLog('🔄 Running dual evaluation engine…');
-    const res = await fetch('/x/finish-presentation', { method: 'POST' });
-    const data = await res.json();
-    if (data.redirect) window.location.href = data.redirect;
+  // ── Finish presentation with loading overlay ───────────────────────────────
+  function triggerFinish() {
+    if (!confirm('End the presentation now and generate your report?')) return;
+    finishPresentation();
   }
 
-  function showQAChallenge(question, round, challengeType) {
-    document.getElementById('qaQuestion').textContent = question;
-    document.getElementById('qaRoundBadge').textContent = `Round ${round}`;
-    const ctBadge = document.getElementById('challengeTypeBadge');
-    if (challengeType) {
-      ctBadge.textContent = challengeType;
-      ctBadge.classList.remove('hidden');
+  async function finishPresentation() {
+    // Show full-screen loading overlay immediately — prevents flash/timeout feel
+    const overlay = document.getElementById('reportLoading');
+    const status  = document.getElementById('reportLoadingStatus');
+    const bar     = document.getElementById('reportLoadingBar');
+    overlay.classList.remove('hidden');
+
+    const msgs = [
+      { delay: 0,     pct: 10, text: 'Gemini is reviewing your narration and Q&A answers…' },
+      { delay: 8000,  pct: 30, text: 'Scoring 11 dimensions across two evaluation axes…' },
+      { delay: 18000, pct: 55, text: 'Writing personalised feedback and training plan…' },
+      { delay: 28000, pct: 75, text: 'Almost ready — finalising your report…' },
+      { delay: 40000, pct: 90, text: 'This can take up to 60 seconds. Please wait…' },
+    ];
+    const timers = msgs.map(m => setTimeout(() => {
+      status.textContent = m.text;
+      bar.style.width    = m.pct + '%';
+    }, m.delay));
+
+    addLog('🔄 Running AI evaluation…');
+    try {
+      const res  = await fetch('/x/finish-presentation', { method: 'POST' });
+      const data = await res.json();
+      timers.forEach(clearTimeout);
+      bar.style.width    = '100%';
+      status.textContent = 'Report ready! Loading…';
+      setTimeout(() => {
+        if (data.redirect) window.location.href = data.redirect;
+      }, 500);
+    } catch(err) {
+      timers.forEach(clearTimeout);
+      overlay.classList.add('hidden');
+      addLog('❌ Report generation failed — try again');
+      console.error(err);
+      resetBtn();
     }
+  }
+
+  // ── UI helpers ────────────────────────────────────────────────────────────
+  function showQAChallenge(question, round, challengeType) {
+    document.getElementById('qaQuestion').textContent   = question;
+    document.getElementById('qaRoundBadge').textContent = `Round ${round}`;
+    const ct = document.getElementById('challengeTypeBadge');
+    if (challengeType) { ct.textContent = challengeType; ct.classList.remove('hidden'); }
     document.getElementById('qaPanel').classList.remove('hidden');
     document.getElementById('finishSlideBtn').disabled = true;
     document.getElementById('slidePanel').style.borderColor = 'rgba(239,68,68,0.5)';
@@ -356,19 +469,43 @@
   }
 
   function updateSlideDisplay(slide) {
+    // Update label and fallback text
     document.getElementById('slideNum').textContent = slide.page;
-    document.getElementById('slideTitle').textContent = slide.title;
-    document.getElementById('slideContent').textContent = slide.content;
-    document.getElementById('pageIndicator').textContent = `${slide.page} / ${state.total_pages}`;
-    document.getElementById('statusPage').textContent = slide.page;
+    document.getElementById('slideTitle').textContent   = slide.title  || '';
+    document.getElementById('slideContent').textContent = slide.content || '';
+
+    // Swap slide image
+    const img = document.getElementById('slideImg');
+    img.style.opacity = '0';
+    img.src = `/x/slide-image/${slide.page}`;
+    img.onload  = () => { img.style.transition = 'opacity 0.3s'; img.style.opacity = '1'; };
+    img.onerror = () => {
+      img.style.display = 'none';
+      document.getElementById('slideFallback').style.display = 'flex';
+    };
+
+    // Update progress bar + dots
+    const pct = Math.round((slide.page / state.total_pages) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progCurrent').textContent  = slide.page;
+    document.getElementById('progPct').textContent      = pct + '%';
+    document.getElementById('statusPage').textContent   = slide.page;
+
     document.querySelectorAll('.slide-dot').forEach(dot => {
       const p = parseInt(dot.dataset.page);
       if (p === slide.page) { dot.classList.add('bg-indigo-400','w-5'); dot.classList.remove('bg-gray-700','w-2'); }
       else { dot.classList.remove('bg-indigo-400','w-5'); dot.classList.add('bg-gray-700','w-2'); }
     });
+
+    // Slide transition animation
     const panel = document.getElementById('slidePanel');
-    panel.style.opacity='0'; panel.style.transform='translateX(15px)';
-    setTimeout(() => { panel.style.transition='all 0.35s ease'; panel.style.opacity='1'; panel.style.transform='translateX(0)'; },50);
+    panel.style.opacity   = '0';
+    panel.style.transform = 'translateX(15px)';
+    setTimeout(() => {
+      panel.style.transition = 'all 0.35s ease';
+      panel.style.opacity    = '1';
+      panel.style.transform  = 'translateX(0)';
+    }, 50);
   }
 
   function resetBtn() {
@@ -376,17 +513,14 @@
     btn.disabled = false;
     btn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>Finish current slide`;
+    </svg>Next Slide`;
   }
 
   function addLog(msg) {
     const log = document.getElementById('sessionLog');
-    const e = Math.floor((Date.now()-sessionStart)/1000);
-    const m = String(Math.floor(e/60)).padStart(2,'0');
-    const s = String(e%60).padStart(2,'0');
-    const el = document.createElement('div');
+    const el  = document.createElement('div');
     el.className = 'flex gap-2 animate-fade-in';
-    el.innerHTML = `<span class="text-indigo-700 font-mono flex-shrink-0">${m}:${s}</span><span>${msg}</span>`;
+    el.innerHTML = `<span class="text-indigo-700 font-mono flex-shrink-0">${formatTime(timerSeconds)}</span><span>${msg}</span>`;
     log.appendChild(el); log.scrollTop = log.scrollHeight;
   }
 
@@ -396,35 +530,39 @@
     setTimeout(() => t.classList.add('hidden'), 4000);
   }
 
-  // Voice input for QA answers
+  // ── Voice input: Q&A ─────────────────────────────────────────────────────
   let recognition = null, isRecordingQA = false;
   function toggleVoice() {
-    if (!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)) { alert('Speech recognition not supported. Please type.'); return; }
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in this browser. Please type your answer.'); return;
+    }
     if (isRecordingQA) {
       recognition?.stop(); isRecordingQA = false;
       document.getElementById('voiceBtn').innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>Voice`;
       return;
     }
-    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SR(); recognition.lang='en-US'; recognition.continuous=true; recognition.interimResults=true;
     recognition.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('answerInput').value=t; };
     recognition.start(); isRecordingQA=true;
-    document.getElementById('voiceBtn').innerHTML=`<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>Stop`;
+    document.getElementById('voiceBtn').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>Stop`;
   }
 
-  // Voice input for narration
-  let narrationRecognition = null, isRecordingNarration = false;
+  // ── Voice input: narration ────────────────────────────────────────────────
+  let narrationRec = null, isRecordingNarration = false;
   function toggleNarrationVoice() {
-    if (!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)) { alert('Speech recognition not supported.'); return; }
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in this browser.'); return;
+    }
     if (isRecordingNarration) {
-      narrationRecognition?.stop(); isRecordingNarration=false;
+      narrationRec?.stop(); isRecordingNarration=false;
       document.getElementById('narrationVoiceBtn').innerHTML=`<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>Start Voice Recording`;
       return;
     }
-    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
-    narrationRecognition = new SR(); narrationRecognition.lang='en-US'; narrationRecognition.continuous=true; narrationRecognition.interimResults=true;
-    narrationRecognition.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('narrationInput').value=t; };
-    narrationRecognition.start(); isRecordingNarration=true;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    narrationRec = new SR(); narrationRec.lang='en-US'; narrationRec.continuous=true; narrationRec.interimResults=true;
+    narrationRec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('narrationInput').value=t; };
+    narrationRec.start(); isRecordingNarration=true;
     document.getElementById('narrationVoiceBtn').innerHTML=`<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>Stop Recording`;
   }
 </script>

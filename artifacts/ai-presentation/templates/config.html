@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Perspeak AI — Configure Your Rehearsal{% endblock %}
+{% block title %}Perspeak AI — Set Up Your Practice{% endblock %}
 
 {% block nav_steps %}
 <span class="text-gray-600">Upload</span>
@@ -13,51 +13,67 @@
   <div class="orb w-64 h-64 bg-purple-600/10 bottom-0 left-0"></div>
 
   <div class="relative z-10 max-w-4xl mx-auto animate-fade-in">
-    <div class="text-center mb-12">
+    <div class="text-center mb-10">
       <div class="inline-flex items-center gap-2 text-xs font-mono text-green-400
                   bg-green-950/40 border border-green-800/50 px-3 py-1.5 rounded-full mb-5">
         <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-        Presentation parsed · {{ slides|length }} slides detected
-        {% if ai_enabled %} · Claude Vision analyzed{% endif %}
+        {{ slides|length }} slides ready
+        {% if ai_enabled %} · AI Engine Active{% endif %}
       </div>
-      <h2 class="text-4xl font-bold text-white mb-3">Configure Your Rehearsal</h2>
-      <p class="text-gray-400 text-base">Choose audience, scenario, and pressure level. The AI examiner will be calibrated accordingly.</p>
+      <h2 class="text-4xl font-bold text-white mb-3">Set Up Your Practice</h2>
+      <p class="text-gray-400 text-base">Choose your audience, scenario, and pressure level.</p>
     </div>
 
-    <!-- Slide Preview -->
-    <div class="flex gap-3 mb-10 overflow-x-auto pb-2 justify-center flex-wrap">
+    <!-- Slide chips -->
+    <div class="flex gap-2 mb-10 overflow-x-auto pb-2 justify-center flex-wrap">
       {% for slide in slides %}
-      <div class="flex-shrink-0 glass rounded-xl px-4 py-3 flex items-center gap-3 min-w-[180px]">
-        <div class="w-7 h-7 rounded-lg bg-indigo-600/30 flex items-center justify-center
+      <div class="flex-shrink-0 glass rounded-lg px-3 py-2 flex items-center gap-2">
+        <div class="w-5 h-5 rounded bg-indigo-600/30 flex items-center justify-center
                     text-xs font-mono font-bold text-indigo-300 flex-shrink-0">{{ slide.page }}</div>
-        <div>
-          <p class="text-white text-sm font-medium leading-tight">{{ slide.title }}</p>
-          <p class="text-gray-600 text-xs mt-0.5">Slide {{ slide.page }}</p>
-        </div>
+        <p class="text-white text-xs font-medium leading-tight max-w-[140px] truncate">{{ slide.title }}</p>
       </div>
       {% endfor %}
     </div>
 
     <form id="configForm" class="space-y-8">
+
       <!-- AUDIENCE -->
       <div>
         <h3 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
           <span class="w-5 h-5 rounded bg-indigo-600/30 flex items-center justify-center text-xs">1</span>
-          Audience Persona
+          Audience
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set audiences = [
-            ('Professor', '🎓', 'Rigorous academic scrutiny. Long, multi-clause questions probing methodology, causality, and evidence.'),
-            ('Classmates', '👥', 'Friendly and curious. Practical questions about applications and real-world relevance.'),
-            ('VC', '💼', 'Cold and results-oriented. Short, sharp questions on market size, moat, and unit economics.'),
+            ('Professor', '🎓', [
+              'Asks long, detailed questions',
+              'Focuses on logic and evidence',
+              'Demands academic rigor',
+            ]),
+            ('Classmates', '👥', [
+              'Friendly and curious',
+              'Asks practical questions',
+              'Wants real-world examples',
+            ]),
+            ('VC', '💼', [
+              'Cold and results-focused',
+              'Short, sharp questions',
+              'Cares only about numbers',
+            ]),
           ] %}
-          {% for val, icon, desc in audiences %}
+          {% for val, icon, bullets in audiences %}
           <label class="config-card cursor-pointer group" data-group="audience" data-value="{{ val }}">
             <input type="radio" name="audience" value="{{ val }}" class="sr-only" {% if val == 'Professor' %}checked{% endif %}>
             <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
               <div class="text-2xl mb-3">{{ icon }}</div>
-              <div class="font-semibold text-white mb-2">{{ val }}</div>
-              <p class="text-gray-500 text-xs leading-relaxed">{{ desc }}</p>
+              <div class="font-semibold text-white mb-3">{{ val }}</div>
+              <ul class="space-y-1">
+                {% for b in bullets %}
+                <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
+                  <span class="text-indigo-600 mt-0.5 flex-shrink-0">·</span>{{ b }}
+                </li>
+                {% endfor %}
+              </ul>
             </div>
           </label>
           {% endfor %}
@@ -68,28 +84,46 @@
       <div>
         <h3 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
           <span class="w-5 h-5 rounded bg-indigo-600/30 flex items-center justify-center text-xs">2</span>
-          Rehearsal Scenario
+          Scenario
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set scenarios = [
-            ('Academic Presentation', '📖', False, 'No mid-session interruptions. AI pre-generates 3 deep questions for a post-presentation Q&A round.'),
-            ('Thesis Defense', '🔬', True, 'AI interrupts at the most vulnerable slide with a targeted challenge. Challenge type is pre-mapped.'),
-            ('MBA Case Pitch', '📈', True, 'Investor-style interruptions. Business-focused challenge classification. High commercial pressure.'),
+            ('Academic Presentation', '📖', False, [
+              'No sudden interruptions',
+              'AI prepares 3 deep questions',
+              'Post-presentation Q&A round',
+            ]),
+            ('Thesis Defense', '🔬', True, [
+              'AI stops you mid-presentation',
+              'Targets your weakest slide',
+              'Up to 2 follow-up challenges',
+            ]),
+            ('MBA Case Pitch', '📈', True, [
+              'Investor-style interruptions',
+              'Business challenge questions',
+              'High pressure, no small talk',
+            ]),
           ] %}
-          {% for val, icon, has_interrupt, desc in scenarios %}
+          {% for val, icon, has_interrupt, bullets in scenarios %}
           <label class="config-card cursor-pointer group" data-group="scenario" data-value="{{ val }}">
             <input type="radio" name="scenario" value="{{ val }}" class="sr-only" {% if val == 'Academic Presentation' %}checked{% endif %}>
             <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
               <div class="text-2xl mb-3">{{ icon }}</div>
-              <div class="flex items-start justify-between mb-2">
+              <div class="flex items-start justify-between mb-3">
                 <div class="font-semibold text-white leading-tight">{{ val }}</div>
                 {% if has_interrupt %}
-                <span class="text-xs bg-orange-900/40 text-orange-400 border border-orange-800/40 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ Interrupts</span>
+                <span class="text-xs bg-orange-900/40 text-orange-400 border border-orange-800/40 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ Interrupts</span>
                 {% else %}
-                <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">✓ Smooth</span>
+                <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/30 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">✓ Smooth</span>
                 {% endif %}
               </div>
-              <p class="text-gray-500 text-xs leading-relaxed">{{ desc }}</p>
+              <ul class="space-y-1">
+                {% for b in bullets %}
+                <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
+                  <span class="text-indigo-600 mt-0.5 flex-shrink-0">·</span>{{ b }}
+                </li>
+                {% endfor %}
+              </ul>
             </div>
           </label>
           {% endfor %}
@@ -104,36 +138,43 @@
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set difficulties = [
-            ('Easy', '🟢', 'Supportive', '1 gentle follow-up round. Encouraging language. Great for first-time practice.'),
-            ('Medium', '🟡', 'Normal', '1–2 follow-up rounds. Balanced challenge. Realistic professional setting.'),
-            ('Hard', '🔴', 'Aggressive', '2+ relentless follow-up rounds. Skeptical, cold, never satisfied. No compliments.'),
+            ('Easy',   '🟢', '温和支持', [
+              'Supportive audience',
+              '1 clarifying question only',
+              'No aggressive follow-ups',
+            ]),
+            ('Medium', '🟡', '正常互动', [
+              'Normal presentation setting',
+              '1–2 follow-up questions',
+              'Balanced challenge level',
+            ]),
+            ('Hard',   '🔴', '高压死磕', [
+              'Skeptical, aggressive audience',
+              'Continuous follow-up questions',
+              'No compliments, just pressure',
+            ]),
           ] %}
-          {% for val, dot, sub, desc in difficulties %}
+          {% for val, dot, zh, bullets in difficulties %}
           <label class="config-card cursor-pointer group" data-group="difficulty" data-value="{{ val }}">
             <input type="radio" name="difficulty" value="{{ val }}" class="sr-only" {% if val == 'Medium' %}checked{% endif %}>
             <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
               <div class="text-2xl mb-3">{{ dot }}</div>
-              <div class="font-semibold text-white mb-0.5">{{ val }}
-                <span class="text-xs text-gray-500 font-normal ml-1">· {{ sub }}</span>
+              <div class="font-semibold text-white mb-0.5">
+                {{ val }}
+                <span class="text-xs text-indigo-400 font-normal ml-1.5">{{ zh }}</span>
               </div>
-              <p class="text-gray-500 text-xs mt-2 leading-relaxed">{{ desc }}</p>
+              <ul class="mt-3 space-y-1">
+                {% for b in bullets %}
+                <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
+                  <span class="text-indigo-600 mt-0.5 flex-shrink-0">·</span>{{ b }}
+                </li>
+                {% endfor %}
+              </ul>
             </div>
           </label>
           {% endfor %}
         </div>
       </div>
-
-      <!-- Master Engine notice -->
-      {% if ai_enabled %}
-      <div class="glass rounded-xl px-5 py-4 flex items-start gap-3 border border-indigo-800/30">
-        <span class="text-indigo-400 mt-0.5">✨</span>
-        <div class="text-xs text-gray-500 leading-relaxed">
-          <strong class="text-indigo-400">Claude Master Engine</strong> — When you click Start Rehearsal,
-          Claude will analyse your slides + configuration and pre-map the most devastating challenge
-          question from the Academic or Business challenge type dictionary before the session begins.
-        </div>
-      </div>
-      {% endif %}
 
       <!-- Submit -->
       <div class="pt-2">
@@ -152,7 +193,7 @@
           </svg>
         </button>
         <p id="engineStatus" class="hidden text-center text-xs text-indigo-400 mt-3 animate-pulse">
-          ✨ Claude is calibrating your examiner persona and mapping challenge vulnerabilities…
+          AI is reading your slides…
         </p>
       </div>
     </form>
@@ -183,18 +224,17 @@
     document.getElementById('submitSpinner').classList.remove('hidden');
     document.getElementById('engineStatus').classList.remove('hidden');
 
-    // Staged loading messages — Vision + Master Engine can take 20-40s
     const stages = [
-      { delay: 0,     text: '✨ Claude Vision 正在读取您的幻灯片内容…' },
-      { delay: 8000,  text: '🔍 识别关键论点与数据漏洞…' },
-      { delay: 16000, text: '⚡ Master Engine 正在选择最犀利的挑战问题…' },
-      { delay: 24000, text: '🎯 生成 Q&A 题库与训练计划…' },
-      { delay: 32000, text: '⏳ AI 处理中，请稍候（最长 60 秒）…' },
+      { delay: 0,     text: 'Reading your slides with Claude Vision…' },
+      { delay: 8000,  text: 'Finding weak points in your argument…' },
+      { delay: 16000, text: 'Building challenge questions…' },
+      { delay: 24000, text: 'Preparing Q&A bank…' },
+      { delay: 32000, text: 'Almost ready (up to 60 sec)…' },
     ];
     const stageTimers = stages.map(s =>
       setTimeout(() => {
         document.getElementById('engineStatus').textContent = s.text;
-        document.getElementById('submitText').textContent = s.text;
+        document.getElementById('submitText').textContent   = s.text;
       }, s.delay)
     );
 
@@ -205,7 +245,6 @@
       difficulty: fd.get('difficulty') || 'Medium',
     };
 
-    // 90-second timeout — Vision (15s) + Master Engine (15s) + network overhead
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), 90000);
 
@@ -224,11 +263,11 @@
       clearTimeout(timeoutId);
       stageTimers.forEach(clearTimeout);
       const msg = err.name === 'AbortError'
-        ? 'AI 分析超时（90 秒）。请检查中转站响应速度后重试。'
-        : `网络错误：${err.message}`;
+        ? 'Request timed out (90 sec). Please check your API connection and try again.'
+        : `Network error: ${err.message}`;
       document.getElementById('engineStatus').textContent = '❌ ' + msg;
       document.getElementById('engineStatus').classList.add('text-red-400');
-      document.getElementById('submitText').textContent = '重试';
+      document.getElementById('submitText').textContent = 'Try Again';
       document.getElementById('submitSpinner').classList.add('hidden');
       btn.disabled = false;
     }

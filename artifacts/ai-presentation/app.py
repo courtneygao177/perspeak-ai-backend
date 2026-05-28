@@ -59,9 +59,14 @@ except Exception as _e:
     _ai_client = None
     AI_ENABLED = False
 
-# Model name — change this to whatever your relay supports, e.g. "gpt-4o", "claude-3-5-sonnet"
-MODEL = os.environ.get("UNIFIED_MODEL", "gpt-4o")
-MAX_TOKENS = 8192
+# ── Multi-model routing ───────────────────────────────────────────────────────
+# Each step is routed to the best-fit model via the same relay endpoint.
+# Override any model via env vars in Replit Secrets.
+VISION_MODEL = os.environ.get("VISION_MODEL", "claude-3-5-sonnet-20241022")  # Step 1: Vision
+TEXT_MODEL   = os.environ.get("TEXT_MODEL",   "gpt-4o")                      # Steps 3,5,6: reasoning
+EVAL_MODEL   = os.environ.get("EVAL_MODEL",   "gemini-1.5-pro")              # Steps 8,9: long-context eval
+MODEL        = os.environ.get("UNIFIED_MODEL", TEXT_MODEL)                   # legacy fallback
+MAX_TOKENS   = 8192
 
 
 def allowed_file(filename):
@@ -263,7 +268,7 @@ def analyze_slides_with_claude(images_b64, filename):
             })
 
         response = _ai_client.chat.completions.create(
-            model=MODEL,
+            model=VISION_MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": content_parts}],
         )
@@ -373,7 +378,7 @@ Return ONLY valid JSON in this exact structure (no other text, no markdown):
 
     try:
         response = _ai_client.chat.completions.create(
-            model=MODEL,
+            model=TEXT_MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -445,7 +450,7 @@ Return ONLY the question text. No preamble, no labels, no markdown."""
 
     try:
         response = _ai_client.chat.completions.create(
-            model=MODEL,
+            model=TEXT_MODEL,
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -554,7 +559,7 @@ Scoring guidelines:
 
     try:
         response = _ai_client.chat.completions.create(
-            model=MODEL,
+            model=EVAL_MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -673,7 +678,7 @@ Be concise, direct, and evidence-based. Reference the actual scores above."""
 
     try:
         response = _ai_client.chat.completions.create(
-            model=MODEL,
+            model=EVAL_MODEL,
             max_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -762,6 +767,7 @@ def sandbox():
     slides = session.get("slides", [])
     cfg = session.get("config", {})
     current_slide = next((s for s in slides if s["page"] == state["current_page"]), slides[0])
+    has_file = bool(session.get("filepath") and os.path.exists(session.get("filepath", "")))
     return render_template(
         "sandbox.html",
         state=state,
@@ -770,7 +776,43 @@ def sandbox():
         current_slide=current_slide,
         total_pages=len(slides),
         ai_enabled=AI_ENABLED,
+        has_file=has_file,
     )
+
+
+@app.route("/x/slide-image/<int:page>")
+def slide_image(page):
+    """Serve a specific PDF page as PNG image for the sandbox viewer."""
+    from flask import Response as _R
+    filepath = session.get("filepath", "")
+    if not filepath or not os.path.exists(filepath):
+        # Return a placeholder SVG when no file is uploaded
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500">'
+            f'<rect width="800" height="500" fill="#12121f"/>'
+            f'<text x="400" y="240" text-anchor="middle" fill="#6366f1" '
+            f'font-size="22" font-family="monospace">Slide {page}</text>'
+            f'<text x="400" y="275" text-anchor="middle" fill="#374151" '
+            f'font-size="14" font-family="sans-serif">No file uploaded — mock mode</text>'
+            f'</svg>'
+        )
+        return _R(svg, mimetype="image/svg+xml")
+    try:
+        import fitz
+        doc = fitz.open(filepath)
+        if page < 1 or page > len(doc):
+            doc.close()
+            return "Page out of range", 404
+        p = doc[page - 1]
+        mat = fitz.Matrix(2.0, 2.0)   # 2× scale for crisp display
+        pix = p.get_pixmap(matrix=mat)
+        img_bytes = pix.tobytes("png")
+        doc.close()
+        return _R(img_bytes, mimetype="image/png",
+                  headers={"Cache-Control": "max-age=3600"})
+    except Exception as e:
+        app.logger.error(f"slide_image page={page} failed: {e}")
+        return "Error generating image", 500
 
 
 @app.route("/report")
