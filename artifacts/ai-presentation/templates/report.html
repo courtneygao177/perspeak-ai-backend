@@ -1,11 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Perspeak AI — Rehearsal Report{% endblock %}
+{% block title %}Perspeak AI — Report{% endblock %}
 
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  .score-bar { background: linear-gradient(90deg,#6366f1,#818cf8); border-radius:9999px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
-  .section-card { background:rgba(18,18,31,.8); border:1px solid rgba(99,102,241,.15); border-radius:1rem; }
+  .section-card { background:rgba(18,18,31,.85); border:1px solid rgba(99,102,241,.15); border-radius:1rem; }
+  .dim-card { cursor:pointer; transition:all .2s; border:1px solid rgba(99,102,241,.15); border-radius:.875rem;
+              background:rgba(18,18,31,.7); }
+  .dim-card:hover { border-color:rgba(99,102,241,.5); background:rgba(30,30,60,.6); transform:translateY(-2px); }
+  .score-bar { background:linear-gradient(90deg,#6366f1,#818cf8); border-radius:9999px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:100;
+              align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+  .modal-bg.open { display:flex; }
+  .modal-box { background:#0f0f1f; border:1px solid rgba(99,102,241,.35); border-radius:1.25rem;
+               max-width:480px; width:90%; padding:1.75rem; position:relative; animation:modalIn .2s ease; }
+  @keyframes modalIn { from { opacity:0; transform:scale(.95) translateY(8px); } to { opacity:1; transform:none; } }
   .tp h2 { font-size:1.05rem;font-weight:700;color:#818cf8;margin:1.25rem 0 .5rem; }
   .tp h3 { font-size:.875rem;font-weight:600;color:#c4b5fd;margin:1rem 0 .4rem; }
   .tp p  { color:#9ca3af;font-size:.85rem;line-height:1.65;margin-bottom:.5rem; }
@@ -13,10 +22,14 @@
   .tp ul { list-style:none;padding:0; }
   .tp li { color:#9ca3af;font-size:.85rem;line-height:1.7;padding-left:1rem;position:relative; }
   .tp li::before { content:'›';position:absolute;left:0;color:#6366f1; }
-  canvas { max-height:280px; }
-  .challenge-badge { display:inline-flex;align-items:center;gap:.375rem;font-size:.7rem;
-    background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.25);
-    color:#fbbf24;padding:.25rem .625rem;border-radius:9999px;font-weight:600; }
+  canvas { max-height:260px; }
+  .good-item { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem; background:rgba(16,42,24,.6);
+               border:1px solid rgba(34,197,94,.15); border-radius:.625rem; }
+  .fix-item  { background:rgba(45,28,8,.5); border:1px solid rgba(234,179,8,.2); border-radius:.75rem;
+               overflow:hidden; }
+  .fix-header{ padding:.75rem 1rem; background:rgba(234,179,8,.06); border-bottom:1px solid rgba(234,179,8,.12); }
+  .fix-body  { padding:.875rem 1rem; display:grid; gap:.5rem; }
+  .fix-label { font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
 </style>
 {% endblock %}
 
@@ -28,202 +41,208 @@
 {% endblock %}
 
 {% block content %}
-<div class="relative max-w-6xl mx-auto px-6 py-10 animate-fade-in">
+{% set pillar   = evaluation.pillar %}
+{% set scores   = pillar.scores %}
+{% set diminfo  = pillar.dimensions_info %}
+{% set avg_score = ((scores.structure + scores.fluency + scores.relevance + scores.delivery) / 4) | round | int %}
+
+<div class="relative max-w-5xl mx-auto px-5 py-10 animate-fade-in">
   <div class="orb w-80 h-80 bg-indigo-600/10 top-0 right-0"></div>
   <div class="orb w-64 h-64 bg-purple-600/8 bottom-40 left-0"></div>
 
   <!-- Header -->
   <div class="relative z-10 mb-8">
-    <div class="flex flex-wrap items-center gap-3 mb-4">
+    <div class="flex flex-wrap items-center gap-2 mb-4">
       <div class="inline-flex items-center gap-2 text-xs font-mono text-indigo-400
                   bg-indigo-950/60 border border-indigo-800/50 px-3 py-1.5 rounded-full">
-        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-        Session Complete · {{ evaluation.scenario }} · {{ evaluation.audience }} · {{ evaluation.difficulty }}
+        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+        {{ evaluation.scenario }} · {{ evaluation.audience }} · {{ evaluation.difficulty }}
       </div>
       {% if evaluation.ai_powered %}
       <div class="inline-flex items-center gap-2 text-xs font-mono text-green-400
                   bg-green-950/40 border border-green-800/40 px-3 py-1.5 rounded-full">
         <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-        AI-Powered Evaluation
+        AI-Powered · Gemini 1.5 Pro
       </div>
       {% endif %}
       {% if evaluation.challenge_type %}
-      <div class="challenge-badge">
-        ⚡ Challenge: {{ evaluation.challenge_type }}
+      <div class="inline-flex items-center gap-1.5 text-xs font-mono text-yellow-400
+                  bg-yellow-950/30 border border-yellow-800/30 px-3 py-1.5 rounded-full">
+        ⚡ {{ evaluation.challenge_type }}
       </div>
       {% endif %}
     </div>
     <h1 class="text-4xl font-bold text-white mb-2">Rehearsal Report</h1>
-    <p class="text-gray-500 text-sm">
-      {{ evaluation.total_interruptions }} interruption(s) handled ·
-      Dual-quality analysis complete
-    </p>
+    <p class="text-gray-500 text-sm">4-pillar precision audit · AAC&amp;U + Toastmasters rubric</p>
   </div>
 
-  <!-- Overall Score Banner -->
-  <div class="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-    <div class="section-card p-6 flex items-center gap-5">
-      <div class="relative w-16 h-16 flex-shrink-0">
-        <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1e1e35" stroke-width="3"/>
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" stroke-width="3"
-                  stroke-dasharray="{{ (evaluation.presentation_quality.overall / 10 * 100)|round }} {{ (100 - (evaluation.presentation_quality.overall / 10 * 100))|round }}"
-                  stroke-linecap="round"/>
-        </svg>
-        <div class="absolute inset-0 flex items-center justify-center">
-          <span class="text-sm font-bold text-white">{{ evaluation.presentation_quality.overall }}</span>
-        </div>
-      </div>
-      <div>
-        <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Presentation Quality</p>
-        <p class="text-2xl font-bold text-white">{{ evaluation.presentation_quality.overall }}<span class="text-gray-600 text-lg">/10</span></p>
-        <p class="text-xs text-gray-500 mt-1 leading-relaxed">{{ evaluation.presentation_quality.feedback[:100] }}…</p>
-      </div>
-    </div>
-    <div class="section-card p-6 flex items-center gap-5">
-      <div class="relative w-16 h-16 flex-shrink-0">
-        <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1e1e35" stroke-width="3"/>
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#c4b5fd" stroke-width="3"
-                  stroke-dasharray="{{ (evaluation.communication_quality.overall / 10 * 100)|round }} {{ (100 - (evaluation.communication_quality.overall / 10 * 100))|round }}"
-                  stroke-linecap="round"/>
-        </svg>
-        <div class="absolute inset-0 flex items-center justify-center">
-          <span class="text-sm font-bold text-white">{{ evaluation.communication_quality.overall }}</span>
-        </div>
-      </div>
-      <div>
-        <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Communication Quality</p>
-        <p class="text-2xl font-bold text-white">{{ evaluation.communication_quality.overall }}<span class="text-gray-600 text-lg">/10</span></p>
-        <p class="text-xs text-gray-500 mt-1 leading-relaxed">{{ evaluation.communication_quality.feedback[:100] }}…</p>
-      </div>
-    </div>
-  </div>
+  <!-- Overall Score + Radar -->
+  <div class="relative z-10 grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
 
-  <!-- Challenge Type Performance callout -->
-  {% if evaluation.challenge_type and (evaluation.presentation_quality.get('challenge_type_performance') or evaluation.communication_quality.get('challenge_type_performance')) %}
-  <div class="relative z-10 section-card p-5 mb-8 border border-yellow-900/30">
-    <div class="flex items-start gap-3">
-      <div class="w-8 h-8 rounded-lg bg-yellow-900/30 flex items-center justify-center flex-shrink-0">
-        <span class="text-yellow-400 text-sm">⚡</span>
-      </div>
-      <div>
-        <h2 class="text-sm font-semibold text-yellow-400 mb-2">Challenge Type Performance: {{ evaluation.challenge_type }}</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-gray-400 leading-relaxed">
-          {% if evaluation.presentation_quality.get('challenge_type_performance') %}
-          <div>
-            <p class="text-indigo-400 font-semibold mb-1 uppercase tracking-widest text-xs">In Your Narration</p>
-            <p>{{ evaluation.presentation_quality.challenge_type_performance }}</p>
+    <!-- Left: Overall + 4 dim cards -->
+    <div class="lg:col-span-2 flex flex-col gap-4">
+
+      <!-- Overall score badge -->
+      <div class="section-card p-6 flex items-center gap-5">
+        <div class="relative w-20 h-20 flex-shrink-0">
+          <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1e1e35" stroke-width="3.5"/>
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" stroke-width="3.5"
+                    stroke-dasharray="{{ avg_score }} {{ 100 - avg_score }}"
+                    stroke-linecap="round"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-lg font-bold text-white">{{ avg_score }}</span>
           </div>
-          {% endif %}
-          {% if evaluation.communication_quality.get('challenge_type_performance') %}
-          <div>
-            <p class="text-purple-400 font-semibold mb-1 uppercase tracking-widest text-xs">Under Direct Challenge</p>
-            <p>{{ evaluation.communication_quality.challenge_type_performance }}</p>
-          </div>
-          {% endif %}
         </div>
-      </div>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- Charts Row -->
-  <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-    <div class="section-card p-6">
-      <h2 class="text-sm font-semibold text-white mb-1">Presentation Quality — Radar</h2>
-      <p class="text-xs text-gray-600 mb-5">6-dimension delivery breakdown</p>
-      <canvas id="radarPQ"></canvas>
-    </div>
-    <div class="section-card p-6">
-      <h2 class="text-sm font-semibold text-white mb-1">Communication Quality — Radar</h2>
-      <p class="text-xs text-gray-600 mb-5">5-dimension Q&amp;A performance</p>
-      <canvas id="radarCQ"></canvas>
-    </div>
-  </div>
-
-  <!-- Bar Chart -->
-  <div class="relative z-10 section-card p-6 mb-8">
-    <h2 class="text-sm font-semibold text-white mb-1">Score Comparison — All Dimensions</h2>
-    <p class="text-xs text-gray-600 mb-5">Side-by-side across both evaluation axes</p>
-    <canvas id="barChart" style="max-height:320px;"></canvas>
-  </div>
-
-  <!-- Dimension Bars -->
-  <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-    <div class="section-card p-6">
-      <h2 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-5">Presentation Quality — Detail</h2>
-      <div class="space-y-4">
-        {% for dim, score in evaluation.presentation_quality.dimensions.items() %}
         <div>
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs text-gray-400 font-medium">{{ dim }}</span>
-            <span class="text-xs font-mono text-white font-bold">{{ score }}</span>
-          </div>
-          <div class="h-1.5 bg-surface-500 rounded-full overflow-hidden">
-            <div class="score-bar h-full" style="width:0%" data-target="{{ (score/10*100)|round }}%"></div>
-          </div>
+          <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Overall Score</p>
+          <p class="text-3xl font-bold text-white">{{ avg_score }}<span class="text-gray-600 text-xl">/100</span></p>
+          <p class="text-xs text-gray-500 mt-1">Click any pillar card to see details</p>
         </div>
-        {% endfor %}
       </div>
-      <div class="mt-5 pt-4 border-t border-gray-800/40">
-        <p class="text-xs text-gray-500 leading-relaxed">{{ evaluation.presentation_quality.feedback }}</p>
-      </div>
-    </div>
 
-    <div class="section-card p-6">
-      <h2 class="text-sm font-semibold text-purple-400 uppercase tracking-widest mb-5">Communication Quality — Detail</h2>
-      <div class="space-y-4">
-        {% for dim, score in evaluation.communication_quality.dimensions.items() %}
-        <div>
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs text-gray-400 font-medium">{{ dim }}</span>
-            <span class="text-xs font-mono text-white font-bold">{{ score }}</span>
-          </div>
-          <div class="h-1.5 bg-surface-500 rounded-full overflow-hidden">
-            <div class="score-bar h-full" style="width:0%;background:linear-gradient(90deg,#9333ea,#c4b5fd);"
-                 data-target="{{ (score/10*100)|round }}%"></div>
-          </div>
+      <!-- 4 Dimension cards -->
+      {% for key, label, color in [
+        ('structure', 'Structure',  '#6366f1'),
+        ('fluency',   'Fluency',    '#a78bfa'),
+        ('relevance', 'Relevance',  '#22d3ee'),
+        ('delivery',  'Delivery',   '#f59e0b')
+      ] %}
+      {% set sc = scores[key] %}
+      {% if sc >= 85 %}{% set tag = 'Excellent' %}
+      {% elif sc >= 70 %}{% set tag = 'Good' %}
+      {% elif sc >= 55 %}{% set tag = 'Getting There' %}
+      {% elif sc >= 40 %}{% set tag = 'Developing' %}
+      {% else %}{% set tag = 'Needs Work' %}{% endif %}
+      <div class="dim-card p-4" onclick="openModal('{{ key }}')" data-dim="{{ key }}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold uppercase tracking-widest" style="color:{{ color }}">{{ label }}</span>
+          <span class="text-xs text-gray-600 font-mono">{{ sc }}/100</span>
         </div>
-        {% endfor %}
-      </div>
-      <div class="mt-5 pt-4 border-t border-gray-800/40">
-        <p class="text-xs text-gray-500 leading-relaxed">{{ evaluation.communication_quality.feedback }}</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Q&A Bank -->
-  {% if qa_bank %}
-  <div class="relative z-10 section-card p-6 mb-8">
-    <h2 class="text-sm font-semibold text-white mb-1">Post-Presentation Q&amp;A Bank</h2>
-    <p class="text-xs text-gray-600 mb-5">
-      {% if ai_enabled %}Claude-generated{% else %}Pre-set{% endif %}
-      questions for <strong class="text-gray-400">{{ evaluation.scenario }}</strong>.
-      Prepare answers before your actual presentation.
-    </p>
-    <div class="space-y-4">
-      {% for q in qa_bank %}
-      <div class="gradient-border rounded-xl p-4">
-        <div class="flex items-start gap-3">
-          <div class="w-6 h-6 rounded-lg bg-indigo-600/30 flex items-center justify-center
-                      text-xs font-mono font-bold text-indigo-400 flex-shrink-0 mt-0.5">{{ q.id }}</div>
-          <div class="flex-1">
-            <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span class="text-xs text-gray-500 bg-surface-600 px-2 py-0.5 rounded">{{ q.category }}</span>
-              <span class="text-xs {% if q.difficulty == 'Hard' %}text-red-400 bg-red-950/30{% else %}text-yellow-400 bg-yellow-950/30{% endif %} px-2 py-0.5 rounded">{{ q.difficulty }}</span>
-              {% if q.challenge_type %}
-              <span class="challenge-badge">⚡ {{ q.challenge_type }}</span>
-              {% endif %}
-            </div>
-            <p class="text-gray-300 text-sm leading-relaxed">{{ q.question }}</p>
+        <div class="flex items-end justify-between">
+          <div>
+            <span class="text-2xl font-bold text-white">{{ sc }}</span>
+            <span class="text-xs text-gray-500 ml-2">{{ tag }}</span>
           </div>
+          <svg class="w-4 h-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+          </svg>
+        </div>
+        <div class="mt-2 h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div class="h-full rounded-full score-bar" style="width:0%;background:{{ color }}" data-target="{{ sc }}%"></div>
         </div>
       </div>
       {% endfor %}
     </div>
+
+    <!-- Right: Radar chart -->
+    <div class="lg:col-span-3 section-card p-6 flex flex-col">
+      <h2 class="text-sm font-semibold text-white mb-1">Performance Radar</h2>
+      <p class="text-xs text-gray-600 mb-4">4-pillar breakdown (0–100)</p>
+      <div class="flex-1 flex items-center justify-center">
+        <canvas id="radarChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filler Word Log -->
+  {% if pillar.filler_log %}
+  <div class="relative z-10 section-card p-6 mb-6">
+    <h2 class="text-sm font-semibold text-white mb-1">Filler Word Log</h2>
+    <p class="text-xs text-gray-600 mb-4">Words that slowed your speech down</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-gray-800/60">
+            <th class="text-left py-2 pr-4 text-gray-600 font-semibold uppercase tracking-widest">Word</th>
+            <th class="text-left py-2 pr-4 text-gray-600 font-semibold uppercase tracking-widest">When</th>
+            <th class="text-left py-2 text-gray-600 font-semibold uppercase tracking-widest">Type</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800/30">
+          {% for f in pillar.filler_log %}
+          <tr>
+            <td class="py-2 pr-4 font-mono text-white">"{{ f.word }}"</td>
+            <td class="py-2 pr-4 text-gray-400">{{ f.timestamp }}</td>
+            <td class="py-2">
+              {% if f.type == 'Disruptive' %}
+              <span class="bg-red-950/40 text-red-400 border border-red-800/30 px-2 py-0.5 rounded-full text-xs font-mono">Disruptive</span>
+              {% else %}
+              <span class="bg-gray-800/60 text-gray-400 border border-gray-700/30 px-2 py-0.5 rounded-full text-xs font-mono">Assistive</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
   {% endif %}
+
+  <!-- Performance Analysis (dual column) -->
+  <div class="relative z-10 mb-8">
+    <h2 class="text-sm font-semibold text-white mb-5 flex items-center gap-2">
+      <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+      Performance Analysis
+    </h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+      <!-- What I did good -->
+      <div class="section-card p-5">
+        <div class="flex items-center gap-2 mb-4">
+          <svg class="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+          </svg>
+          <h3 class="text-sm font-semibold text-white">What I did good</h3>
+        </div>
+        <div class="space-y-2.5">
+          {% for item in pillar.what_i_did_good %}
+          <div class="good-item">
+            <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-gray-300 text-sm leading-relaxed">{{ item }}</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Areas for improvement -->
+      <div class="section-card p-5">
+        <div class="flex items-center gap-2 mb-4">
+          <svg class="w-4 h-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <h3 class="text-sm font-semibold text-white">Areas for Improvement</h3>
+        </div>
+        <div class="space-y-3">
+          {% for item in pillar.areas_for_improvement %}
+          <div class="fix-item">
+            <div class="fix-header">
+              <div class="flex items-start gap-2">
+                <span class="text-yellow-400 text-sm flex-shrink-0 mt-0.5">⚠</span>
+                <p class="text-yellow-300 text-sm font-semibold leading-snug">{{ item.issue }}</p>
+              </div>
+            </div>
+            <div class="fix-body">
+              <div>
+                <p class="fix-label text-orange-400 mb-1">Example</p>
+                <p class="text-gray-400 text-xs leading-relaxed italic">"{{ item.example }}"</p>
+              </div>
+              <div>
+                <p class="fix-label text-green-400 mb-1">How to fix</p>
+                <p class="text-gray-200 text-xs leading-relaxed">{{ item.how_to_fix }}</p>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Training Plan -->
   <div class="relative z-10 section-card p-6 mb-8">
@@ -237,7 +256,7 @@
       <div>
         <h2 class="text-sm font-semibold text-white">Personalized Training Plan</h2>
         <p class="text-xs text-gray-600">
-          {% if ai_enabled %}AI-generated based on your session + challenge type performance.{% else %}Template-based training plan.{% endif %}
+          {% if ai_enabled %}AI-generated · IELTS 5.5 language level{% else %}Template-based plan{% endif %}
         </p>
       </div>
     </div>
@@ -267,69 +286,103 @@
     </button>
   </div>
 </div>
+
+<!-- Dimension Detail Modals -->
+{% for key, label, color in [
+  ('structure', 'Structure',  '#6366f1'),
+  ('fluency',   'Fluency',    '#a78bfa'),
+  ('relevance', 'Relevance',  '#22d3ee'),
+  ('delivery',  'Delivery',   '#f59e0b')
+] %}
+{% set sc  = scores[key] %}
+{% set info = diminfo[key] if key in diminfo else {} %}
+{% if sc >= 85 %}{% set tag = 'Excellent' %}
+{% elif sc >= 70 %}{% set tag = 'Good' %}
+{% elif sc >= 55 %}{% set tag = 'Getting There' %}
+{% elif sc >= 40 %}{% set tag = 'Developing' %}
+{% else %}{% set tag = 'Needs Work' %}{% endif %}
+<div id="modal-{{ key }}" class="modal-bg" onclick="if(event.target===this)closeModal('{{ key }}')">
+  <div class="modal-box">
+    <button onclick="closeModal('{{ key }}')"
+            class="absolute top-4 right-4 text-gray-600 hover:text-white transition-colors">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <p class="text-xs font-bold uppercase tracking-widest mb-2" style="color:{{ color }}">{{ label }}</p>
+    <div class="flex items-baseline gap-3 mb-3">
+      <span class="text-5xl font-bold text-white">{{ sc }}</span>
+      <span class="text-xl font-semibold" style="color:{{ color }}">{{ tag }}</span>
+    </div>
+    <p class="text-gray-400 text-sm leading-relaxed mb-4">{{ info.explanation if info else '' }}</p>
+    <div class="bg-gray-900/60 rounded-xl p-4 border border-gray-800/40">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">How it's calculated</p>
+      <p class="text-gray-400 text-sm leading-relaxed">{{ info.calculation if info else '' }}</p>
+    </div>
+    <div class="mt-4">
+      <div class="flex justify-between text-xs text-gray-600 mb-1.5">
+        <span>Needs Work</span><span>Excellent</span>
+      </div>
+      <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div class="h-full rounded-full" style="width:{{ sc }}%;background:{{ color }};transition:width 0.8s ease;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const pqDims  = {{ evaluation.presentation_quality.dimensions | tojson }};
-  const cqDims  = {{ evaluation.communication_quality.dimensions | tojson }};
+  const scores = {{ evaluation.pillar.scores | tojson }};
 
-  const radarOptions = {
-    responsive: true,
-    plugins: { legend: { display: false } },
-    scales: {
-      r: {
-        min:0, max:10,
-        ticks: { color:'#4b5563', stepSize:2, backdropColor:'transparent', font:{size:10} },
-        grid: { color:'rgba(99,102,241,0.1)' },
-        pointLabels: { color:'#9ca3af', font:{size:11} },
-        angleLines: { color:'rgba(99,102,241,0.1)' },
-      }
-    }
-  };
-
-  new Chart(document.getElementById('radarPQ'), {
-    type:'radar',
-    data:{ labels:Object.keys(pqDims), datasets:[{
-      label:'PQ', data:Object.values(pqDims),
-      backgroundColor:'rgba(99,102,241,0.15)', borderColor:'#6366f1',
-      pointBackgroundColor:'#6366f1', pointBorderColor:'#1e1e35', pointRadius:4, borderWidth:2,
-    }]},
-    options: radarOptions,
-  });
-
-  new Chart(document.getElementById('radarCQ'), {
-    type:'radar',
-    data:{ labels:Object.keys(cqDims), datasets:[{
-      label:'CQ', data:Object.values(cqDims),
-      backgroundColor:'rgba(196,181,253,0.12)', borderColor:'#c4b5fd',
-      pointBackgroundColor:'#c4b5fd', pointBorderColor:'#1e1e35', pointRadius:4, borderWidth:2,
-    }]},
-    options: radarOptions,
-  });
-
-  const allLabels = [...Object.keys(pqDims), ...Object.keys(cqDims)];
-  const pqVals = [...Object.values(pqDims), ...Array(Object.keys(cqDims).length).fill(null)];
-  const cqVals = [...Array(Object.keys(pqDims).length).fill(null), ...Object.values(cqDims)];
-
-  new Chart(document.getElementById('barChart'), {
-    type:'bar',
-    data:{ labels:allLabels, datasets:[
-      { label:'Presentation Quality', data:pqVals, backgroundColor:'rgba(99,102,241,0.7)', borderColor:'#6366f1', borderWidth:1, borderRadius:6 },
-      { label:'Communication Quality', data:cqVals, backgroundColor:'rgba(196,181,253,0.7)', borderColor:'#c4b5fd', borderWidth:1, borderRadius:6 },
-    ]},
-    options:{
-      responsive:true,
-      plugins:{ legend:{labels:{color:'#9ca3af',font:{size:11}}}, tooltip:{callbacks:{label:c=>` Score: ${c.parsed.y}/10`}} },
-      scales:{
-        x:{ ticks:{color:'#6b7280',font:{size:10},maxRotation:30}, grid:{color:'rgba(99,102,241,0.06)'} },
-        y:{ min:0,max:10, ticks:{color:'#6b7280',font:{size:10},stepSize:2}, grid:{color:'rgba(99,102,241,0.06)'} },
+  // ── Radar chart ────────────────────────────────────────────────────────────
+  new Chart(document.getElementById('radarChart'), {
+    type: 'radar',
+    data: {
+      labels: ['Structure', 'Fluency', 'Relevance', 'Delivery'],
+      datasets: [{
+        label: 'Score',
+        data: [scores.structure, scores.fluency, scores.relevance, scores.delivery],
+        backgroundColor: 'rgba(99,102,241,0.15)',
+        borderColor: '#6366f1',
+        pointBackgroundColor: ['#6366f1','#a78bfa','#22d3ee','#f59e0b'],
+        pointBorderColor: '#0f0f1f',
+        pointRadius: 5,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        r: {
+          min: 0, max: 100,
+          ticks: { color: '#4b5563', stepSize: 25, backdropColor: 'transparent', font: { size: 10 } },
+          grid: { color: 'rgba(99,102,241,0.1)' },
+          pointLabels: { color: '#9ca3af', font: { size: 12, weight: '500' } },
+          angleLines: { color: 'rgba(99,102,241,0.1)' },
+        }
       }
     }
   });
 
+  // ── Score bar animations ───────────────────────────────────────────────────
   setTimeout(() => {
-    document.querySelectorAll('.score-bar[data-target]').forEach(bar => { bar.style.width = bar.dataset.target; });
+    document.querySelectorAll('.score-bar[data-target]').forEach(b => { b.style.width = b.dataset.target; });
   }, 300);
+
+  // ── Modal helpers ──────────────────────────────────────────────────────────
+  function openModal(key) {
+    document.getElementById('modal-' + key).classList.add('open');
+  }
+  function closeModal(key) {
+    document.getElementById('modal-' + key).classList.remove('open');
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
+    }
+  });
 </script>
 {% endblock %}

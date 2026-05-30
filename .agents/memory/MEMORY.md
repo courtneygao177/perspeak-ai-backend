@@ -1,0 +1,2 @@
+- [4-Pillar Eval Schema](pillar-eval-schema.md) — canonical `evaluation.pillar` schema with scores/dimensions_info/filler_log/what_i_did_good/areas_for_improvement; never revert to old PQ/CQ schema.
+- [Academic QA Flow](academic-qa-flow.md) — Academic Presentation triggers post-session Q&A via ACADEMIC_QA_START → /x/submit-academic-qa before /x/finish-presentation; Thesis/MBA go direct to finish.

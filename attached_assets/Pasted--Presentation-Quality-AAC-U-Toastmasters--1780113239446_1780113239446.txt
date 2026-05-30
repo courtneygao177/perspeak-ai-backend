@@ -1,0 +1,65 @@
+我们现在要全面重构第九步的报告页（Presentation Quality）底层打分引擎与前端交互界面。请完全丢弃旧的模糊文本评语，改用基于学术标准（AAC&U 与 Toastmasters）的高精度结构化质检器。
+
+请严格执行以下重构任务：
+
+1. 【后端重构：部署 4 大核心支柱审计 System Prompt】
+请修改后端调用 Gemini 1.5 Pro 的核心 Prompt。将以下规则作为系统核心审计律注入：
+\"\"\"
+You are a precision Presentation Coach. Your job is to audit the user's transcript using 4 Core Pillars:
+1. Structure & Organization: Catch [Abrupt Transition] when slide changes lack signposts.
+2. Language Fluency: Count filler words (uh, um, like, you know) and catch [Disruptive Filler Word] or [Grammar Broken].
+3. Content Relevance: Compare slide text with user speech. Catch [Omitted Slide Evidence] if they ignore key data on the screen.
+4. Delivery & Pace: Calculate WPM. Flag [Rushed Delivery] (>160 WPM) or [Hesitant Delivery] (<110 WPM).
+
+CRITICAL LANGUAGE CONSTRAINT:
+All output text for 'critique', 'explanation', and 'suggestions' MUST be written at an IELTS 5.5 - 6.0 level. Use clear, simple, and concise words. NEVER use complex academic jargon like 'exemplified' or 'mitigate'. Use 'show' or 'fix' instead.
+\"\"\"
+
+2. 【后端数据输出格式：必须输出严格的 JSON Schema】
+后端必须强制 Gemini 模型返回以下标准格式的 JSON 数据，以便前端完美渲染，严禁因格式问题闪退：
+{
+  "scores": {
+    "structure": 64,
+    "fluency": 58,
+    "relevance": 68,
+    "delivery": 72
+  },
+  "dimensions_info": {
+    "structure": {"explanation": "Measures how smoothly you connect different slides.", "calculation": "Computed by checking transition words between slides."},
+    "fluency": {"explanation": "Measures filler words like 'um' or 'uh' and long pauses.", "calculation": "Computed by counting filler words per minute."},
+    "relevance": {"explanation": "Measures how closely your words match the facts on the slide.", "calculation": "Computed by matching slide keywords with your speech."},
+    "delivery": {"explanation": "Measures your speaking speed (WPM) and talking energy.", "calculation": "Computed by dividing total words by presentation time."}
+  },
+  "filler_log": [
+    {"word": "uh", "timestamp": "0:07", "type": "Assistive"},
+    {"word": "uh", "timestamp": "0:37", "type": "Disruptive"}
+  ],
+  "what_i_did_good": [
+    "You used clear numbers from Slide 2 to support your idea.",
+    "Your speaking speed on Slide 1 was very natural and comfortable."
+  ],
+  "areas_for_improvement": [
+    {
+      "issue": "Fumbled the opening and faked a project name.",
+      "example": "You said 'EcoChef' but the slide title writes 'EcoShift'. This makes your introduction look unprofessional.",
+      "how_to_fix": "Look at the slide title before speaking. Start with: 'Today, I want to present our project, EcoShift.'"
+    },
+    {
+      "issue": "Abrupt transition from Slide 2 to Slide 3.",
+      "example": "You finished Slide 2 and immediately said 'The next part is cost.' without any connection.",
+      "how_to_fix": "Use a transition word. For example, say: 'Now that we understand the market, let us move on to the cost on Slide 3.'"
+    }
+  ]
+}
+
+3. 【前端 UI 重构：完美复刻 SlideCoach 体验】
+- 【雷达图与弹窗联动】：
+  * 使用 Chart.js 渲染一个精美的五角雷达图（展示 4 个维度的分数）。
+  * 每一个维度卡片设计为可点击项。当用户点击（例如点击 Relevance）时，弹出一个精美的 Modal 浮窗（参考图1）。
+  * 浮窗顶端展示大字分数（如 58 Generally Relevant），中间展示 `dimensions_info` 中的 explanation，底部展示 How it's calculated 的卡片进度条。
+- 【双栏精细化报告（参考图2）】：
+  * 页面下方划分为双栏布局。左侧为绿色主题的【What I did good】勾选列表（直接渲染 `what_i_did_good` 数组）。
+  * 右侧为黄色主题的【Areas for Improvement】警告列表（遍历 `areas_for_improvement` 数组）。
+  * 【核心要求】：右侧的每一项，必须清晰地用独立行或子色块同时展示出：【Issue（错误点）】、 【Example（具体反面实例）】、以及【How to fix（极其直观的手把手改写教学）】。
+
+请立即完整升级这一套 Presentation Quality 报告引擎，确保所有文本均符合雅思 5.5 的极简易读性！

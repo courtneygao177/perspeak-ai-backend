@@ -511,99 +511,97 @@ Return ONLY the question text. No preamble, no labels, no markdown."""
 
 
 # ─────────────────────────────────────────────
-# CLAUDE: DUAL EVALUATION ENGINE (Step 8)
+# GEMINI: 4-PILLAR EVALUATION ENGINE (Step 8)
 # ─────────────────────────────────────────────
-def run_dual_evaluation(slides, answers, config, challenge_seed, qa_bank):
+def run_pillar_evaluation(slides, answers, config, challenge_seed):
     """
-    Full AI-powered dual evaluation. Returns structured PQ + CQ scores with
-    challenge-type-specific feedback. Falls back to mock scoring on error.
+    4-Pillar precision evaluation via Gemini 1.5 Pro.
+    Rubric: Structure / Fluency / Relevance / Delivery (each 0-100).
+    Returns the canonical schema consumed by report.html.
+    Falls back to _mock_pillar_evaluation on error or when AI is off.
     """
-    audience = config.get("audience", "Professor")
-    scenario = config.get("scenario", "Academic Presentation")
-    difficulty = config.get("difficulty", "Medium")
+    audience       = config.get("audience",   "Professor")
+    scenario       = config.get("scenario",   "Academic Presentation")
+    difficulty     = config.get("difficulty", "Medium")
     challenge_type = (challenge_seed or {}).get("challenge_type", "Unknown")
-    interruptions = 0
 
     narrations = [a["text"] for a in answers if a.get("type") == "narration"]
-    qa_answers = [a for a in answers if a.get("type") == "qa_answer"]
-    interruptions = max((a.get("round", 1) for a in qa_answers), default=0)
+    qa_answers = [a for a in answers
+                  if a.get("type") in ("qa_answer", "academic_qa")]
 
     if not AI_ENABLED:
-        return _mock_evaluation(difficulty, audience, interruptions,
-                                bool(qa_answers), challenge_type)
+        return _mock_pillar_evaluation(difficulty)
 
     slide_text = "\n\n".join(
-        f"Slide {s['page']}: {s.get('title','')}\n{s.get('content','')}"
+        f"[Slide {s['page']}] {s.get('title', '')}\n{s.get('content', '')}"
         for s in slides
     )
     narration_text = "\n\n".join(
-        f"[Slide {i+1} narration]: {t}" for i, t in enumerate(narrations)
-    ) or "(No narration text recorded)"
+        f"[Slide {i + 1} narration]: {t}" for i, t in enumerate(narrations)
+    ) or "(No narration recorded — user did not type or speak any text)"
 
-    qa_text = "\n\n".join(
-        f"[Q&A Round {a['round']}]: {a['text']}" for a in qa_answers
-    ) or "(No Q&A answers recorded)"
+    qa_parts = []
+    for a in qa_answers:
+        q_text = a.get("question", "")
+        a_text = a.get("text", "")
+        if q_text:
+            qa_parts.append(f"Q: {q_text}\nA: {a_text}")
+        else:
+            qa_parts.append(f"[Answer]: {a_text}")
+    qa_text = "\n\n".join(qa_parts) or "(No Q&A answers recorded)"
 
-    qa_bank_text = "\n".join(
-        f"- [{q.get('challenge_type','')}] {q['question']}" for q in (qa_bank or [])
-    ) or "(none)"
+    prompt = f"""You are a precision Presentation Coach. Audit the user's transcript using 4 Core Pillars:
+1. Structure & Organization: Catch [Abrupt Transition] when slide changes lack signposts.
+2. Language Fluency: Count filler words (uh, um, like, you know) and catch [Disruptive Filler Word] or [Grammar Broken].
+3. Content Relevance: Compare slide text with user speech. Catch [Omitted Slide Evidence] if they ignore key data on the screen.
+4. Delivery & Pace: Calculate WPM. Flag [Rushed Delivery] (>160 WPM) or [Hesitant Delivery] (<110 WPM).
 
-    prompt = f"""You are a dual-dimension presentation evaluation AI.
+CRITICAL LANGUAGE CONSTRAINT:
+All output text for 'critique', 'explanation', and 'suggestions' MUST be written at an IELTS 5.5-6.0 level. Use clear, simple, concise words. NEVER use complex academic jargon like 'exemplified' or 'mitigate'. Use 'show' or 'fix' instead.
 
 SESSION CONTEXT:
-- Audience: {audience}
-- Scenario: {scenario}
-- Difficulty: {difficulty}
-- Challenge Type Triggered: {challenge_type}
-- Interruptions handled: {interruptions}
+- Audience: {audience} | Scenario: {scenario} | Difficulty: {difficulty}
+- Challenge Type: {challenge_type}
 
-SLIDES PRESENTED:
+SLIDE CONTENT (what was shown on screen):
 {slide_text}
 
 PRESENTER NARRATION (what they said):
 {narration_text}
 
-Q&A CHALLENGE ANSWERS:
+Q&A ANSWERS (mid-session challenges + post-session questions):
 {qa_text}
 
-POST-PRESENTATION Q&A BANK (reference):
-{qa_bank_text}
-
-TASK: Evaluate the presenter on TWO dimensions. Return ONLY valid JSON (no markdown):
-
+Return ONLY valid JSON (no markdown fences, no extra text):
 {{
-  "presentation_quality": {{
-    "overall": <float 0-10>,
-    "dimensions": {{
-      "Logic & Organization": <float 0-10>,
-      "Content Relevance": <float 0-10>,
-      "Grammar & Language": <float 0-10>,
-      "Fluency & Pace": <float 0-10>,
-      "Confidence & Tone": <float 0-10>,
-      "Filler Words": <float 0-10>
-    }},
-    "feedback": "<2-3 sentences of specific, actionable PQ feedback referencing actual content>",
-    "challenge_type_performance": "<1-2 sentences: how well did they handle the '{challenge_type}' challenge in their narration?>"
+  "scores": {{
+    "structure": <integer 0-100>,
+    "fluency":   <integer 0-100>,
+    "relevance": <integer 0-100>,
+    "delivery":  <integer 0-100>
   }},
-  "communication_quality": {{
-    "overall": <float 0-10>,
-    "dimensions": {{
-      "Response Rate": <float 0-10>,
-      "Answer Relevance": <float 0-10>,
-      "Structure (BLUF)": <float 0-10>,
-      "Persuasiveness": <float 0-10>,
-      "Under Pressure": <float 0-10>
-    }},
-    "feedback": "<2-3 sentences of specific CQ feedback referencing actual Q&A answers>",
-    "challenge_type_performance": "<1-2 sentences: how did they perform specifically on '{challenge_type}' when challenged?>"
-  }}
+  "dimensions_info": {{
+    "structure": {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}},
+    "fluency":   {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}},
+    "relevance": {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}},
+    "delivery":  {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}}
+  }},
+  "filler_log": [
+    {{"word": "<filler word>", "timestamp": "<e.g. Slide 1>", "type": "Assistive or Disruptive"}}
+  ],
+  "what_i_did_good": [
+    "<specific positive point — use simple English>"
+  ],
+  "areas_for_improvement": [
+    {{
+      "issue": "<short label>",
+      "example": "<exact quote or specific instance from their speech>",
+      "how_to_fix": "<direct, simple instruction — rewrite the example if possible>"
+    }}
+  ]
 }}
 
-Scoring guidelines:
-- Be honest and calibrated. Hard difficulty with short/vague answers = lower scores.
-- If no narration was recorded, score Fluency/Grammar/Filler around 4-5.
-- If no QA answers were recorded, score all CQ dimensions at 3-4.
-- Reference specific content from what they said in the feedback fields."""
+Scoring: Be honest. If no narration → structure/fluency/relevance = 30-45. If no Q&A → delivery only from pace estimate."""
 
     try:
         response = _ai_client.chat.completions.create(
@@ -616,150 +614,151 @@ Scoring guidelines:
         raw = re.sub(r"\s*```$", "", raw)
         result = json.loads(raw)
 
-        pq = result.get("presentation_quality", {})
-        cq = result.get("communication_quality", {})
-
-        # Clamp all scores to 0-10
-        for section in [pq, cq]:
-            if "dimensions" in section:
-                section["dimensions"] = {
-                    k: round(min(10.0, max(0.0, float(v))), 1)
-                    for k, v in section["dimensions"].items()
-                }
-            if "overall" in section:
-                section["overall"] = round(min(10.0, max(0.0, float(section["overall"]))), 1)
-
-        return pq, cq, interruptions
+        # Clamp scores 0-100
+        scores = result.get("scores", {})
+        result["scores"] = {
+            k: int(min(100, max(0, float(v))))
+            for k, v in scores.items()
+        }
+        return result
 
     except Exception as e:
-        app.logger.error(f"Dual evaluation failed: {e}")
-        return _mock_evaluation(difficulty, audience, interruptions,
-                                bool(qa_answers), challenge_type)
+        app.logger.error(f"Pillar evaluation failed: {e}")
+        traceback.print_exc()
+        return _mock_pillar_evaluation(difficulty)
 
 
-def _mock_evaluation(difficulty, audience, interruptions, has_answers, challenge_type):
-    """Fallback mock scores when AI call fails."""
-    pq_base = {"Easy": 8.5, "Medium": 7.0, "Hard": 5.5}.get(difficulty, 7.0)
-    cq_base = 7.5 if has_answers else 4.0
-    r = random.uniform
+def _mock_pillar_evaluation(difficulty):
+    """Fallback mock when AI is unavailable. Returns the same schema as run_pillar_evaluation."""
+    base = {"Easy": 74, "Medium": 61, "Hard": 49}.get(difficulty, 61)
+    r = random.randint
 
-    pq = {
-        "overall": round(min(10, pq_base + r(-0.8, 0.8)), 1),
-        "dimensions": {
-            "Logic & Organization": round(min(10, pq_base + r(-1, 1)), 1),
-            "Content Relevance": round(min(10, pq_base + r(-0.5, 1.2)), 1),
-            "Grammar & Language": round(min(10, pq_base + r(-1.5, 0.5)), 1),
-            "Fluency & Pace": round(min(10, pq_base + r(-1, 0.8)), 1),
-            "Confidence & Tone": round(min(10, pq_base + r(-0.8, 1)), 1),
-            "Filler Words": round(min(10, pq_base + r(-2, 0.3)), 1),
+    return {
+        "scores": {
+            "structure": min(100, base + r(-4, 10)),
+            "fluency":   min(100, base + r(-10, 5)),
+            "relevance": min(100, base + r(-8, 8)),
+            "delivery":  min(100, base + r(-6, 9)),
         },
-        "feedback": f"Evaluation completed in offline mode. Your {difficulty.lower()} difficulty session showed typical patterns for a {audience} audience.",
-        "challenge_type_performance": f"Your handling of the '{challenge_type}' challenge was noted. See the training plan for targeted drills.",
-    }
-    cq = {
-        "overall": round(min(10, cq_base + r(-0.5, 0.5)), 1),
-        "dimensions": {
-            "Response Rate": round(10.0 if has_answers else 3.0, 1),
-            "Answer Relevance": round(min(10, cq_base + r(-1, 0.8)), 1),
-            "Structure (BLUF)": round(min(10, cq_base + r(-1.5, 0.5)), 1),
-            "Persuasiveness": round(min(10, cq_base + r(-1, 1)), 1),
-            "Under Pressure": round(min(10, 5.0 + interruptions * 2 + r(-0.5, 0.5)), 1),
+        "dimensions_info": {
+            "structure": {
+                "explanation": "Measures how smoothly you connect different slides.",
+                "calculation": "Computed by checking for transition words between slides.",
+            },
+            "fluency": {
+                "explanation": "Measures filler words like 'um' or 'uh' and long pauses.",
+                "calculation": "Computed by counting filler words per minute of speech.",
+            },
+            "relevance": {
+                "explanation": "Measures how closely your words match the facts on the slide.",
+                "calculation": "Computed by matching slide keywords with your speech text.",
+            },
+            "delivery": {
+                "explanation": "Measures your speaking speed (WPM) and talking energy.",
+                "calculation": "Computed by dividing total words by your presentation time.",
+            },
         },
-        "feedback": "Offline evaluation mode. Run a full session with narration for AI-powered feedback.",
-        "challenge_type_performance": f"Could not evaluate '{challenge_type}' response quality in offline mode.",
+        "filler_log": [],
+        "what_i_did_good": [
+            "You kept a clear structure throughout most of your slides.",
+            "Your speaking pace was comfortable and easy to follow.",
+            "You covered the main points on each slide.",
+        ],
+        "areas_for_improvement": [
+            {
+                "issue": "Missing transition words between slides.",
+                "example": "You moved from one slide to the next without saying anything to connect them.",
+                "how_to_fix": "Try: 'Now that we have covered X, let us look at Y on the next slide.'",
+            },
+            {
+                "issue": "Some slide content was not mentioned in your speech.",
+                "example": "There were important facts on the slide that you did not talk about.",
+                "how_to_fix": "Before moving on, check the slide and make sure you mentioned all the key points.",
+            },
+        ],
     }
-    return pq, cq, interruptions
 
 
 # ─────────────────────────────────────────────
-# CLAUDE: GENERATE TRAINING PLAN (Step 8 → 9)
+# GEMINI: GENERATE TRAINING PLAN (Step 9)
 # ─────────────────────────────────────────────
-def generate_training_plan(pq, cq, config, challenge_type, interruptions):
-    """Generate a personalized training plan. Falls back to template on error."""
+def generate_training_plan(pillar_eval, config, challenge_type):
+    """Generate a personalized training plan based on 4-pillar scores."""
     difficulty = config.get("difficulty", "Medium")
-    audience = config.get("audience", "Professor")
-    scenario = config.get("scenario", "Academic Presentation")
+    audience   = config.get("audience",   "Professor")
+    scenario   = config.get("scenario",   "Academic Presentation")
 
-    weakest_pq = min(pq["dimensions"], key=pq["dimensions"].get)
-    weakest_cq = min(cq["dimensions"], key=cq["dimensions"].get)
+    scores = pillar_eval.get("scores", {})
+    weakest = min(scores, key=scores.get) if scores else "structure"
+    worst_score = scores.get(weakest, 60)
+    areas = pillar_eval.get("areas_for_improvement", [])
+    top_issues = " | ".join(a["issue"] for a in areas[:3]) if areas else "see score breakdown"
 
     if not AI_ENABLED:
-        return _template_training_plan(pq, cq, difficulty, audience, interruptions, challenge_type)
+        return _template_training_plan_v2(difficulty, audience, challenge_type, weakest, worst_score)
 
-    prompt = f"""You are a world-class presentation coach. Generate a highly personalized, actionable training plan.
+    prompt = f"""You are a world-class presentation coach. Write a short, practical training plan.
 
-SESSION RESULTS:
+SESSION:
 - Audience: {audience} | Scenario: {scenario} | Difficulty: {difficulty}
-- Interruptions handled: {interruptions}
-- Challenge Type triggered: {challenge_type}
+- Challenge Type: {challenge_type}
 
-PRESENTATION QUALITY SCORES:
-{json.dumps(pq['dimensions'], indent=2)}
-- Weakest PQ dimension: {weakest_pq} ({pq['dimensions'][weakest_pq]}/10)
-- PQ Feedback: {pq.get('feedback','')}
-- Challenge type performance: {pq.get('challenge_type_performance','')}
+4-PILLAR SCORES (0-100):
+{json.dumps(scores, indent=2)}
+Weakest pillar: {weakest} ({worst_score}/100)
 
-COMMUNICATION QUALITY SCORES:
-{json.dumps(cq['dimensions'], indent=2)}
-- Weakest CQ dimension: {weakest_cq} ({cq['dimensions'][weakest_cq]}/10)
-- CQ Feedback: {cq.get('feedback','')}
-- Challenge type performance: {cq.get('challenge_type_performance','')}
+TOP ISSUES FOUND:
+{top_issues}
 
-Write a training plan with these exact sections (use ## and ### headers, markdown format):
-## Personalized Training Plan
+Write the plan using these exact sections (markdown, simple IELTS 5.5 English):
+## Training Plan
 
-**Session Profile:** [summary line]
+**Profile:** [one line summary]
 
-### Priority 1 — [Weakest PQ Dimension] ({weakest_pq})
-[2-3 specific, immediately actionable drills. Reference the exact challenge type '{challenge_type}' where relevant.]
+### Fix First — {weakest.title()} ({worst_score}/100)
+[2 specific drills. Reference {challenge_type} where useful.]
 
-### Priority 2 — Communication Under Pressure: {weakest_cq}
-[2-3 specific drills targeting how to respond better to '{challenge_type}' challenges. Include the BLUF framework if relevant.]
+### Quick Wins This Week
+[3 bullet points — easy actions to do right now]
 
-### Challenge Type Deep-Dive: {challenge_type}
-[Explain what this challenge type means, why it was triggered in this session, and give 2 concrete techniques to preempt or deflect it in future presentations.]
+### 30-Day Schedule
+- Week 1: [focus]
+- Week 2: [focus]
+- Week 3: [focus]
+- Week 4: [focus]
 
-### 30-Day Accelerator Schedule
-[4 bullet points, one per week, with specific session types and goals]
-
-Be concise, direct, and evidence-based. Reference the actual scores above."""
+Keep every sentence short and simple. No jargon."""
 
     try:
         response = _ai_client.chat.completions.create(
             model=EVAL_MODEL,
-            max_tokens=MAX_TOKENS,
+            max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         app.logger.error(f"Training plan generation failed: {e}")
-        return _template_training_plan(pq, cq, difficulty, audience, interruptions, challenge_type)
+        return _template_training_plan_v2(difficulty, audience, challenge_type, weakest, worst_score)
 
 
-def _template_training_plan(pq, cq, difficulty, audience, interruptions, challenge_type):
-    weakest_pq = min(pq["dimensions"], key=pq["dimensions"].get)
-    weakest_cq = min(cq["dimensions"], key=cq["dimensions"].get)
-    pq_score = pq["dimensions"][weakest_pq]
-    cq_score = cq["dimensions"][weakest_cq]
+def _template_training_plan_v2(difficulty, audience, challenge_type, weakest, worst_score):
+    return f"""## Training Plan
 
-    return f"""## Personalized Training Plan
+**Profile:** {difficulty} difficulty · {audience} audience · Weakest area: {weakest.title()} ({worst_score}/100)
 
-**Session Profile:** {difficulty} difficulty · {audience} audience · {interruptions} interruption(s) handled
+### Fix First — {weakest.title()} ({worst_score}/100)
+Record yourself and play it back. Look for the moments where you lose the point. Practice the Pyramid Principle: say your main idea first, then give 2-3 supporting facts. When you face a **{challenge_type}** question, answer in one clear sentence first, then explain.
 
-### Priority 1 — {weakest_pq} (Score: {pq_score}/10)
-Practice the Pyramid Principle: lead with your conclusion, support with 3 sub-points. Record yourself and review for logical gaps. Pay particular attention to how you address **{challenge_type}** vulnerabilities in your narration.
+### Quick Wins This Week
+- Read your slide title out loud before you start talking about it.
+- Use a linking phrase between each slide. Example: "Now let us move to the next point."
+- Practice in front of a mirror for 10 minutes every day.
 
-### Priority 2 — Communication Under Pressure: {weakest_cq} (Score: {cq_score}/10)
-Drill the BLUF framework: Answer in 10 seconds → Evidence → Implication. Specifically practice responding to **{challenge_type}** challenges with data-first answers.
-
-### Challenge Type Deep-Dive: {challenge_type}
-This challenge type targets a fundamental weakness in your argument structure. Prepare a 30-second pre-emptive rebuttal for this type of question before your next real presentation.
-
-### 30-Day Accelerator Schedule
-- **Week 1:** Daily 15-min recording sessions (focus on pacing and structure)
-- **Week 2:** 3x Medium difficulty full rehearsals with peer feedback
-- **Week 3:** 2x Hard difficulty sessions with {audience} persona
-- **Week 4:** Mock full defense/pitch with recorded video review"""
+### 30-Day Schedule
+- Week 1: Daily 10-min recording sessions. Focus on transitions and pace.
+- Week 2: Two full rehearsals at {difficulty} difficulty. Ask a friend to give feedback.
+- Week 3: Two Hard difficulty sessions. Practice handling tough questions.
+- Week 4: One full mock session from start to finish. Record and review."""
 
 
 # ─────────────────────────────────────────────
@@ -1075,6 +1074,27 @@ def api_check_slide():
 
     next_page = current_page + 1
     if next_page > len(slides):
+        # ── Academic Presentation: trigger post-session Q&A before report ──
+        if scenario == "Academic Presentation":
+            qa_bank = session.get("qa_bank", [])
+            difficulty = config.get("difficulty", "Medium")
+            qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
+            questions = [q for q in qa_bank if isinstance(q, dict)][:qa_count]
+            if questions:
+                state["academic_qa_mode"] = True
+                state["academic_qa_index"] = 0
+                state["academic_qa_total"] = len(questions)
+                session["state"] = state
+                session["academic_qa_questions"] = questions
+                first_q = questions[0]
+                return jsonify({
+                    "action":          "ACADEMIC_QA_START",
+                    "question":        first_q.get("question", ""),
+                    "question_num":    1,
+                    "total_questions": len(questions),
+                    "challenge_type":  first_q.get("challenge_type", ""),
+                    "category":        first_q.get("category", ""),
+                })
         session["state"] = state
         return jsonify({"action": "PRESENTATION_DONE"})
 
@@ -1161,52 +1181,93 @@ def api_submit_answer():
         })
 
 
+@app.route("/x/submit-academic-qa", methods=["POST"])
+def api_submit_academic_qa():
+    """
+    Step Academic-7: Handle post-presentation Q&A for Academic Presentation scenario.
+    Cycles through qa_bank questions (count = 1/2/3 based on Easy/Medium/Hard).
+    Returns ACADEMIC_QA_NEXT (more questions) or ACADEMIC_QA_DONE (all answered).
+    """
+    if "state" not in session:
+        return jsonify({"error": "No active session"}), 400
+
+    data     = request.get_json() or {}
+    answer   = data.get("answer", "").strip()
+    state    = dict(session["state"])
+    config   = session.get("config", {})
+    questions = session.get("academic_qa_questions", [])
+
+    current_idx = state.get("academic_qa_index", 0)
+
+    # Persist the answer
+    current_q = questions[current_idx] if current_idx < len(questions) else {}
+    answers_list = list(session.get("answers", []))
+    answers_list.append({
+        "type":         "academic_qa",
+        "question_idx": current_idx,
+        "question":     current_q.get("question", ""),
+        "text":         answer,
+    })
+    session["answers"] = answers_list
+
+    next_idx = current_idx + 1
+    if next_idx < len(questions):
+        state["academic_qa_index"] = next_idx
+        session["state"] = state
+        next_q = questions[next_idx]
+        return jsonify({
+            "status":          "ACADEMIC_QA_NEXT",
+            "question":        next_q.get("question", ""),
+            "question_num":    next_idx + 1,
+            "total_questions": len(questions),
+            "challenge_type":  next_q.get("challenge_type", ""),
+            "category":        next_q.get("category", ""),
+        })
+    else:
+        state["academic_qa_mode"]  = False
+        state["academic_qa_index"] = 0
+        session["state"] = state
+        return jsonify({"status": "ACADEMIC_QA_DONE"})
+
+
 @app.route("/x/finish-presentation", methods=["POST"])
 def api_finish_presentation():
     """
-    Steps 7 & 8: Generate QA bank (non-MBA) + run AI dual evaluation + training plan.
+    Steps 7 & 8: Generate QA bank if needed + run 4-pillar AI evaluation + training plan.
     """
-    config = session.get("config", {})
-    answers = session.get("answers", [])
-    state = session.get("state", {})
-    slides = session.get("slides", MOCK_SLIDES)
+    config         = session.get("config", {})
+    answers        = session.get("answers", [])
+    slides         = session.get("slides", MOCK_SLIDES)
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
-    scenario = config.get("scenario", "Academic Presentation")
+    scenario       = config.get("scenario", "Academic Presentation")
 
-    # Step 7: QA bank
-    # Academic Presentation: already generated in start-session
-    # Thesis Defense: generate now post-presentation
-    # MBA Case Pitch: skip
+    # Step 7: QA bank — Thesis Defense generates it post-presentation
     qa_bank = session.get("qa_bank", [])
     if scenario == "Thesis Defense" and not qa_bank:
         _, qa_bank = build_master_engine(
             slides,
             config.get("audience", "Professor"),
-            "Academic Presentation",  # use academic challenge types for QA bank
+            "Academic Presentation",
             config.get("difficulty", "Medium"),
         )
         session["qa_bank"] = qa_bank
 
-    # Step 8: Dual evaluation
-    pq, cq, interruptions = run_dual_evaluation(
-        slides, answers, config, challenge_seed, qa_bank
-    )
+    # Step 8: 4-Pillar evaluation
+    pillar_eval = run_pillar_evaluation(slides, answers, config, challenge_seed)
 
     challenge_type = challenge_seed.get("challenge_type", "General")
 
     # Step 9: Training plan
-    training_plan = generate_training_plan(pq, cq, config, challenge_type, interruptions)
+    training_plan = generate_training_plan(pillar_eval, config, challenge_type)
 
     evaluation = {
-        "presentation_quality": pq,
-        "communication_quality": cq,
-        "training_plan": training_plan,
-        "scenario": scenario,
-        "audience": config.get("audience", "Professor"),
-        "difficulty": config.get("difficulty", "Medium"),
-        "total_interruptions": interruptions,
-        "challenge_type": challenge_type,
-        "ai_powered": AI_ENABLED,
+        "pillar":            pillar_eval,
+        "training_plan":     training_plan,
+        "scenario":          scenario,
+        "audience":          config.get("audience",   "Professor"),
+        "difficulty":        config.get("difficulty", "Medium"),
+        "challenge_type":    challenge_type,
+        "ai_powered":        AI_ENABLED,
     }
 
     session["evaluation"] = evaluation

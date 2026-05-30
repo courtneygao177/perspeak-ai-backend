@@ -107,6 +107,54 @@
         </p>
       </div>
 
+      <!-- Academic Post-Presentation Q&A Panel -->
+      <div id="academicQaPanel" class="hidden rounded-2xl p-6"
+           style="background:rgba(16,30,61,0.85);border:1px solid rgba(99,102,241,0.5);">
+        <div class="flex items-start gap-4">
+          <div class="w-10 h-10 rounded-xl bg-indigo-900/60 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <svg class="w-5 h-5 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
+              <span class="text-indigo-300 font-semibold text-sm">📋 POST-SESSION Q&amp;A</span>
+              <span id="acqNumBadge" class="text-xs bg-indigo-900/50 border border-indigo-700/40 text-indigo-300 px-2 py-0.5 rounded-full font-mono">Q 1 / 2</span>
+              <span id="acqTypeBadge" class="hidden text-xs bg-blue-950/40 border border-blue-800/40 text-blue-300 px-2 py-0.5 rounded-full font-mono"></span>
+            </div>
+            <p class="text-xs text-indigo-400/70 mb-3">Answer each question before generating your report.</p>
+            <p id="acqQuestion" class="text-indigo-100 text-base font-medium leading-relaxed mb-4"></p>
+            <div class="space-y-3">
+              <textarea id="acqInput"
+                        placeholder="Type your answer, or use Voice…"
+                        class="w-full rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none text-sm focus:outline-none transition-colors"
+                        style="background:rgba(30,30,80,0.5);border:1px solid rgba(99,102,241,0.3)"
+                        rows="3"></textarea>
+              <div class="flex gap-3">
+                <button onclick="submitAcademicQa()" id="acqSubmitBtn"
+                        class="flex-1 text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+                        style="background:rgba(99,102,241,0.7)">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                  </svg>
+                  Submit Answer
+                </button>
+                <button onclick="toggleAcqVoice()" id="acqVoiceBtn"
+                        class="px-4 rounded-xl text-sm transition-all flex items-center gap-2 text-indigo-300"
+                        style="background:rgba(30,30,80,0.5);border:1px solid rgba(99,102,241,0.3)">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                  </svg>
+                  Voice
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- QA Alert Panel -->
       <div id="qaPanel" class="hidden alarm-overlay rounded-2xl p-6">
         <div class="flex items-start gap-4">
@@ -369,11 +417,90 @@
         addLog(`✓ Slide ${state.current_page - 1} → ${state.current_page}`);
         resetBtn();
 
+      } else if (data.action === 'ACADEMIC_QA_START') {
+        // Post-presentation Q&A for Academic Presentation
+        pauseTimer();
+        document.getElementById('finishSlideBtn').disabled = true;
+        showAcademicQa(data.question, data.question_num, data.total_questions, data.challenge_type, data.category);
+        addLog(`📋 Post-session Q&A started (${data.total_questions} question(s))`);
+        btn.innerHTML = `<span class="text-indigo-400 text-xs">📋 Answer Q&A first</span>`;
+
       } else if (data.action === 'PRESENTATION_DONE') {
         addLog('✓ All slides done — generating report…');
         await finishPresentation();
       }
     } catch(err) { console.error(err); resetBtn(); }
+  }
+
+  // ── Academic Post-Session Q&A ──────────────────────────────────────────────
+  function showAcademicQa(question, num, total, challengeType, category) {
+    document.getElementById('acqQuestion').textContent = question;
+    document.getElementById('acqNumBadge').textContent = `Q ${num} / ${total}`;
+    const typeBadge = document.getElementById('acqTypeBadge');
+    if (challengeType) { typeBadge.textContent = challengeType; typeBadge.classList.remove('hidden'); }
+    else               { typeBadge.classList.add('hidden'); }
+    document.getElementById('academicQaPanel').classList.remove('hidden');
+    document.getElementById('acqInput').value = '';
+    document.getElementById('acqInput').focus();
+  }
+
+  function hideAcademicQaPanel() {
+    document.getElementById('academicQaPanel').classList.add('hidden');
+  }
+
+  async function submitAcademicQa() {
+    const answer = document.getElementById('acqInput').value.trim();
+    if (!answer) return;
+    const btn = document.getElementById('acqSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg> Saving…`;
+
+    try {
+      const res  = await fetch('/x/submit-academic-qa', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ answer }),
+      });
+      const data = await res.json();
+      document.getElementById('acqInput').value = '';
+
+      if (data.status === 'ACADEMIC_QA_NEXT') {
+        showAcademicQa(data.question, data.question_num, data.total_questions, data.challenge_type, data.category);
+        addLog(`↪ Academic Q&A ${data.question_num} / ${data.total_questions}`);
+        btn.disabled = false;
+        btn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>Submit Answer`;
+
+      } else if (data.status === 'ACADEMIC_QA_DONE') {
+        hideAcademicQaPanel();
+        addLog('✅ Post-session Q&A complete — generating report…');
+        await finishPresentation();
+      }
+    } catch(err) {
+      console.error(err);
+      btn.disabled = false;
+      btn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>Submit Answer`;
+    }
+  }
+
+  let acqRec = null, acqRecording = false;
+  function toggleAcqVoice() {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Speech recognition not supported. Please type your answer.'); return;
+    }
+    if (acqRecording) {
+      acqRec?.stop(); acqRecording = false;
+      document.getElementById('acqVoiceBtn').innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>Voice`;
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    acqRec = new SR(); acqRec.lang = 'en-US'; acqRec.continuous = true; acqRec.interimResults = true;
+    acqRec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('acqInput').value = t; };
+    acqRec.start(); acqRecording = true;
+    document.getElementById('acqVoiceBtn').innerHTML = `<span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>Stop`;
   }
 
   // ── Q&A ───────────────────────────────────────────────────────────────────
