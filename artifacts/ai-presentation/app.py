@@ -513,11 +513,17 @@ Return ONLY the question text. No preamble, no labels, no markdown."""
 # ─────────────────────────────────────────────
 # GEMINI: 4-PILLAR EVALUATION ENGINE (Step 8)
 # ─────────────────────────────────────────────
-def run_pillar_evaluation(slides, answers, config, challenge_seed):
+def run_pillar_evaluation(slides, answers, config, challenge_seed,
+                          fe_qa_history=None, total_time_seconds=0):
     """
     4-Pillar precision evaluation via Gemini 1.5 Pro.
     Rubric: Structure / Fluency / Relevance / Delivery (each 0-100).
-    Returns the canonical schema consumed by report.html.
+
+    New in this version:
+    - Accepts fe_qa_history (frontend Q&A chat log) for richer QA context.
+    - Accepts total_time_seconds for real WPM calculation.
+    - Pre-computes word count, WPM, and filler density from actual transcript text.
+    - Detects completely empty presentations and applies mandatory score penalties.
     Falls back to _mock_pillar_evaluation on error or when AI is off.
     """
     audience       = config.get("audience",   "Professor")
@@ -525,52 +531,146 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed):
     difficulty     = config.get("difficulty", "Medium")
     challenge_type = (challenge_seed or {}).get("challenge_type", "Unknown")
 
-    narrations = [a["text"] for a in answers if a.get("type") == "narration"]
-    qa_answers = [a for a in answers
-                  if a.get("type") in ("qa_answer", "academic_qa")]
+    narration_entries = [a for a in answers if a.get("type") == "narration"]
+    qa_entries        = [a for a in answers
+                         if a.get("type") in ("qa_answer", "academic_qa")]
 
+    # ── Pre-compute real metrics from the actual transcript text ───────────────
+    all_narration_text = " ".join(
+        (a.get("text") or "").strip() for a in narration_entries
+    ).strip()
+    total_words = len(all_narration_text.split()) if all_narration_text else 0
+
+    # Real WPM (requires timer data sent from frontend)
+    if total_words > 0 and total_time_seconds > 30:
+        wpm_estimate = round(total_words / (total_time_seconds / 60))
+    else:
+        wpm_estimate = 0
+
+    # Actual filler word scan from transcript
+    FILLER_RE = r'\b(um+|uh+|like|you know|basically|sort of|kind of|i mean|literally|right\?)\b'
+    filler_matches  = re.findall(FILLER_RE, all_narration_text.lower())
+    filler_count    = len(filler_matches)
+    filler_density  = round(filler_count / max(total_words, 1) * 100, 1)
+
+    # ALL-EMPTY detection: fewer than 10 total words means presenter never spoke
+    all_empty = total_words < 10
+
+    # ── Build per-slide narration map ──────────────────────────────────────────
+    narration_map = {a["page"]: (a.get("text") or "").strip() for a in narration_entries}
+    slide_narration_text = "\n\n".join(
+        f"[Slide {s['page']} — \"{s.get('title','')}\"]:\n"
+        f"{narration_map.get(s['page']) or '(No narration recorded for this slide)'}"
+        for s in slides
+    )
+
+    # ── Build QA exchange text ─────────────────────────────────────────────────
+    if fe_qa_history:
+        qa_history_text = "\n".join(
+            f"[{'AI Examiner' if h.get('role')=='ai' else 'Presenter'}] "
+            f"({h.get('type','')}) {h.get('text','')}"
+            for h in fe_qa_history
+        )
+    else:
+        qa_parts = []
+        for a in qa_entries:
+            q = a.get("question", "")
+            t = a.get("text", "")
+            qa_parts.append(f"Q: {q}\nA: {t}" if q else f"[Answer]: {t}")
+        qa_history_text = "\n\n".join(qa_parts) or "(No Q&A answers recorded)"
+
+    # ── No AI: return mock, but enforce empty-speech penalty ──────────────────
     if not AI_ENABLED:
-        return _mock_pillar_evaluation(difficulty)
+        result = _mock_pillar_evaluation(difficulty)
+        if all_empty:
+            result["scores"] = {"structure": 25, "fluency": 18, "relevance": 25, "delivery": 20}
+            result["what_i_did_good"] = ["You completed the setup and reached the practice stage."]
+            result["areas_for_improvement"] = [{
+                "issue": "No speech recorded",
+                "example": "We found no spoken words in your presentation.",
+                "how_to_fix": (
+                    "Use the 'Start Voice Recording' button or type your narration in the text box "
+                    "before clicking Next Slide. Gemini can only coach you if it has something to analyse."
+                ),
+            }] + result["areas_for_improvement"][:1]
+        return result
 
-    slide_text = "\n\n".join(
+    # ── Compose WPM / filler notes for the prompt ─────────────────────────────
+    if wpm_estimate > 0:
+        if wpm_estimate > 160:
+            wpm_note = f"{wpm_estimate} WPM — RUSHED DELIVERY (>160 WPM). Penalise Delivery."
+        elif wpm_estimate < 110:
+            wpm_note = f"{wpm_estimate} WPM — HESITANT DELIVERY (<110 WPM). Penalise Delivery."
+        else:
+            wpm_note = f"{wpm_estimate} WPM — good pace (110-160 WPM target)."
+    else:
+        wpm_note = "WPM unknown (no timer data). Estimate from text density."
+
+    if filler_count > 10:
+        filler_note = (
+            f"{filler_count} filler words ({filler_density}% of words). "
+            "HIGH density — penalise Fluency significantly (deduct ≥20 pts)."
+        )
+    elif filler_count > 5:
+        filler_note = (
+            f"{filler_count} filler words ({filler_density}% of words). "
+            "Moderate density — penalise Fluency mildly (deduct 5-15 pts)."
+        )
+    else:
+        filler_note = (
+            f"{filler_count} filler words ({filler_density}% of words). "
+            "Low density — do NOT penalise Fluency for fillers."
+        )
+
+    empty_warning = ""
+    if all_empty:
+        empty_warning = (
+            "\n⚠️ CRITICAL: The presenter's transcript is EMPTY (fewer than 10 words total). "
+            "They did not speak. ALL scores MUST be 15-40. "
+            "The FIRST entry in areas_for_improvement MUST be: "
+            '{"issue":"No speech recorded",'
+            '"example":"We found no spoken words in your presentation.",'
+            '"how_to_fix":"Use the Voice Recording button or type narration before clicking Next Slide."}\n'
+        )
+
+    slide_content_text = "\n\n".join(
         f"[Slide {s['page']}] {s.get('title', '')}\n{s.get('content', '')}"
         for s in slides
     )
-    narration_text = "\n\n".join(
-        f"[Slide {i + 1} narration]: {t}" for i, t in enumerate(narrations)
-    ) or "(No narration recorded — user did not type or speak any text)"
 
-    qa_parts = []
-    for a in qa_answers:
-        q_text = a.get("question", "")
-        a_text = a.get("text", "")
-        if q_text:
-            qa_parts.append(f"Q: {q_text}\nA: {a_text}")
-        else:
-            qa_parts.append(f"[Answer]: {a_text}")
-    qa_text = "\n\n".join(qa_parts) or "(No Q&A answers recorded)"
+    prompt = f"""You are a precision Presentation Coach running a 4-Pillar performance audit.
+{empty_warning}
+SCORING RUBRIC (0-100 each):
+1. Structure & Organization: Award for clear intro/body/conclusion and explicit transitions ("Moving on to…", "To summarise…"). Deduct for abrupt slide changes with no linking words. If empty: 20-35.
+2. Language Fluency: Use the pre-computed filler word count below as your anchor. Deduct 3 pts per filler word above 5 occurrences. Penalise broken grammar. If empty: 15-25.
+3. Content Relevance: Compare slide text with narration. Deduct for slides where key facts were ignored. Award for direct referencing of slide data. If empty: 20-35.
+4. Delivery & Pace: Use the pre-computed WPM as your anchor. Flag Rushed (>160) or Hesitant (<110). Award for smooth variation. If empty: 18-30.
 
-    prompt = f"""You are a precision Presentation Coach. Audit the user's transcript using 4 Core Pillars:
-1. Structure & Organization: Catch [Abrupt Transition] when slide changes lack signposts.
-2. Language Fluency: Count filler words (uh, um, like, you know) and catch [Disruptive Filler Word] or [Grammar Broken].
-3. Content Relevance: Compare slide text with user speech. Catch [Omitted Slide Evidence] if they ignore key data on the screen.
-4. Delivery & Pace: Calculate WPM. Flag [Rushed Delivery] (>160 WPM) or [Hesitant Delivery] (<110 WPM).
+PRE-COMPUTED METRICS — USE THESE AS ANCHORS, do NOT ignore them:
+- Total words spoken: {total_words}
+- WPM assessment: {wpm_note}
+- Filler word assessment: {filler_note}
+- All transcripts empty: {all_empty}
 
 CRITICAL LANGUAGE CONSTRAINT:
-All output text for 'critique', 'explanation', and 'suggestions' MUST be written at an IELTS 5.5-6.0 level. Use clear, simple, concise words. NEVER use complex academic jargon like 'exemplified' or 'mitigate'. Use 'show' or 'fix' instead.
+All output text MUST be at IELTS 5.5-6.0 level. Short, clear sentences only. No academic jargon.
+Use "show" not "demonstrate". Use "fix" not "mitigate". Use "say" not "articulate".
 
-SESSION CONTEXT:
+SESSION:
 - Audience: {audience} | Scenario: {scenario} | Difficulty: {difficulty}
 - Challenge Type: {challenge_type}
 
 SLIDE CONTENT (what was shown on screen):
-{slide_text}
+{slide_content_text}
 
-PRESENTER NARRATION (what they said):
-{narration_text}
+PRESENTER NARRATION (what they actually said, slide by slide):
+{slide_narration_text}
 
-Q&A ANSWERS (mid-session challenges + post-session questions):
-{qa_text}
+Q&A EXCHANGE HISTORY (real transcript of challenge and post-session Q&A):
+{qa_history_text}
+
+INSTRUCTION: Be specific. If they said something wrong, quote it. If they missed a slide point, name the slide.
+Scores for a presenter who said very little MUST be clearly lower than one who spoke fully.
 
 Return ONLY valid JSON (no markdown fences, no extra text):
 {{
@@ -581,27 +681,25 @@ Return ONLY valid JSON (no markdown fences, no extra text):
     "delivery":  <integer 0-100>
   }},
   "dimensions_info": {{
-    "structure": {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}},
-    "fluency":   {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}},
-    "relevance": {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}},
-    "delivery":  {{"explanation": "<1 simple sentence>", "calculation": "<1 simple sentence>"}}
+    "structure": {{"explanation": "<1 sentence about their specific structure>", "calculation": "<1 sentence: how you scored it>"}},
+    "fluency":   {{"explanation": "<1 sentence referencing their actual filler count>", "calculation": "<1 sentence: filler count and grammar issues found>"}},
+    "relevance": {{"explanation": "<1 sentence about which slides they covered>", "calculation": "<1 sentence: how many slides had good coverage>"}},
+    "delivery":  {{"explanation": "<1 sentence about their actual WPM>", "calculation": "<1 sentence: WPM value and pace verdict>"}}
   }},
   "filler_log": [
-    {{"word": "<filler word>", "timestamp": "<e.g. Slide 1>", "type": "Assistive or Disruptive"}}
+    {{"word": "<exact filler word from transcript>", "timestamp": "<Slide N where it appeared>", "type": "Assistive or Disruptive"}}
   ],
   "what_i_did_good": [
-    "<specific positive point — use simple English>"
+    "<specific strength — quote their actual words or reference a specific slide>"
   ],
   "areas_for_improvement": [
     {{
-      "issue": "<short label>",
-      "example": "<exact quote or specific instance from their speech>",
-      "how_to_fix": "<direct, simple instruction — rewrite the example if possible>"
+      "issue": "<short label for the problem>",
+      "example": "<exact quote from their speech OR specific observation>",
+      "how_to_fix": "<simple direct instruction — include a rewritten example if possible>"
     }}
   ]
-}}
-
-Scoring: Be honest. If no narration → structure/fluency/relevance = 30-45. If no Q&A → delivery only from pace estimate."""
+}}"""
 
     try:
         response = _ai_client.chat.completions.create(
@@ -620,12 +718,24 @@ Scoring: Be honest. If no narration → structure/fluency/relevance = 30-45. If 
             k: int(min(100, max(0, float(v))))
             for k, v in scores.items()
         }
+        # Enforce max-40 penalty for empty transcripts regardless of AI output
+        if all_empty:
+            result["scores"] = {k: min(v, 40) for k, v in result["scores"].items()}
+
         return result
 
     except Exception as e:
         app.logger.error(f"Pillar evaluation failed: {e}")
         traceback.print_exc()
-        return _mock_pillar_evaluation(difficulty)
+        result = _mock_pillar_evaluation(difficulty)
+        if all_empty:
+            result["scores"] = {"structure": 25, "fluency": 18, "relevance": 25, "delivery": 20}
+            result["areas_for_improvement"].insert(0, {
+                "issue": "No speech recorded",
+                "example": "We found no spoken words in your presentation.",
+                "how_to_fix": "Use the Voice Recording button or type narration before clicking Next Slide.",
+            })
+        return result
 
 
 def _mock_pillar_evaluation(difficulty):
@@ -1234,12 +1344,46 @@ def api_submit_academic_qa():
 def api_finish_presentation():
     """
     Steps 7 & 8: Generate QA bank if needed + run 4-pillar AI evaluation + training plan.
+    Accepts JSON body with frontend-collected real transcripts and QA history.
     """
     config         = session.get("config", {})
-    answers        = session.get("answers", [])
+    answers        = list(session.get("answers", []))
     slides         = session.get("slides", MOCK_SLIDES)
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
     scenario       = config.get("scenario", "Academic Presentation")
+
+    # ── Read real performance data sent by the frontend ────────────────────────
+    req_data           = request.get_json(silent=True) or {}
+    fe_transcripts     = req_data.get("presentation_transcripts", [])   # [{page,text,words}]
+    fe_qa_history      = req_data.get("qa_chat_history", [])            # [{role,text,type}]
+    total_time_seconds = int(req_data.get("total_time_seconds", 0) or 0)
+
+    # Merge frontend transcripts into session answers (fill gaps from voice/type)
+    if fe_transcripts:
+        existing_pages = {a["page"] for a in answers if a.get("type") == "narration"}
+        for t in fe_transcripts:
+            pg  = t.get("page", 0)
+            txt = (t.get("text") or "").strip()
+            if pg not in existing_pages and txt:
+                answers.append({"type": "narration", "page": pg, "text": txt})
+        session["answers"] = answers
+
+    # Merge frontend QA history if it has more data than what was saved to session
+    if fe_qa_history:
+        user_qa = [h for h in fe_qa_history if h.get("role") == "user"]
+        ai_qa   = [h for h in fe_qa_history if h.get("role") == "ai"]
+        existing_qa_count = sum(
+            1 for a in answers if a.get("type") in ("qa_answer", "academic_qa")
+        )
+        if len(user_qa) > existing_qa_count:
+            for i, ua in enumerate(user_qa):
+                ai_q = ai_qa[i]["text"] if i < len(ai_qa) else ""
+                answers.append({
+                    "type":     ua.get("type", "qa_answer"),
+                    "question": ai_q,
+                    "text":     ua.get("text", ""),
+                })
+            session["answers"] = answers
 
     # Step 7: QA bank — Thesis Defense generates it post-presentation
     qa_bank = session.get("qa_bank", [])
@@ -1252,8 +1396,12 @@ def api_finish_presentation():
         )
         session["qa_bank"] = qa_bank
 
-    # Step 8: 4-Pillar evaluation
-    pillar_eval = run_pillar_evaluation(slides, answers, config, challenge_seed)
+    # Step 8: 4-Pillar evaluation (with real transcript metrics)
+    pillar_eval = run_pillar_evaluation(
+        slides, answers, config, challenge_seed,
+        fe_qa_history=fe_qa_history,
+        total_time_seconds=total_time_seconds,
+    )
 
     challenge_type = challenge_seed.get("challenge_type", "General")
 
@@ -1261,13 +1409,13 @@ def api_finish_presentation():
     training_plan = generate_training_plan(pillar_eval, config, challenge_type)
 
     evaluation = {
-        "pillar":            pillar_eval,
-        "training_plan":     training_plan,
-        "scenario":          scenario,
-        "audience":          config.get("audience",   "Professor"),
-        "difficulty":        config.get("difficulty", "Medium"),
-        "challenge_type":    challenge_type,
-        "ai_powered":        AI_ENABLED,
+        "pillar":         pillar_eval,
+        "training_plan":  training_plan,
+        "scenario":       scenario,
+        "audience":       config.get("audience",   "Professor"),
+        "difficulty":     config.get("difficulty", "Medium"),
+        "challenge_type": challenge_type,
+        "ai_powered":     AI_ENABLED,
     }
 
     session["evaluation"] = evaluation

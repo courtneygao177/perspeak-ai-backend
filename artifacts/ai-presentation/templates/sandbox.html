@@ -349,6 +349,11 @@
   let slides     = {{ slides | tojson }};
   let hasFile    = {{ 'true' if has_file else 'false' }};
 
+  // ── Real data pipeline accumulators ─────────────────────────────────────────
+  // These are sent to /x/finish-presentation so Gemini sees actual user speech
+  let presentationTranscripts = []; // [{page, text, words}] — one entry per completed slide
+  let qaChatHistory           = []; // [{role:'ai'|'user', text, type:'interrupt'|'academic'}]
+
   // Render upcoming preview on first load
   document.addEventListener('DOMContentLoaded', () => renderUpcoming(state.current_page));
 
@@ -393,6 +398,9 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg>`;
 
+    // ── Stop active narration recording before submitting ─────────────────────
+    if (audioMode === 'narration') _stopAllRecording();
+
     const narration = document.getElementById('narrationInput').value.trim();
     try {
       const res = await fetch('/x/check-slide', {
@@ -402,15 +410,28 @@
       const data = await res.json();
 
       if (data.action === 'INTERRUPT') {
-        state.in_qa_mode     = true;
+        state.in_qa_mode      = true;
         state.follow_up_round = 1;
         state.challenge_type  = data.challenge_type || '';
+        // Save narration for this slide before the interrupt
+        presentationTranscripts.push({
+          page: state.current_page, text: narration,
+          words: narration.split(/\s+/).filter(Boolean).length,
+        });
+        // Exclusive audio: suspend narration, only QA mic now allowed
+        audioSuspendForQa();
         showQAChallenge(data.question, 1, data.challenge_type);
+        qaChatHistory.push({ role: 'ai', text: data.question, type: 'interrupt' });
         addLog(`⚡ Challenge: ${data.challenge_type || 'Unknown'}`);
         pauseTimer();
         btn.innerHTML = `<span class="text-red-400 text-xs">⚡ Answer first</span>`;
 
       } else if (data.action === 'NEXT_SLIDE') {
+        // Record completed slide transcript
+        presentationTranscripts.push({
+          page: state.current_page, text: narration,
+          words: narration.split(/\s+/).filter(Boolean).length,
+        });
         state.current_page = data.page;
         updateSlideDisplay(data.slide);
         document.getElementById('narrationInput').value = '';
@@ -418,14 +439,27 @@
         resetBtn();
 
       } else if (data.action === 'ACADEMIC_QA_START') {
-        // Post-presentation Q&A for Academic Presentation
+        // Record last slide transcript
+        presentationTranscripts.push({
+          page: state.current_page, text: narration,
+          words: narration.split(/\s+/).filter(Boolean).length,
+        });
+        // Exclusive audio: stop narration, only academic QA mic allowed
+        audioSuspendForQa();
         pauseTimer();
         document.getElementById('finishSlideBtn').disabled = true;
-        showAcademicQa(data.question, data.question_num, data.total_questions, data.challenge_type, data.category);
+        showAcademicQa(data.question, data.question_num, data.total_questions,
+                       data.challenge_type, data.category);
+        qaChatHistory.push({ role: 'ai', text: data.question, type: 'academic' });
         addLog(`📋 Post-session Q&A started (${data.total_questions} question(s))`);
         btn.innerHTML = `<span class="text-indigo-400 text-xs">📋 Answer Q&A first</span>`;
 
       } else if (data.action === 'PRESENTATION_DONE') {
+        // Record final slide transcript
+        presentationTranscripts.push({
+          page: state.current_page, text: narration,
+          words: narration.split(/\s+/).filter(Boolean).length,
+        });
         addLog('✓ All slides done — generating report…');
         await finishPresentation();
       }
@@ -457,6 +491,8 @@
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg> Saving…`;
+    // Record user academic QA answer
+    qaChatHistory.push({ role: 'user', text: answer, type: 'academic' });
 
     try {
       const res  = await fetch('/x/submit-academic-qa', {
@@ -467,6 +503,8 @@
       document.getElementById('acqInput').value = '';
 
       if (data.status === 'ACADEMIC_QA_NEXT') {
+        // Record next AI question in the chat history
+        qaChatHistory.push({ role: 'ai', text: data.question, type: 'academic' });
         showAcademicQa(data.question, data.question_num, data.total_questions, data.challenge_type, data.category);
         addLog(`↪ Academic Q&A ${data.question_num} / ${data.total_questions}`);
         btn.disabled = false;
@@ -486,23 +524,6 @@
     }
   }
 
-  let acqRec = null, acqRecording = false;
-  function toggleAcqVoice() {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert('Speech recognition not supported. Please type your answer.'); return;
-    }
-    if (acqRecording) {
-      acqRec?.stop(); acqRecording = false;
-      document.getElementById('acqVoiceBtn').innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>Voice`;
-      return;
-    }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    acqRec = new SR(); acqRec.lang = 'en-US'; acqRec.continuous = true; acqRec.interimResults = true;
-    acqRec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('acqInput').value = t; };
-    acqRec.start(); acqRecording = true;
-    document.getElementById('acqVoiceBtn').innerHTML = `<span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>Stop`;
-  }
-
   // ── Q&A ───────────────────────────────────────────────────────────────────
   async function submitAnswer() {
     const answer = document.getElementById('answerInput').value.trim();
@@ -513,6 +534,8 @@
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg> AI thinking…`;
+    // Record user's real QA answer
+    qaChatHistory.push({ role: 'user', text: answer, type: 'interrupt' });
 
     try {
       const res = await fetch('/x/submit-answer', {
@@ -523,6 +546,8 @@
       document.getElementById('answerInput').value = '';
 
       if (data.status === 'CONTINUE_QA') {
+        // Record the follow-up AI question
+        qaChatHistory.push({ role: 'ai', text: data.next_question, type: 'interrupt' });
         state.follow_up_round = data.round;
         document.getElementById('qaRoundBadge').textContent = `Round ${data.round}`;
         document.getElementById('qaQuestion').textContent   = data.next_question;
@@ -532,6 +557,8 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>Submit Answer`;
 
       } else if (data.status === 'QA_FINISHED') {
+        // Unlock audio: narration stream can resume (user must click the button)
+        audioResumeAfterQa();
         state.in_qa_mode = false; state.total_interruptions++;
         document.getElementById('interruptBadge').textContent = `⚡ ${state.total_interruptions} challenge(s)`;
         document.getElementById('interruptBadge').className = 'text-orange-400 bg-orange-950/30 border border-orange-800/30 px-2 py-0.5 rounded text-xs font-mono';
@@ -561,15 +588,17 @@
   }
 
   async function finishPresentation() {
-    // Show full-screen loading overlay immediately — prevents flash/timeout feel
+    // Stop ALL recording before generating report
+    _stopAllRecording();
+
     const overlay = document.getElementById('reportLoading');
     const status  = document.getElementById('reportLoadingStatus');
     const bar     = document.getElementById('reportLoadingBar');
     overlay.classList.remove('hidden');
 
     const msgs = [
-      { delay: 0,     pct: 10, text: 'Gemini is reviewing your narration and Q&A answers…' },
-      { delay: 8000,  pct: 30, text: 'Scoring 11 dimensions across two evaluation axes…' },
+      { delay: 0,     pct: 10, text: 'Sending your real transcripts to Gemini 1.5 Pro…' },
+      { delay: 8000,  pct: 30, text: 'Analysing Structure, Fluency, Relevance & Delivery…' },
       { delay: 18000, pct: 55, text: 'Writing personalised feedback and training plan…' },
       { delay: 28000, pct: 75, text: 'Almost ready — finalising your report…' },
       { delay: 40000, pct: 90, text: 'This can take up to 60 seconds. Please wait…' },
@@ -579,9 +608,18 @@
       bar.style.width    = m.pct + '%';
     }, m.delay));
 
-    addLog('🔄 Running AI evaluation…');
+    addLog(`🔄 Sending ${presentationTranscripts.length} transcript(s) + ${qaChatHistory.length} Q&A exchange(s) to AI…`);
     try {
-      const res  = await fetch('/x/finish-presentation', { method: 'POST' });
+      const res  = await fetch('/x/finish-presentation', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          presentation_transcripts: presentationTranscripts,
+          qa_chat_history:          qaChatHistory,
+          slide_logic_tree:         slides,
+          total_time_seconds:       timerSeconds,
+        }),
+      });
       const data = await res.json();
       timers.forEach(clearTimeout);
       bar.style.width    = '100%';
@@ -723,40 +761,86 @@
     setTimeout(() => t.classList.add('hidden'), 4000);
   }
 
-  // ── Voice input: Q&A ─────────────────────────────────────────────────────
-  let recognition = null, isRecordingQA = false;
-  function toggleVoice() {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert('Speech recognition is not supported in this browser. Please type your answer.'); return;
-    }
-    if (isRecordingQA) {
-      recognition?.stop(); isRecordingQA = false;
-      document.getElementById('voiceBtn').innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>Voice`;
-      return;
-    }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SR(); recognition.lang='en-US'; recognition.continuous=true; recognition.interimResults=true;
-    recognition.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('answerInput').value=t; };
-    recognition.start(); isRecordingQA=true;
-    document.getElementById('voiceBtn').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>Stop`;
+  // ── Unified Audio State Machine ────────────────────────────────────────────
+  // RULE: Only ONE SpeechRecognition instance active at any time.
+  // Modes: 'idle' | 'narration' | 'qa' | 'acq'
+  let audioMode    = 'idle';
+  let _narrationRec = null;
+  let _qaRec        = null;
+  let _acqRec       = null;
+  const MIC_SVG = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>`;
+
+  function _stopAllRecording() {
+    if (_narrationRec) { try { _narrationRec.stop(); } catch(e){} _narrationRec = null; }
+    if (_qaRec)        { try { _qaRec.stop();        } catch(e){} _qaRec        = null; }
+    if (_acqRec)       { try { _acqRec.stop();       } catch(e){} _acqRec       = null; }
+    audioMode = 'idle';
+    _syncAudioButtons();
   }
 
-  // ── Voice input: narration ────────────────────────────────────────────────
-  let narrationRec = null, isRecordingNarration = false;
-  function toggleNarrationVoice() {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert('Speech recognition is not supported in this browser.'); return;
-    }
-    if (isRecordingNarration) {
-      narrationRec?.stop(); isRecordingNarration=false;
-      document.getElementById('narrationVoiceBtn').innerHTML=`<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>Start Voice Recording`;
-      return;
-    }
+  function _syncAudioButtons() {
+    const nBtn = document.getElementById('narrationVoiceBtn');
+    const qBtn = document.getElementById('voiceBtn');
+    const aBtn = document.getElementById('acqVoiceBtn');
+    if (nBtn) nBtn.innerHTML = audioMode === 'narration'
+      ? `<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse flex-shrink-0"></span>Stop Recording`
+      : `${MIC_SVG}Start Voice Recording`;
+    if (qBtn) qBtn.innerHTML = audioMode === 'qa'
+      ? `<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>Stop`
+      : `${MIC_SVG}Voice`;
+    if (aBtn) aBtn.innerHTML = audioMode === 'acq'
+      ? `<span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>Stop`
+      : `${MIC_SVG}Voice`;
+  }
+
+  // Called when INTERRUPT or ACADEMIC_QA_START fires — stops narration exclusively
+  function audioSuspendForQa() {
+    _stopAllRecording(); // mode returns to 'idle'; QA/ACQ buttons now usable
+  }
+
+  // Called when QA_FINISHED — narration can resume (user must click button)
+  function audioResumeAfterQa() {
+    _stopAllRecording(); // ensure QA stream stopped; user clicks narration button to restart
+  }
+
+  function _makeSR() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    narrationRec = new SR(); narrationRec.lang='en-US'; narrationRec.continuous=true; narrationRec.interimResults=true;
-    narrationRec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('narrationInput').value=t; };
-    narrationRec.start(); isRecordingNarration=true;
-    document.getElementById('narrationVoiceBtn').innerHTML=`<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>Stop Recording`;
+    if (!SR) { alert('Speech recognition is not supported in this browser. Please type instead.'); return null; }
+    const rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+    return rec;
+  }
+
+  // Narration voice button (main presentation speech)
+  function toggleNarrationVoice() {
+    if (audioMode === 'narration') { _stopAllRecording(); return; }
+    if (audioMode === 'qa' || audioMode === 'acq') {
+      showToast('Finish answering the question before recording narration.'); return;
+    }
+    _stopAllRecording();
+    const rec = _makeSR(); if (!rec) return;
+    rec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('narrationInput').value=t; };
+    rec.onend    = () => { if (audioMode==='narration') { audioMode='idle'; _syncAudioButtons(); } };
+    _narrationRec = rec; rec.start(); audioMode = 'narration'; _syncAudioButtons();
+  }
+
+  // QA voice button (mid-session interrupt answer)
+  function toggleVoice() {
+    if (audioMode === 'qa') { _stopAllRecording(); return; }
+    _stopAllRecording();
+    const rec = _makeSR(); if (!rec) return;
+    rec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('answerInput').value=t; };
+    rec.onend    = () => { if (audioMode==='qa') { audioMode='idle'; _syncAudioButtons(); } };
+    _qaRec = rec; rec.start(); audioMode = 'qa'; _syncAudioButtons();
+  }
+
+  // Academic QA voice button (post-session Q&A answer)
+  function toggleAcqVoice() {
+    if (audioMode === 'acq') { _stopAllRecording(); return; }
+    _stopAllRecording();
+    const rec = _makeSR(); if (!rec) return;
+    rec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('acqInput').value=t; };
+    rec.onend    = () => { if (audioMode==='acq') { audioMode='idle'; _syncAudioButtons(); } };
+    _acqRec = rec; rec.start(); audioMode = 'acq'; _syncAudioButtons();
   }
 </script>
 {% endblock %}

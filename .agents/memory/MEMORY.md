@@ -1,2 +1,4 @@
-- [4-Pillar Eval Schema](pillar-eval-schema.md) — canonical `evaluation.pillar` schema with scores/dimensions_info/filler_log/what_i_did_good/areas_for_improvement; never revert to old PQ/CQ schema.
-- [Academic QA Flow](academic-qa-flow.md) — Academic Presentation triggers post-session Q&A via ACADEMIC_QA_START → /x/submit-academic-qa before /x/finish-presentation; Thesis/MBA go direct to finish.
+- [4-Pillar Eval Schema](pillar-eval-schema.md) — canonical `evaluation.pillar` schema; never revert to old PQ/CQ schema.
+- [Academic QA Flow](academic-qa-flow.md) — Academic triggers post-session Q&A via ACADEMIC_QA_START; Thesis/MBA go direct to finish.
+- [Real Data Pipeline](real-data-pipeline.md) — frontend sends transcripts/QA/timer to /x/finish-presentation; backend merges with session; Gemini gets real WPM+filler+per-slide narration.
+- [Audio State Machine](audio-state-machine.md) — unified AudioMachine (audioMode: idle/narration/qa/acq); audioSuspendForQa() on INTERRUPT/ACADEMIC_QA_START; audioResumeAfterQa() on QA_FINISHED.
