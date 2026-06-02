@@ -49,8 +49,8 @@ try:
         _UNIFIED_URL = _UNIFIED_URL.rstrip("/ ")
 
     if _UNIFIED_KEY and _UNIFIED_URL:
-        # timeout=60s so slow relay APIs don't hang the Flask worker forever
-        _ai_client = _OpenAI(api_key=_UNIFIED_KEY, base_url=_UNIFIED_URL, timeout=60.0)
+        # timeout=120s — Gemini 1.5 Pro on 6-slide + Q&A eval can take >60s via relay
+        _ai_client = _OpenAI(api_key=_UNIFIED_KEY, base_url=_UNIFIED_URL, timeout=120.0)
         AI_ENABLED = True
     else:
         _ai_client = None
@@ -689,6 +689,15 @@ Q&A TRANSCRIPT
 OUTPUT RULES — READ EVERY RULE BEFORE WRITING
 ══════════════════════════════════════════════
 
+⚡ CRITICAL SPEED CONSTRAINT — OBEY TO PREVENT API TIMEOUT ⚡
+You are evaluating a live rehearsal with multiple slides and Q&A history.
+Your JSON response MUST be concise:
+- "what_i_did_good"      → EXACTLY 3 items (no more, no fewer)
+- "areas_for_improvement" → EXACTLY 2 items (no more, no fewer)
+- Each item: maximum 2 sentences. Do NOT write essay-length text.
+- "dimensions_info" values: maximum 1 short sentence each.
+Verbose responses will cause an API timeout and waste the user's session.
+
 RULE 1 — LANGUAGE LEVEL
 All text in what_i_did_good and areas_for_improvement MUST use IELTS 5.5-6.0 vocabulary.
 Short, clear sentences only. Use "show" not "demonstrate". Use "fix" not "mitigate".
@@ -797,7 +806,21 @@ Return ONLY valid JSON — no markdown fences, no extra text
         return result
 
     except Exception as e:
-        app.logger.error(f"Pillar evaluation failed: {e}")
+        err_type = type(e).__name__
+        err_msg  = str(e)
+        app.logger.error(
+            f"[GEMINI EVAL ERROR] type={err_type} | msg={err_msg[:300]} | "
+            f"model={EVAL_MODEL} | total_words={total_words}"
+        )
+        # Classify root cause for easier diagnosis in console
+        if "timeout" in err_msg.lower() or "timed out" in err_msg.lower():
+            app.logger.error("[GEMINI EVAL ERROR] Root cause: API TIMEOUT — relay took >120s")
+        elif "json" in err_msg.lower() or isinstance(e, (ValueError, json.JSONDecodeError)):
+            app.logger.error("[GEMINI EVAL ERROR] Root cause: JSON PARSE FAILURE — model returned non-JSON")
+        elif "connection" in err_msg.lower() or "network" in err_msg.lower():
+            app.logger.error("[GEMINI EVAL ERROR] Root cause: NETWORK / CONNECTION ERROR")
+        else:
+            app.logger.error(f"[GEMINI EVAL ERROR] Root cause: UNKNOWN — {err_type}")
         traceback.print_exc()
         # Return generic mock — zero-speech already handled by BRANCH A above
         return _mock_pillar_evaluation(difficulty)

@@ -590,9 +590,31 @@
     finishPresentation();
   }
 
+  // ── Hard lock: prevent any double-submit race ─────────────────────────────
+  let _finishLock = false;
+
   async function finishPresentation() {
-    // Stop ALL recording before generating report
+    // ── Guard 1: debounce — reject any duplicate call ──────────────────────
+    if (_finishLock) {
+      console.warn('finishPresentation() called while already in progress — ignored');
+      return;
+    }
+    _finishLock = true;
+
+    // ── Guard 2: immediately disable every interactive button ───────────────
+    ['finishSlideBtn', 'submitAnswerBtn', 'acqSubmitBtn',
+     'narrationVoiceBtn', 'voiceBtn', 'acqVoiceBtn'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = true;
+    });
+
+    // ── Guard 3: stop all SR instances ──────────────────────────────────────
     _stopAllRecording();
+
+    // ── Guard 4: wait 400 ms so the final onresult events can flush ─────────
+    // SpeechRecognition fires onresult asynchronously after .stop(); if we
+    // send the fetch immediately the last spoken words may not be in the array.
+    await new Promise(r => setTimeout(r, 400));
 
     const overlay = document.getElementById('reportLoading');
     const status  = document.getElementById('reportLoadingStatus');
@@ -600,11 +622,11 @@
     overlay.classList.remove('hidden');
 
     const msgs = [
-      { delay: 0,     pct: 10, text: 'Sending your real transcripts to Gemini 1.5 Pro…' },
-      { delay: 8000,  pct: 30, text: 'Analysing Structure, Fluency, Relevance & Delivery…' },
-      { delay: 18000, pct: 55, text: 'Writing personalised feedback and training plan…' },
-      { delay: 28000, pct: 75, text: 'Almost ready — finalising your report…' },
-      { delay: 40000, pct: 90, text: 'This can take up to 60 seconds. Please wait…' },
+      { delay: 0,     pct:  8, text: `Analyzing your ${presentationTranscripts.length} slides and Q&A exchanges… Please wait up to 45s` },
+      { delay: 8000,  pct: 28, text: 'Analysing Structure, Fluency, Relevance & Delivery…' },
+      { delay: 20000, pct: 52, text: 'Writing personalised feedback and training plan…' },
+      { delay: 35000, pct: 74, text: 'Almost ready — finalising your report…' },
+      { delay: 55000, pct: 90, text: 'Still working… large sessions can take up to 90s' },
     ];
     const timers = msgs.map(m => setTimeout(() => {
       status.textContent = m.text;
@@ -612,9 +634,15 @@
     }, m.delay));
 
     addLog(`🔄 Sending ${presentationTranscripts.length} transcript(s) + ${qaChatHistory.length} Q&A exchange(s) to AI…`);
+
+    // ── Abort controller: front-end hard cap at 100 s ──────────────────────
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 100000);
+
     try {
       const res  = await fetch('/x/finish-presentation', {
         method:  'POST',
+        signal:  controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           presentation_transcripts: presentationTranscripts,
@@ -623,19 +651,31 @@
           total_time_seconds:       timerSeconds,
         }),
       });
-      const data = await res.json();
+      clearTimeout(abortTimer);
       timers.forEach(clearTimeout);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const data = await res.json();
       bar.style.width    = '100%';
       status.textContent = 'Report ready! Loading…';
       setTimeout(() => {
         if (data.redirect) window.location.href = data.redirect;
       }, 500);
     } catch(err) {
+      clearTimeout(abortTimer);
       timers.forEach(clearTimeout);
       overlay.classList.add('hidden');
-      addLog('❌ Report generation failed — try again');
-      console.error(err);
-      resetBtn();
+      const isTimeout = err.name === 'AbortError';
+      const msg = isTimeout
+        ? '⏱ Report timed out (>100s) — please reload and try again'
+        : `❌ Report generation failed — ${err.message}`;
+      addLog(msg);
+      console.error('finishPresentation error:', err.name, err.message, err);
+      // Stay locked — do NOT reset/re-enable to prevent retry loops
     }
   }
 
