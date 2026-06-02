@@ -5,12 +5,39 @@ import base64
 import io
 import re
 import traceback
+import uuid
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "ai-presentation-dev-secret-2024")
 app.config["UPLOAD_FOLDER"] = os.path.join(os.path.dirname(__file__), "uploads")
+
+# ── Server-side report store (avoids 4KB cookie overflow) ─────────────────────
+# Large blobs (evaluation, qa_bank, answers) are written to disk as JSON files
+# keyed by a UUID. Only the 36-char key is stored in the session cookie.
+_REPORT_DIR = os.path.join(os.path.dirname(__file__), "uploads", "reports")
+
+def _save_report(evaluation, qa_bank, answers):
+    """Persist report blobs to disk; return key to store in session."""
+    os.makedirs(_REPORT_DIR, exist_ok=True)
+    key = str(uuid.uuid4())
+    payload = {"evaluation": evaluation, "qa_bank": qa_bank, "answers": answers}
+    with open(os.path.join(_REPORT_DIR, f"{key}.json"), "w") as fh:
+        json.dump(payload, fh)
+    return key
+
+def _load_report(key):
+    """Load report blobs from disk; returns None if missing/corrupt."""
+    if not key:
+        return None
+    path = os.path.join(_REPORT_DIR, f"{key}.json")
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
 # ── CORS: allow all origins so the proxied iframe can reach Flask ──────────────
@@ -1061,14 +1088,18 @@ def slide_image(page):
 
 @app.route("/report")
 def report():
-    if "evaluation" not in session:
+    report_key = session.get("report_key")
+    report_data = _load_report(report_key)
+    if not report_data:
+        # Cookie lost or file missing — restart from home
+        app.logger.warning(f"[Report] No report data found for key={report_key!r} — redirecting home")
         return redirect(url_for("index"))
     return render_template(
         "report.html",
-        evaluation=session.get("evaluation"),
-        qa_bank=session.get("qa_bank", []),
+        evaluation=report_data.get("evaluation"),
+        qa_bank=report_data.get("qa_bank", []),
         config=session.get("config", {}),
-        answers=session.get("answers", []),
+        answers=report_data.get("answers", []),
         ai_enabled=AI_ENABLED,
     )
 
@@ -1505,7 +1536,15 @@ def api_finish_presentation():
         "ai_powered":     AI_ENABLED,
     }
 
-    session["evaluation"] = evaluation
+    # ── Persist large blobs to disk; store only UUID key in cookie ────────────
+    # Prevents Flask session cookie overflow (4KB limit).
+    report_key = _save_report(evaluation, qa_bank, answers)
+    session["report_key"] = report_key
+    # Remove stale large keys that would push the cookie over limit
+    session.pop("evaluation", None)
+    session.pop("qa_bank", None)
+    session.pop("answers", None)
+    app.logger.info(f"[Report] Saved report data → key={report_key}")
     return jsonify({"success": True, "redirect": "/report"})
 
 
