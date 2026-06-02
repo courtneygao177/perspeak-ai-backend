@@ -64,7 +64,7 @@ except Exception as _e:
 # Override any model via env vars in Replit Secrets.
 VISION_MODEL = os.environ.get("VISION_MODEL", "claude-3-5-sonnet-20241022")  # Step 1: Vision
 TEXT_MODEL   = os.environ.get("TEXT_MODEL",   "gpt-4o")                      # Steps 3,5,6: reasoning
-EVAL_MODEL   = os.environ.get("EVAL_MODEL",   "gemini-1.5-pro")              # Steps 8,9: long-context eval
+EVAL_MODEL   = os.environ.get("EVAL_MODEL",   "gemini-2.5-flash")            # Steps 8,9: long-context eval
 MODEL        = os.environ.get("UNIFIED_MODEL", TEXT_MODEL)                   # legacy fallback
 MAX_TOKENS   = 8192
 
@@ -645,7 +645,7 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
     )
 
     prompt = f"""You are a friendly Presentation Coach for non-native English speakers. Run a 4-Pillar audit.
-{empty_warning}
+
 ══════════════════════════════════════════════
 SCORING RUBRIC (0-100 each pillar)
 ══════════════════════════════════════════════
