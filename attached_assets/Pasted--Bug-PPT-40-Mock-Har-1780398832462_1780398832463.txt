@@ -1,0 +1,43 @@
+请注意！目前系统出现了严重的硬编码 Bug（如用户在测试时发现：完全不说话也会生成固定的转场评价、PPT里没有数据却提示40%增长错误）。这是因为你把我给你的提示词示例作为 Mock 数据直接 Hardcode 写死在返回结果里了，Gemini 大模型根本没有真正对真实的上下文进行泛化分析！
+
+请立即进行以下全栈重构，彻底修复这个致命问题：
+
+1. 【后端强制：彻底删除所有硬编码的静态字符串】
+- 请检查后端负责生成报告的路由文件。立刻清理掉所有包含 "EcoShift", "EcoChef", "40% increase" 等写死的静态字符串。
+- 确保所有的 `what_i_did_good` 和 `areas_for_improvement` 的数组内容，【100% 必须来自于 Gemini 1.5 Pro 的实时分析返回】。
+
+2. 【后端逻辑重构：注入“条件分支判断”防御机制】
+在调用 Gemini 1.5 Pro 之前，请在后端代码中加入一层硬性的条件判断逻辑：
+- 【分支 A：完全无音频/无文字输入】：如果前端传过来的 `presentation_transcripts` 为空，或者全都是空字符串、总字数少于 5 个单词：
+  * 【绝对不允许】调用 Gemini 生成常规的转场、流利度、数据比对分析！
+  * 直接由后端快速返回一个特殊的 JSON 惩罚结构：
+    {
+      "scores": {"structure": 0, "fluency": 0, "relevance": 0, "delivery": 0},
+      "what_i_did_good": ["No silver lining found. You did not speak during the presentation."],
+      "areas_for_improvement": [
+        {
+          "issue": "No speech recorded.",
+          "example": "We found no spoken words in your entire presentation rehearsal.",
+          "how_to_fix": "Please turn on your microphone and speak clearly for each slide before clicking Next Slide."
+        }
+      ]
+    }
+- 【分支 B：有真实音频输入】：只有当检测到用户有真实的口语转录文字时，才将【真实的 slide_logic_tree（当前PPT的字面内容）】与【真实的 presentation_transcripts（用户说的话）】打包发给 Gemini Pro。
+
+3. 【修复 Prompt：命令 AI 必须基于真实输入“现编”】
+请修改发给 Gemini 的提示词，在 Few-shot 示例部分加入极其严厉的警告约束：
+\"\"\"
+[WARNING] The examples provided below (like 'EcoShift' or '40% increase') are ONLY to show you the JSON format and language level (IELTS 5.5). 
+
+You MUST NOT copy these example words into your final response. You must dynamically read the actual user transcripts and actual slide contents provided in the request context:
+- Slide Content Provided: {{slide_logic_tree}}
+- User Spoken Words Provided: {{presentation_transcripts}}
+
+If the user's slide does NOT contain any numbers or statistics, DO NOT generic-complain about missing statistics. Your critique MUST exactly match what the user actually said and what the slide actually wrote!
+\"\"\"
+
+4. 【控制台真机打印审计（Console Log Audit）】
+- 请在后端发送给 Gemini 的最终 Payload 处，加上 `console.log("=== REAL GEMINI INPUT ===", JSON.stringify(payload))`。
+- 确保在控制台里能亲眼看到用户的真实转录文本被送进了大模型。
+
+请立即修改，删掉所有偷懒的 Mock 数据，让 AI 真正开始听懂用户的话！

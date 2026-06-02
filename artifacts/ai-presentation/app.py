@@ -553,8 +553,37 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
     filler_count    = len(filler_matches)
     filler_density  = round(filler_count / max(total_words, 1) * 100, 1)
 
-    # ALL-EMPTY detection: fewer than 10 total words means presenter never spoke
-    all_empty = total_words < 10
+    # ── BRANCH A: Zero / near-zero speech — fast return, skip Gemini entirely ──
+    # This fires when the user never spoke (< 5 real words across all slides).
+    # Calling Gemini with an empty transcript produces hallucinated, generic praise
+    # that is completely wrong. We return a fixed penalty result immediately.
+    if total_words < 5:
+        app.logger.warning(
+            f"[EvalGuard] Zero-speech detected ({total_words} words). "
+            "Skipping Gemini call. Returning penalty result."
+        )
+        return {
+            "scores": {"structure": 0, "fluency": 0, "relevance": 0, "delivery": 0},
+            "dimensions_info": {
+                "structure": {"explanation": "No speech was recorded.", "calculation": "Score is 0 — no narration to evaluate."},
+                "fluency":   {"explanation": "No speech was recorded.", "calculation": "Score is 0 — no narration to evaluate."},
+                "relevance": {"explanation": "No speech was recorded.", "calculation": "Score is 0 — no narration to evaluate."},
+                "delivery":  {"explanation": "No speech was recorded.", "calculation": "Score is 0 — no narration to evaluate."},
+            },
+            "filler_log": [],
+            "what_i_did_good": [
+                "No silver lining found. You did not speak during the presentation."
+            ],
+            "areas_for_improvement": [
+                {
+                    "issue": "[Delivery] No speech recorded.",
+                    "example": "We found no spoken words in your entire presentation rehearsal.",
+                    "how_to_fix": "Please turn on your microphone and speak clearly for each slide before clicking Next Slide. Say this instead: \"Good morning. Today I will talk about [your topic].\"",
+                }
+            ],
+        }
+
+    # ── BRANCH B: Real speech present — proceed to AI evaluation ─────────────
 
     # ── Build per-slide narration map ──────────────────────────────────────────
     narration_map = {a["page"]: (a.get("text") or "").strip() for a in narration_entries}
@@ -579,23 +608,11 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
             qa_parts.append(f"Q: {q}\nA: {t}" if q else f"[Answer]: {t}")
         qa_history_text = "\n\n".join(qa_parts) or "(No Q&A answers recorded)"
 
-    # ── No AI: return mock, but enforce empty-speech penalty ──────────────────
+    # ── No AI: return generic mock (no specific slide content known) ───────────
     if not AI_ENABLED:
-        result = _mock_pillar_evaluation(difficulty)
-        if all_empty:
-            result["scores"] = {"structure": 25, "fluency": 18, "relevance": 25, "delivery": 20}
-            result["what_i_did_good"] = ["You completed the setup and reached the practice stage."]
-            result["areas_for_improvement"] = [{
-                "issue": "No speech recorded",
-                "example": "We found no spoken words in your presentation.",
-                "how_to_fix": (
-                    "Use the 'Start Voice Recording' button or type your narration in the text box "
-                    "before clicking Next Slide. Gemini can only coach you if it has something to analyse."
-                ),
-            }] + result["areas_for_improvement"][:1]
-        return result
+        return _mock_pillar_evaluation(difficulty)
 
-    # ── Compose WPM / filler notes for the prompt ─────────────────────────────
+    # ── Compose WPM / filler notes ─────────────────────────────────────────────
     if wpm_estimate > 0:
         if wpm_estimate > 160:
             wpm_note = f"{wpm_estimate} WPM — RUSHED DELIVERY (>160 WPM). Penalise Delivery."
@@ -622,17 +639,6 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
             "Low density — do NOT penalise Fluency for fillers."
         )
 
-    empty_warning = ""
-    if all_empty:
-        empty_warning = (
-            "\n⚠️ CRITICAL: The presenter's transcript is EMPTY (fewer than 10 words total). "
-            "They did not speak. ALL scores MUST be 15-40. "
-            "The FIRST entry in areas_for_improvement MUST be: "
-            '{"issue":"No speech recorded",'
-            '"example":"We found no spoken words in your presentation.",'
-            '"how_to_fix":"Use the Voice Recording button or type narration before clicking Next Slide."}\n'
-        )
-
     slide_content_text = "\n\n".join(
         f"[Slide {s['page']}] {s.get('title', '')}\n{s.get('content', '')}"
         for s in slides
@@ -655,10 +661,9 @@ SCORING RUBRIC (0-100 each pillar)
 ══════════════════════════════════════════════
 PRE-COMPUTED METRICS — USE THESE EXACTLY, DO NOT IGNORE
 ══════════════════════════════════════════════
-- Total words spoken : {total_words}
+- Total words spoken : {total_words} (≥5 confirmed, presenter did speak)
 - WPM assessment     : {wpm_note}
 - Filler assessment  : {filler_note}
-- All text empty     : {all_empty}
 
 ══════════════════════════════════════════════
 SESSION CONTEXT
@@ -689,44 +694,48 @@ All text in what_i_did_good and areas_for_improvement MUST use IELTS 5.5-6.0 voc
 Short, clear sentences only. Use "show" not "demonstrate". Use "fix" not "mitigate".
 Write as if talking to a university student who is NOT a native speaker.
 
+⚠️ FORMAT-ONLY WARNING — READ BEFORE WRITING ANY FEEDBACK ⚠️
+The examples below (EXAMPLE A and EXAMPLE B) exist ONLY to show the JSON structure and language level.
+Do NOT copy or echo those example words into your response.
+- Do NOT echo, copy, or paraphrase any example phrase shown in this prompt into your response.
+- Do NOT invent facts not present in the actual slide content or user narration above.
+- If the user's slides contain no statistics, DO NOT complain about missing statistics.
+- If the user did not use filler words, DO NOT mention filler words.
+- Every single sentence in your output MUST be grounded in the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION provided above.
+
 RULE 2 — what_i_did_good FORMAT
 Each item MUST follow this pattern:
-  "[PillarTag] Strength title: 1-2 sentences explaining what they did well. Quote their exact words if possible."
+  "[PillarTag] Strength title: 1-2 sentences explaining what they actually did well. Quote their exact words if they said something good."
 
 Pillar tags to use: [Structure], [Fluency], [Relevance], [Delivery]
 
-GOOD example of what_i_did_good item:
-  "[Structure] Clear Signposting: You connected Slide 1 and Slide 2 very smoothly. You said, 'Now that we know the problem, let\\'s look at the market size,' which helps the audience follow easily."
+EXAMPLE A (FORMAT ONLY — do NOT copy these words):
+  "[Structure] Clear Signposting: You connected two slides smoothly. You said, '<actual user quote>', which helps the audience follow."
 
-BAD (do NOT write like this):
+BAD (never write like this):
   "The presenter demonstrated effective discourse management strategies."
 
 RULE 3 — areas_for_improvement FORMAT (STRICT 3-PART STRUCTURE)
 Each item MUST be a JSON object with exactly these 3 keys:
 
-  "issue"      : "[PillarTag] Short title. 1 sentence: state what went wrong. Name the specific slide."
-  "example"    : "You said: \\"<copy the EXACT bad phrase from their actual speech>\\"  OR if they missed data: \\"On Slide N, you skipped the [specific fact] from the slide.\\""
-  "how_to_fix" : "1 sentence advice. Then: Say this instead: \\"<a clear, corrected sentence at IELTS 5.5 level>\\""
+  "issue"      : "[PillarTag] Short title. 1 sentence: what went wrong on which specific slide."
+  "example"    : "You said: \\"<EXACT quote from the ACTUAL narration above>\\"  OR  \\"On Slide N, you did not mention [EXACT fact from the ACTUAL slide content above].\\""
+  "how_to_fix" : "1 sentence of advice based on their actual mistake. Then: Say this instead: \\"<a corrected sentence at IELTS 5.5 level that fits their actual topic>\\""
 
-GOOD example of areas_for_improvement item:
+EXAMPLE B (FORMAT ONLY — do NOT copy these words):
 {{
-  "issue": "[Fluency] Too Many Filler Words on Slide 2. You used 'um' and 'like' five times in one sentence.",
-  "example": "You said: \\"The tech is, um, like, very advanced, you know.\\"",
-  "how_to_fix": "Pause silently when you think — silence sounds more confident than 'um'. Say this instead: \\"The technology is highly advanced.\\""
+  "issue": "[Fluency] High filler word usage on Slide X.",
+  "example": "You said: \\"<copy EXACT phrase from ACTUAL narration above>\\"",
+  "how_to_fix": "Pause silently instead of using filler words. Say this instead: \\"<rewritten version of their ACTUAL sentence>\\""
 }}
 
-ANOTHER GOOD example:
-{{
-  "issue": "[Relevance] Wrong Project Name on Slide 3. You called it 'EcoChef' but the slide title says 'EcoShift'.",
-  "example": "You said: \\"EcoChef will reduce CO2.\\" But the slide clearly shows the title 'EcoShift Project'.",
-  "how_to_fix": "Always read the slide title before you speak. Say this instead: \\"The EcoShift Project will significantly reduce CO2 emissions.\\""
-}}
-
-RULE 4 — SPECIFICITY
-- If the narrator said nothing on a slide → name that exact slide number in your feedback.
-- If they used a wrong word → quote that exact wrong word.
-- If they skipped a key fact → name that exact fact from the slide.
-- NEVER write generic feedback that could apply to any presenter.
+RULE 4 — SPECIFICITY (MOST IMPORTANT RULE)
+- Read the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION sections above before writing a single word.
+- Every issue, example, and suggestion MUST reference something the presenter ACTUALLY SAID or ACTUALLY skipped.
+- If they said nothing on a slide → state that exact slide number, e.g. "Slide 3 had no narration."
+- If they used a wrong word → quote THAT exact wrong word from their transcript.
+- NEVER write feedback that could apply to any presenter regardless of their actual words.
+- NEVER invent quotes the user did not actually say.
 
 ══════════════════════════════════════════════
 Return ONLY valid JSON — no markdown fences, no extra text
@@ -759,6 +768,14 @@ Return ONLY valid JSON — no markdown fences, no extra text
   ]
 }}"""
 
+    # ── Audit log: confirm real user data is being sent ───────────────────────
+    app.logger.info(
+        f"=== GEMINI PILLAR INPUT === "
+        f"total_words={total_words} | wpm={wpm_note} | fillers={filler_count} | "
+        f"slides={len(slides)} | qa_exchanges={len(fe_qa_history) if fe_qa_history else 0}"
+    )
+    app.logger.info(f"=== NARRATION PREVIEW === {all_narration_text[:300]!r}")
+
     try:
         response = _ai_client.chat.completions.create(
             model=EVAL_MODEL,
@@ -776,24 +793,14 @@ Return ONLY valid JSON — no markdown fences, no extra text
             k: int(min(100, max(0, float(v))))
             for k, v in scores.items()
         }
-        # Enforce max-40 penalty for empty transcripts regardless of AI output
-        if all_empty:
-            result["scores"] = {k: min(v, 40) for k, v in result["scores"].items()}
 
         return result
 
     except Exception as e:
         app.logger.error(f"Pillar evaluation failed: {e}")
         traceback.print_exc()
-        result = _mock_pillar_evaluation(difficulty)
-        if all_empty:
-            result["scores"] = {"structure": 25, "fluency": 18, "relevance": 25, "delivery": 20}
-            result["areas_for_improvement"].insert(0, {
-                "issue": "No speech recorded",
-                "example": "We found no spoken words in your presentation.",
-                "how_to_fix": "Use the Voice Recording button or type narration before clicking Next Slide.",
-            })
-        return result
+        # Return generic mock — zero-speech already handled by BRANCH A above
+        return _mock_pillar_evaluation(difficulty)
 
 
 def _mock_pillar_evaluation(difficulty):
@@ -828,20 +835,19 @@ def _mock_pillar_evaluation(difficulty):
         },
         "filler_log": [],
         "what_i_did_good": [
-            "[Structure] Clear Signposting: You used linking phrases to connect your slides. This helps the audience follow your logic easily.",
-            "[Delivery] Natural Pace: Your speaking speed was comfortable. The audience had time to understand each point.",
-            "[Relevance] Good Slide Coverage: You covered the main ideas on most slides. Your narration matched what was on screen.",
+            "[Structure] Presentation Attempt: You completed the rehearsal flow and moved through the slides.",
+            "[Delivery] Session Completed: You reached the end of the presentation session.",
         ],
         "areas_for_improvement": [
             {
-                "issue": "[Structure] Abrupt Slide Transition. You moved to the next slide without a linking phrase.",
-                "example": "On Slide 2, you finished speaking and then jumped to the next slide without saying anything to connect them.",
-                "how_to_fix": "Use a short bridge phrase before moving on. Say this instead: \"Now that we know the problem, let's look at the solution on the next slide.\"",
+                "issue": "[Structure] No linking words detected between slides.",
+                "example": "You moved between slides without using any transition phrases.",
+                "how_to_fix": "Use a short bridge before each new slide. Say this instead: \"Now let's move to the next point.\"",
             },
             {
-                "issue": "[Relevance] Key Slide Data Was Skipped. You did not mention important facts that were on the slide.",
-                "example": "On Slide 3, the slide showed key statistics, but you did not talk about any of them in your speech.",
-                "how_to_fix": "Before clicking Next Slide, check if you mentioned all the key data. Say this instead: \"As you can see here, the data shows a 40% increase over the last year.\"",
+                "issue": "[Relevance] Slide content may not have been fully covered in your speech.",
+                "example": "Some slides may have had key points that were not mentioned in your narration.",
+                "how_to_fix": "Before clicking Next Slide, check the slide and make sure you mentioned all the key information shown on screen.",
             },
         ],
     }
