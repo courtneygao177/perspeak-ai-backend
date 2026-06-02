@@ -1,0 +1,47 @@
+我们已经成功打通了分数的真实匹配，现在需要彻底解决“翻页导致录音中断”的体验 Bug，并让 【What I did good】 与 【Areas for Improvement】 两个区域的文本根据用户的真实口语数据实现 100% 动态流渲染。
+
+请立即执行以下全栈重构：
+
+1. 【第四步演练舱：重构录音控制逻辑，实现全流程持续收音（Continuous Recording）】
+- 【问题诊断】：目前用户每切换到下一页 PPT，前端录音流就会被切断，需要重新手动点击开启，这严重破坏了演练体感。
+- 【重构要求】：请将麦克风录音实例（Audio Recorder Instance）挂载到全局演练状态机中：
+  * 当用户点击“开始演讲”时，录音正式启动，并且在用户点击“下一页”或“上一页”翻页时，【录音流保持持续开启（Continuous Recording），不暂停、不关闭、不需要重新点击】。
+  * 录音流在后端应自动根据当前“活跃 Slide 页码”对 Whisper 转录出来的文本进行打标隔离（例如：记录为 slide_1_text, slide_2_text...）。
+  * 【唯二暂停触发点】：只有当系统触发“中途打断提问（Interrupt）”或进入“尾部 Q&A”时，才自动暂停背景演讲录音（切换到弹窗的特定录音源）。弹窗关闭后，自动恢复全流程背景收音。
+
+2. 【后端重构：强制 Gemini 1.5 Pro 在 JSON 文本中提取真实原话与改写方案】
+- 检查后端 `generate_rehearsal_report` 路由。目前前端对应的 `what_i_did_good` 和 `areas_for_improvement` 没有动态变化。
+- 请重构后端大模型的 Prompt 约束，强制其输出符合 `IMG_2193_3.PNG` 体验的精细化动态数组：
+\"\"\"
+When generating 'what_i_did_good' and 'areas_for_improvement', you MUST analyze the user's actual speech text (presentation_transcripts) and slide details. Do NOT use static templates.
+
+For 'what_i_did_good', output simple bullet points. You must specify which pillar (Structure, Fluency, Relevance, or Delivery) the user did well, and quote their exact words if possible.
+
+For 'areas_for_improvement', you MUST follow this strict 3-part format inside each JSON item:
+- 'issue': Briefly state what went wrong and name the specific pillar.
+- 'example': Cite the exact bad phrase or mistake the user made (e.g., "You said 'EcoChef' but the slide title writes 'EcoShift'").
+- 'how_to_fix': Provide an IELTS 5.5-level clear, simple rewriting example starting with "Say this instead: '...'" to show the user exactly how to correct it.
+
+LANGUAGE STANDARD:
+All generated critique and suggestions MUST use clear, simple IELTS 5.5-6.0 vocabulary. Avoid any hard, professional academic terms. Make it extremely friendly for non-native speakers.
+\"\"\"
+
+3. 【更新后端 JSON Schema 数据结构】
+请确保后端返回给前端的报告 JSON 对象完全对齐以下动态结构：
+{
+  "what_i_did_good": [
+    "[Structure] Excellent Signposting: You connected Slide 1 and Slide 2 very smoothly by saying 'Now that we know the problem, let's look at the market size'."
+  ],
+  "areas_for_improvement": [
+    {
+      "issue": "[Language] High Filler Word Frequency on Slide 2.",
+      "example": "You said: 'The tech is, um, like, very advanced, you know.'",
+      "how_to_fix": "Try to pause silently when you think. Say this instead: 'The technology is highly advanced.'"
+    }
+  ]
+}
+
+4. 【前端 UI 渲染对齐】
+- 修改第九步报告页前端的渲染逻辑。遍历 `areas_for_improvement` 数组时，在一个精美的黄色警告卡片中（参考 IMG_2193_3.PNG），清晰地分行渲染出用户哪点做得不好（issue）、反面典型（example）、以及带有突出标示的升级改写建议（how_to_fix）。
+
+请立刻执行重构，确保无缝持续录音和文本的绝对动态化生成！

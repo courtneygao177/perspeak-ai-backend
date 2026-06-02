@@ -211,8 +211,9 @@
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-semibold text-white">Recording</span>
           <div class="flex items-center gap-1.5">
-            <div class="w-2 h-2 rounded-full bg-red-500" style="animation: recordPulse 1.5s ease-in-out infinite;"></div>
-            <span class="text-xs text-red-400 font-mono">LIVE</span>
+            <div id="recActiveDot" class="w-2 h-2 rounded-full bg-red-500"
+                 style="display:none;animation:recordPulse 1.5s ease-in-out infinite;"></div>
+            <span id="recActiveLabel" class="text-xs font-mono text-gray-600">Mic off</span>
           </div>
         </div>
         <style>@keyframes recordPulse { 0%,100% { transform:scale(1);opacity:0.8;} 50%{transform:scale(1.1);opacity:1;}}</style>
@@ -398,10 +399,10 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg>`;
 
-    // ── Stop active narration recording before submitting ─────────────────────
-    if (audioMode === 'narration') _stopAllRecording();
-
+    // Track if narration was recording — we keep it alive across NEXT_SLIDE
+    const wasRecordingNarration = (audioMode === 'narration');
     const narration = document.getElementById('narrationInput').value.trim();
+
     try {
       const res = await fetch('/x/check-slide', {
         method: 'POST', headers: {'Content-Type':'application/json'},
@@ -413,13 +414,12 @@
         state.in_qa_mode      = true;
         state.follow_up_round = 1;
         state.challenge_type  = data.challenge_type || '';
-        // Save narration for this slide before the interrupt
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
         });
-        // Exclusive audio: suspend narration, only QA mic now allowed
-        audioSuspendForQa();
+        // Suspend narration; remember we were recording so QA_FINISHED can auto-resume
+        audioSuspendForQa(wasRecordingNarration);
         showQAChallenge(data.question, 1, data.challenge_type);
         qaChatHistory.push({ role: 'ai', text: data.question, type: 'interrupt' });
         addLog(`⚡ Challenge: ${data.challenge_type || 'Unknown'}`);
@@ -427,25 +427,29 @@
         btn.innerHTML = `<span class="text-red-400 text-xs">⚡ Answer first</span>`;
 
       } else if (data.action === 'NEXT_SLIDE') {
-        // Record completed slide transcript
+        // Save this slide's narration
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
         });
         state.current_page = data.page;
         updateSlideDisplay(data.slide);
+        // Clear text for new slide — recording stream continues automatically
         document.getElementById('narrationInput').value = '';
         addLog(`✓ Slide ${state.current_page - 1} → ${state.current_page}`);
         resetBtn();
+        // ── Continuous Recording: restart the SR instance for a clean result set ──
+        if (wasRecordingNarration) {
+          _stopAllRecording();                        // flush old instance cleanly
+          setTimeout(() => _startNarrationRec(), 200); // auto-restart, no user click needed
+        }
 
       } else if (data.action === 'ACADEMIC_QA_START') {
-        // Record last slide transcript
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
         });
-        // Exclusive audio: stop narration, only academic QA mic allowed
-        audioSuspendForQa();
+        audioSuspendForQa(wasRecordingNarration);
         pauseTimer();
         document.getElementById('finishSlideBtn').disabled = true;
         showAcademicQa(data.question, data.question_num, data.total_questions,
@@ -455,7 +459,6 @@
         btn.innerHTML = `<span class="text-indigo-400 text-xs">📋 Answer Q&A first</span>`;
 
       } else if (data.action === 'PRESENTATION_DONE') {
-        // Record final slide transcript
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
@@ -768,6 +771,7 @@
   let _narrationRec = null;
   let _qaRec        = null;
   let _acqRec       = null;
+  let _narrationWasActiveBeforeQA = false; // for auto-resume after QA_FINISHED
   const MIC_SVG = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>`;
 
   function _stopAllRecording() {
@@ -779,10 +783,14 @@
   }
 
   function _syncAudioButtons() {
-    const nBtn = document.getElementById('narrationVoiceBtn');
-    const qBtn = document.getElementById('voiceBtn');
-    const aBtn = document.getElementById('acqVoiceBtn');
-    if (nBtn) nBtn.innerHTML = audioMode === 'narration'
+    const nBtn    = document.getElementById('narrationVoiceBtn');
+    const qBtn    = document.getElementById('voiceBtn');
+    const aBtn    = document.getElementById('acqVoiceBtn');
+    const recDot  = document.getElementById('recActiveDot');
+    const recLbl  = document.getElementById('recActiveLabel');
+
+    const isNarrating = (audioMode === 'narration');
+    if (nBtn) nBtn.innerHTML = isNarrating
       ? `<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse flex-shrink-0"></span>Stop Recording`
       : `${MIC_SVG}Start Voice Recording`;
     if (qBtn) qBtn.innerHTML = audioMode === 'qa'
@@ -791,16 +799,13 @@
     if (aBtn) aBtn.innerHTML = audioMode === 'acq'
       ? `<span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>Stop`
       : `${MIC_SVG}Voice`;
-  }
 
-  // Called when INTERRUPT or ACADEMIC_QA_START fires — stops narration exclusively
-  function audioSuspendForQa() {
-    _stopAllRecording(); // mode returns to 'idle'; QA/ACQ buttons now usable
-  }
-
-  // Called when QA_FINISHED — narration can resume (user must click button)
-  function audioResumeAfterQa() {
-    _stopAllRecording(); // ensure QA stream stopped; user clicks narration button to restart
+    // Recording status badge in the Recording panel header
+    if (recDot)  recDot.style.display  = isNarrating ? 'block' : 'none';
+    if (recLbl)  recLbl.textContent    = isNarrating ? '● Recording…' : 'Mic off';
+    if (recLbl)  recLbl.className      = isNarrating
+      ? 'text-xs font-mono text-red-400'
+      : 'text-xs font-mono text-gray-600';
   }
 
   function _makeSR() {
@@ -810,17 +815,55 @@
     return rec;
   }
 
-  // Narration voice button (main presentation speech)
+  // ── Internal: start narration recognition (shared by button + auto-restart) ──
+  function _startNarrationRec() {
+    if (audioMode !== 'idle') return; // safety: don't start if QA is active
+    const rec = _makeSR(); if (!rec) return;
+    rec.onresult = e => {
+      let t = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+      document.getElementById('narrationInput').value = t;
+    };
+    rec.onend = () => {
+      // If browser stopped recognition while still in narration mode → auto-restart
+      if (audioMode === 'narration' && _narrationRec === rec) {
+        _narrationRec = null;
+        setTimeout(() => { if (audioMode === 'idle') { /* was stopped externally */ return; }
+                           _startNarrationRec(); }, 150);
+      } else if (audioMode === 'narration') {
+        audioMode = 'idle'; _syncAudioButtons();
+      }
+    };
+    _narrationRec = rec;
+    rec.start();
+    audioMode = 'narration';
+    _syncAudioButtons();
+  }
+
+  // Narration voice button toggle
   function toggleNarrationVoice() {
     if (audioMode === 'narration') { _stopAllRecording(); return; }
     if (audioMode === 'qa' || audioMode === 'acq') {
       showToast('Finish answering the question before recording narration.'); return;
     }
     _stopAllRecording();
-    const rec = _makeSR(); if (!rec) return;
-    rec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('narrationInput').value=t; };
-    rec.onend    = () => { if (audioMode==='narration') { audioMode='idle'; _syncAudioButtons(); } };
-    _narrationRec = rec; rec.start(); audioMode = 'narration'; _syncAudioButtons();
+    _startNarrationRec();
+  }
+
+  // Called when INTERRUPT or ACADEMIC_QA_START fires
+  // wasActive: whether narration was recording before the interrupt
+  function audioSuspendForQa(wasActive = false) {
+    _narrationWasActiveBeforeQA = wasActive;
+    _stopAllRecording(); // mode → 'idle'; QA/ACQ buttons unlocked
+  }
+
+  // Called when QA_FINISHED — auto-resume narration if it was active before
+  function audioResumeAfterQa() {
+    _stopAllRecording(); // ensure QA stream stopped
+    if (_narrationWasActiveBeforeQA) {
+      _narrationWasActiveBeforeQA = false;
+      setTimeout(() => { if (audioMode === 'idle') _startNarrationRec(); }, 300);
+    }
   }
 
   // QA voice button (mid-session interrupt answer)

@@ -638,41 +638,99 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
         for s in slides
     )
 
-    prompt = f"""You are a precision Presentation Coach running a 4-Pillar performance audit.
+    prompt = f"""You are a friendly Presentation Coach for non-native English speakers. Run a 4-Pillar audit.
 {empty_warning}
-SCORING RUBRIC (0-100 each):
-1. Structure & Organization: Award for clear intro/body/conclusion and explicit transitions ("Moving on to…", "To summarise…"). Deduct for abrupt slide changes with no linking words. If empty: 20-35.
-2. Language Fluency: Use the pre-computed filler word count below as your anchor. Deduct 3 pts per filler word above 5 occurrences. Penalise broken grammar. If empty: 15-25.
-3. Content Relevance: Compare slide text with narration. Deduct for slides where key facts were ignored. Award for direct referencing of slide data. If empty: 20-35.
-4. Delivery & Pace: Use the pre-computed WPM as your anchor. Flag Rushed (>160) or Hesitant (<110). Award for smooth variation. If empty: 18-30.
+══════════════════════════════════════════════
+SCORING RUBRIC (0-100 each pillar)
+══════════════════════════════════════════════
+1. [Structure] — Award for clear intro/body/conclusion and transitions like "Moving on to…" or "To summarise…".
+   Deduct for abrupt slide changes with zero linking words.  Empty transcript → score 20-35.
+2. [Fluency]   — Use the PRE-COMPUTED filler word count as your ANCHOR. Deduct 3 pts per filler above 5.
+   Penalise broken grammar or repeated stops. Empty transcript → score 15-25.
+3. [Relevance] — Compare each slide's key facts vs. what the presenter actually said.
+   Deduct for slides where key data was ignored. Award for directly quoting slide data. Empty → 20-35.
+4. [Delivery]  — Use PRE-COMPUTED WPM as ANCHOR. Rushed >160 WPM or hesitant <110 WPM → penalise.
+   Award smooth pace variation. Empty transcript → score 18-30.
 
-PRE-COMPUTED METRICS — USE THESE AS ANCHORS, do NOT ignore them:
-- Total words spoken: {total_words}
-- WPM assessment: {wpm_note}
-- Filler word assessment: {filler_note}
-- All transcripts empty: {all_empty}
+══════════════════════════════════════════════
+PRE-COMPUTED METRICS — USE THESE EXACTLY, DO NOT IGNORE
+══════════════════════════════════════════════
+- Total words spoken : {total_words}
+- WPM assessment     : {wpm_note}
+- Filler assessment  : {filler_note}
+- All text empty     : {all_empty}
 
-CRITICAL LANGUAGE CONSTRAINT:
-All output text MUST be at IELTS 5.5-6.0 level. Short, clear sentences only. No academic jargon.
-Use "show" not "demonstrate". Use "fix" not "mitigate". Use "say" not "articulate".
+══════════════════════════════════════════════
+SESSION CONTEXT
+══════════════════════════════════════════════
+Audience: {audience} | Scenario: {scenario} | Difficulty: {difficulty} | Challenge: {challenge_type}
 
-SESSION:
-- Audience: {audience} | Scenario: {scenario} | Difficulty: {difficulty}
-- Challenge Type: {challenge_type}
-
-SLIDE CONTENT (what was shown on screen):
+══════════════════════════════════════════════
+SLIDE CONTENT (screen text)
+══════════════════════════════════════════════
 {slide_content_text}
 
-PRESENTER NARRATION (what they actually said, slide by slide):
+══════════════════════════════════════════════
+PRESENTER NARRATION (their actual speech, slide by slide)
+══════════════════════════════════════════════
 {slide_narration_text}
 
-Q&A EXCHANGE HISTORY (real transcript of challenge and post-session Q&A):
+══════════════════════════════════════════════
+Q&A TRANSCRIPT
+══════════════════════════════════════════════
 {qa_history_text}
 
-INSTRUCTION: Be specific. If they said something wrong, quote it. If they missed a slide point, name the slide.
-Scores for a presenter who said very little MUST be clearly lower than one who spoke fully.
+══════════════════════════════════════════════
+OUTPUT RULES — READ EVERY RULE BEFORE WRITING
+══════════════════════════════════════════════
 
-Return ONLY valid JSON (no markdown fences, no extra text):
+RULE 1 — LANGUAGE LEVEL
+All text in what_i_did_good and areas_for_improvement MUST use IELTS 5.5-6.0 vocabulary.
+Short, clear sentences only. Use "show" not "demonstrate". Use "fix" not "mitigate".
+Write as if talking to a university student who is NOT a native speaker.
+
+RULE 2 — what_i_did_good FORMAT
+Each item MUST follow this pattern:
+  "[PillarTag] Strength title: 1-2 sentences explaining what they did well. Quote their exact words if possible."
+
+Pillar tags to use: [Structure], [Fluency], [Relevance], [Delivery]
+
+GOOD example of what_i_did_good item:
+  "[Structure] Clear Signposting: You connected Slide 1 and Slide 2 very smoothly. You said, 'Now that we know the problem, let\\'s look at the market size,' which helps the audience follow easily."
+
+BAD (do NOT write like this):
+  "The presenter demonstrated effective discourse management strategies."
+
+RULE 3 — areas_for_improvement FORMAT (STRICT 3-PART STRUCTURE)
+Each item MUST be a JSON object with exactly these 3 keys:
+
+  "issue"      : "[PillarTag] Short title. 1 sentence: state what went wrong. Name the specific slide."
+  "example"    : "You said: \\"<copy the EXACT bad phrase from their actual speech>\\"  OR if they missed data: \\"On Slide N, you skipped the [specific fact] from the slide.\\""
+  "how_to_fix" : "1 sentence advice. Then: Say this instead: \\"<a clear, corrected sentence at IELTS 5.5 level>\\""
+
+GOOD example of areas_for_improvement item:
+{{
+  "issue": "[Fluency] Too Many Filler Words on Slide 2. You used 'um' and 'like' five times in one sentence.",
+  "example": "You said: \\"The tech is, um, like, very advanced, you know.\\"",
+  "how_to_fix": "Pause silently when you think — silence sounds more confident than 'um'. Say this instead: \\"The technology is highly advanced.\\""
+}}
+
+ANOTHER GOOD example:
+{{
+  "issue": "[Relevance] Wrong Project Name on Slide 3. You called it 'EcoChef' but the slide title says 'EcoShift'.",
+  "example": "You said: \\"EcoChef will reduce CO2.\\" But the slide clearly shows the title 'EcoShift Project'.",
+  "how_to_fix": "Always read the slide title before you speak. Say this instead: \\"The EcoShift Project will significantly reduce CO2 emissions.\\""
+}}
+
+RULE 4 — SPECIFICITY
+- If the narrator said nothing on a slide → name that exact slide number in your feedback.
+- If they used a wrong word → quote that exact wrong word.
+- If they skipped a key fact → name that exact fact from the slide.
+- NEVER write generic feedback that could apply to any presenter.
+
+══════════════════════════════════════════════
+Return ONLY valid JSON — no markdown fences, no extra text
+══════════════════════════════════════════════
 {{
   "scores": {{
     "structure": <integer 0-100>,
@@ -681,22 +739,22 @@ Return ONLY valid JSON (no markdown fences, no extra text):
     "delivery":  <integer 0-100>
   }},
   "dimensions_info": {{
-    "structure": {{"explanation": "<1 sentence about their specific structure>", "calculation": "<1 sentence: how you scored it>"}},
-    "fluency":   {{"explanation": "<1 sentence referencing their actual filler count>", "calculation": "<1 sentence: filler count and grammar issues found>"}},
-    "relevance": {{"explanation": "<1 sentence about which slides they covered>", "calculation": "<1 sentence: how many slides had good coverage>"}},
-    "delivery":  {{"explanation": "<1 sentence about their actual WPM>", "calculation": "<1 sentence: WPM value and pace verdict>"}}
+    "structure": {{"explanation": "<1 sentence: reference their actual transitions or lack of them>", "calculation": "<1 sentence: how many slides had linking phrases>"}},
+    "fluency":   {{"explanation": "<1 sentence: reference their actual filler count>", "calculation": "<1 sentence: filler count + any grammar issues>"}},
+    "relevance": {{"explanation": "<1 sentence: which slides had good or poor coverage>", "calculation": "<1 sentence: how many slides matched the slide content>"}},
+    "delivery":  {{"explanation": "<1 sentence: their actual WPM value and verdict>", "calculation": "<1 sentence: WPM and pace judgement>"}}
   }},
   "filler_log": [
-    {{"word": "<exact filler word from transcript>", "timestamp": "<Slide N where it appeared>", "type": "Assistive or Disruptive"}}
+    {{"word": "<exact filler from transcript>", "timestamp": "<Slide N where it appeared>", "type": "Assistive or Disruptive"}}
   ],
   "what_i_did_good": [
-    "<specific strength — quote their actual words or reference a specific slide>"
+    "<[PillarTag] Title: explanation with quote if possible>"
   ],
   "areas_for_improvement": [
     {{
-      "issue": "<short label for the problem>",
-      "example": "<exact quote from their speech OR specific observation>",
-      "how_to_fix": "<simple direct instruction — include a rewritten example if possible>"
+      "issue":      "<[PillarTag] Short title. 1 sentence stating what went wrong and which slide.>",
+      "example":    "<You said: \\"exact quote\\" OR On Slide N, you skipped [specific fact].>",
+      "how_to_fix": "<1 sentence advice. Say this instead: \\"corrected sentence at IELTS 5.5 level.\\">"
     }}
   ]
 }}"""
@@ -770,20 +828,20 @@ def _mock_pillar_evaluation(difficulty):
         },
         "filler_log": [],
         "what_i_did_good": [
-            "You kept a clear structure throughout most of your slides.",
-            "Your speaking pace was comfortable and easy to follow.",
-            "You covered the main points on each slide.",
+            "[Structure] Clear Signposting: You used linking phrases to connect your slides. This helps the audience follow your logic easily.",
+            "[Delivery] Natural Pace: Your speaking speed was comfortable. The audience had time to understand each point.",
+            "[Relevance] Good Slide Coverage: You covered the main ideas on most slides. Your narration matched what was on screen.",
         ],
         "areas_for_improvement": [
             {
-                "issue": "Missing transition words between slides.",
-                "example": "You moved from one slide to the next without saying anything to connect them.",
-                "how_to_fix": "Try: 'Now that we have covered X, let us look at Y on the next slide.'",
+                "issue": "[Structure] Abrupt Slide Transition. You moved to the next slide without a linking phrase.",
+                "example": "On Slide 2, you finished speaking and then jumped to the next slide without saying anything to connect them.",
+                "how_to_fix": "Use a short bridge phrase before moving on. Say this instead: \"Now that we know the problem, let's look at the solution on the next slide.\"",
             },
             {
-                "issue": "Some slide content was not mentioned in your speech.",
-                "example": "There were important facts on the slide that you did not talk about.",
-                "how_to_fix": "Before moving on, check the slide and make sure you mentioned all the key points.",
+                "issue": "[Relevance] Key Slide Data Was Skipped. You did not mention important facts that were on the slide.",
+                "example": "On Slide 3, the slide showed key statistics, but you did not talk about any of them in your speech.",
+                "how_to_fix": "Before clicking Next Slide, check if you mentioned all the key data. Say this instead: \"As you can see here, the data shows a 40% increase over the last year.\"",
             },
         ],
     }

@@ -12,14 +12,21 @@ let _acqRec       = null;
 ```
 
 **Key functions:**
+- `_startNarrationRec()` — internal helper; creates new SR instance for narration; handles auto-restart on `onend`
 - `_stopAllRecording()` — stops all three streams, sets audioMode='idle', calls _syncAudioButtons()
-- `_syncAudioButtons()` — updates innerHTML of narrationVoiceBtn / voiceBtn / acqVoiceBtn based on audioMode
-- `audioSuspendForQa()` — called on INTERRUPT and ACADEMIC_QA_START → _stopAllRecording()
-- `audioResumeAfterQa()` — called on QA_FINISHED → _stopAllRecording() (user re-clicks to restart narration)
-- `toggleNarrationVoice()` — starts _narrationRec; blocked if audioMode==='qa'|'acq'
+- `_syncAudioButtons()` — updates narrationVoiceBtn / voiceBtn / acqVoiceBtn AND recActiveDot / recActiveLabel status badge
+- `audioSuspendForQa(wasActive)` — called on INTERRUPT/ACADEMIC_QA_START; saves wasActive flag in `_narrationWasActiveBeforeQA`
+- `audioResumeAfterQa()` — called on QA_FINISHED; auto-restarts narration if `_narrationWasActiveBeforeQA` was true
+- `toggleNarrationVoice()` — calls _startNarrationRec(); blocked if audioMode==='qa'|'acq'
 - `toggleVoice()` — starts _qaRec (interrupt QA panel)
 - `toggleAcqVoice()` — starts _acqRec (academic QA panel)
 
-**Why:** Three independent SpeechRecognition instances caused browser audio stream conflicts. Only one stream can be active at a time. The `audioMode` variable enforces this invariant.
+**Continuous Recording across slide transitions:**
+In `finishSlide()`, track `wasRecordingNarration = (audioMode === 'narration')` BEFORE the fetch.
+For NEXT_SLIDE action: _stopAllRecording() then `setTimeout(() => _startNarrationRec(), 200)` — no user click needed.
+For INTERRUPT/ACADEMIC_QA_START: `audioSuspendForQa(wasRecordingNarration)` — stores flag for auto-resume.
+For PRESENTATION_DONE: finishPresentation() calls _stopAllRecording() internally.
 
-**How to apply:** Always check/set audioMode before creating a new SpeechRecognition. Never create a new SR without calling _stopAllRecording() first.
+**Why:** Three independent SpeechRecognition instances caused browser audio stream conflicts. Continuous recording across slides requires stop+restart (new instance = fresh result set) rather than keeping the same stream, because accumulated results would contaminate the next slide's text.
+
+**How to apply:** Always call _startNarrationRec() (not toggleNarrationVoice()) for programmatic starts to avoid the QA-active guard.
