@@ -1051,13 +1051,89 @@ def sandbox():
     )
 
 
+def _render_pptx_page(filepath, page_num, width=1280, height=720):
+    """
+    Render a single PPTX slide as PNG bytes using python-pptx + Pillow.
+    Returns PNG bytes, or None on failure.
+    """
+    try:
+        from pptx import Presentation
+        from PIL import Image, ImageDraw, ImageFont
+
+        prs = Presentation(filepath)
+        slides_list = list(prs.slides)
+        if page_num < 1 or page_num > len(slides_list):
+            return None
+        slide = slides_list[page_num - 1]
+
+        img  = Image.new("RGB", (width, height), color=(12, 12, 28))
+        draw = ImageDraw.Draw(img)
+
+        try:
+            font_title   = ImageFont.load_default(size=38)
+            font_content = ImageFont.load_default(size=22)
+            font_badge   = ImageFont.load_default(size=15)
+        except TypeError:                               # Pillow < 10
+            font_title = font_content = font_badge = ImageFont.load_default()
+
+        # ── Extract title ───────────────────────────────────────────────────
+        title_text = ""
+        title_shape = None
+        try:
+            if slide.shapes.title and slide.shapes.title.text.strip():
+                title_text  = slide.shapes.title.text.strip()
+                title_shape = slide.shapes.title
+        except Exception:
+            pass
+
+        # ── Extract body text (non-title shapes) ────────────────────────────
+        body_blocks = []
+        for shape in slide.shapes:
+            if not hasattr(shape, "text") or not shape.text.strip():
+                continue
+            if shape is title_shape:
+                continue
+            body_blocks.append(shape.text.strip())
+
+        # ── Header bar ──────────────────────────────────────────────────────
+        draw.rectangle([(0, 0), (width, 108)], fill=(22, 22, 52))
+        draw.line([(0, 108), (width, 108)], fill=(80, 80, 200), width=2)
+
+        # ── Title ───────────────────────────────────────────────────────────
+        if title_text:
+            draw.text((52, 30), title_text[:90], fill=(220, 225, 255), font=font_title)
+
+        # ── Body content ────────────────────────────────────────────────────
+        y = 130
+        for block in body_blocks:
+            lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
+            for line in lines:
+                if y > height - 72:
+                    break
+                draw.text((72, y), "▸  " + line[:115], fill=(175, 182, 210), font=font_content)
+                y += 36
+            y += 14
+
+        # ── Slide number badge ───────────────────────────────────────────────
+        badge = f"Slide {page_num} / {len(slides_list)}"
+        draw.rectangle([(width - 190, height - 50), (width - 20, height - 18)],
+                       fill=(30, 30, 72))
+        draw.text((width - 180, height - 45), badge, fill=(110, 120, 190), font=font_badge)
+
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        return buf.getvalue()
+    except Exception as e:
+        app.logger.error(f"_render_pptx_page page={page_num} failed: {e}")
+        return None
+
+
 @app.route("/x/slide-image/<int:page>")
 def slide_image(page):
-    """Serve a specific PDF page as PNG image for the sandbox viewer."""
+    """Serve a specific slide page as PNG — PDF via fitz, PPTX via Pillow."""
     from flask import Response as _R
     filepath = session.get("filepath", "")
     if not filepath or not os.path.exists(filepath):
-        # Return a placeholder SVG when no file is uploaded
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500">'
             f'<rect width="800" height="500" fill="#12121f"/>'
@@ -1068,14 +1144,26 @@ def slide_image(page):
             f'</svg>'
         )
         return _R(svg, mimetype="image/svg+xml")
+
+    ext = os.path.splitext(filepath)[1].lstrip(".").lower()
+
+    # ── PPTX / PPT → Pillow renderer ────────────────────────────────────────
+    if ext in ("pptx", "ppt"):
+        img_bytes = _render_pptx_page(filepath, page)
+        if img_bytes is None:
+            return "Page out of range or render failed", 404
+        return _R(img_bytes, mimetype="image/png",
+                  headers={"Cache-Control": "max-age=3600"})
+
+    # ── PDF → fitz renderer ─────────────────────────────────────────────────
     try:
         import fitz
         doc = fitz.open(filepath)
         if page < 1 or page > len(doc):
             doc.close()
             return "Page out of range", 404
-        p = doc[page - 1]
-        mat = fitz.Matrix(2.0, 2.0)   # 2× scale for crisp display
+        p   = doc[page - 1]
+        mat = fitz.Matrix(2.0, 2.0)
         pix = p.get_pixmap(matrix=mat)
         img_bytes = pix.tobytes("png")
         doc.close()
