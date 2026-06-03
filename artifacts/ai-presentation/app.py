@@ -1123,13 +1123,25 @@ def api_upload():
         if not allowed_file(file.filename):
             return jsonify({"error": "Invalid file type. Please upload PDF, PPT, or PPTX."}), 400
 
-        filename = secure_filename(file.filename)
+        # Extract extension from the ORIGINAL filename BEFORE secure_filename()
+        # strips non-ASCII chars (e.g. Chinese filenames lose their dot+ext).
+        orig_ext = os.path.splitext(file.filename)[1].lstrip(".").lower()
+        safe_stem = secure_filename(file.filename)
+        # If secure_filename wiped everything (non-ASCII name), fall back to "upload"
+        if not safe_stem or safe_stem == orig_ext:
+            safe_stem = "upload"
+        # Only append extension if secure_filename didn't already preserve it
+        if orig_ext and not safe_stem.lower().endswith(f".{orig_ext}"):
+            filename = f"{safe_stem}.{orig_ext}"
+        else:
+            filename = safe_stem
+
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
         save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(save_path)
         app.logger.info(f"File saved: {save_path}")
 
-        ext = filename.rsplit(".", 1)[1].lower()
+        ext = orig_ext
 
         # Step 1a: PDF → base64 images (fast — no AI call here)
         images_b64 = []
