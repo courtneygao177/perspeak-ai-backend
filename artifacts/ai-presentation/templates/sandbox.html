@@ -7,7 +7,9 @@
   .alarm-overlay { background: rgba(153,27,27,0.15); border: 1px solid rgba(239,68,68,0.4); animation: alarmPulse 1.5s ease-in-out infinite; }
   @keyframes alarmPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } }
   @keyframes wave { from { transform: scaleY(0.4); } to { transform: scaleY(1.0); } }
-  #slideImg { display:block; width:100%; height:100%; object-fit:contain; border-radius:0.5rem; min-height:220px; }
+  /* Slide image — fills its 16:9 wrapper, never overflows */
+  #slideImgWrap { position:relative; width:100%; aspect-ratio:16/9; max-height:min(48vh,480px); overflow:hidden; border-radius:0.5rem; }
+  #slideImg { display:block; width:100%; height:100%; object-fit:contain; border-radius:0.5rem; }
   .progress-bar-fill { transition: width 0.4s ease; }
 </style>
 {% endblock %}
@@ -56,14 +58,16 @@
           </span>
         </div>
 
-        <!-- Actual slide image -->
-        <div class="flex-1 flex items-center justify-center p-4 pt-10">
-          <img id="slideImg"
-               src="/x/slide-image/{{ state.current_page }}"
-               alt="Slide {{ state.current_page }}"
-               onerror="this.style.display='none'; document.getElementById('slideFallback').style.display='flex';">
-          <!-- Fallback text view (hidden when image loads) -->
-          <div id="slideFallback" class="hidden flex-col justify-center items-center text-center px-8 py-8 w-full">
+        <!-- Actual slide image (16:9 constrained box) -->
+        <div class="flex items-center justify-center px-4 pt-10 pb-2">
+          <div id="slideImgWrap">
+            <img id="slideImg"
+                 src="/x/slide-image/{{ state.current_page }}"
+                 alt="Slide {{ state.current_page }}"
+                 onerror="this.style.display='none'; document.getElementById('slideFallback').style.removeProperty('display');">
+          </div>
+          <!-- Fallback text view (shown only if image fails to load) -->
+          <div id="slideFallback" class="hidden flex-col justify-center items-center text-center px-8 py-8 w-full" style="min-height:220px;">
             <h2 id="slideTitle" class="text-2xl font-bold text-white mb-4 leading-tight">{{ current_slide.title }}</h2>
             <p id="slideContent" class="text-gray-400 text-sm leading-relaxed max-w-lg">{{ current_slide.content }}</p>
           </div>
@@ -745,14 +749,19 @@
     document.getElementById('slideTitle').textContent   = slide.title  || '';
     document.getElementById('slideContent').textContent = slide.content || '';
 
-    // Swap slide image
-    const img = document.getElementById('slideImg');
-    img.style.opacity = '0';
+    // Swap slide image — reset state first, then load new src
+    const img      = document.getElementById('slideImg');
+    const wrap     = document.getElementById('slideImgWrap');
+    const fallback = document.getElementById('slideFallback');
+    // Reset: show img, hide fallback
+    img.style.display   = '';
+    img.style.opacity   = '0';
+    fallback.style.display = 'none';
     img.src = `/x/slide-image/${slide.page}`;
     img.onload  = () => { img.style.transition = 'opacity 0.3s'; img.style.opacity = '1'; };
     img.onerror = () => {
-      img.style.display = 'none';
-      document.getElementById('slideFallback').style.display = 'flex';
+      img.style.display      = 'none';
+      fallback.style.display = 'flex';
     };
 
     // Update progress bar + dots

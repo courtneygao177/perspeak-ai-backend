@@ -89,7 +89,7 @@ except Exception as _e:
 # ── Multi-model routing ───────────────────────────────────────────────────────
 # Each step is routed to the best-fit model via the same relay endpoint.
 # Override any model via env vars in Replit Secrets.
-VISION_MODEL = os.environ.get("VISION_MODEL", "claude-3-5-sonnet-20241022")  # Step 1: Vision
+VISION_MODEL = os.environ.get("VISION_MODEL", "gpt-4o")                    # Step 1: Vision
 TEXT_MODEL   = os.environ.get("TEXT_MODEL",   "gpt-4o")                      # Steps 3,5,6: reasoning
 EVAL_MODEL   = os.environ.get("EVAL_MODEL",   "gemini-2.5-flash")            # Steps 8,9: long-context eval
 MODEL        = os.environ.get("UNIFIED_MODEL", TEXT_MODEL)                   # legacy fallback
@@ -1051,33 +1051,66 @@ def sandbox():
     )
 
 
-def _render_pptx_page(filepath, page_num, width=1280, height=720):
+def _extract_pptx_shape_texts(shapes, out=None):
     """
-    Render a single PPTX slide as PNG bytes using python-pptx + Pillow.
-    Returns PNG bytes, or None on failure.
+    Recursively collect (top_emu, text) pairs from PPTX shapes.
+    Handles groups (type 6), tables (type 19), and regular text shapes.
+    """
+    if out is None:
+        out = []
+    for shape in shapes:
+        try:
+            stype = int(shape.shape_type)
+        except Exception:
+            stype = -1
+        if stype == 6:                          # GROUP — recurse
+            try:
+                _extract_pptx_shape_texts(shape.shapes, out)
+            except Exception:
+                pass
+        elif stype == 19:                       # TABLE
+            try:
+                for row in shape.table.rows:
+                    for cell in row.cells:
+                        t = cell.text.strip()
+                        if t:
+                            out.append((shape.top or 0, t))
+            except Exception:
+                pass
+        elif hasattr(shape, "text") and shape.text.strip():
+            out.append((shape.top or 0, shape.text.strip()))
+    return out
+
+
+def _render_pptx_page(filepath, page_num):
+    """
+    Render a PPTX slide as an SVG (bytes, mimetype) tuple.
+    SVG is served directly to the browser — uses system fonts so CJK text
+    (Chinese / Japanese / Korean) renders correctly without needing embedded fonts.
+    Returns (None, None) on failure.
     """
     try:
         from pptx import Presentation
-        from PIL import Image, ImageDraw, ImageFont
 
-        prs = Presentation(filepath)
+        prs         = Presentation(filepath)
         slides_list = list(prs.slides)
         if page_num < 1 or page_num > len(slides_list):
-            return None
+            return None, None
+
         slide = slides_list[page_num - 1]
+        total = len(slides_list)
+        W, H  = 1280, 720
 
-        img  = Image.new("RGB", (width, height), color=(12, 12, 28))
-        draw = ImageDraw.Draw(img)
+        CJK_FONTS = ("'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',"
+                     "Arial,Helvetica,sans-serif")
 
-        try:
-            font_title   = ImageFont.load_default(size=38)
-            font_content = ImageFont.load_default(size=22)
-            font_badge   = ImageFont.load_default(size=15)
-        except TypeError:                               # Pillow < 10
-            font_title = font_content = font_badge = ImageFont.load_default()
+        def esc(s: str) -> str:
+            return (s.replace("&", "&amp;").replace("<", "&lt;")
+                     .replace(">", "&gt;").replace('"', "&quot;")
+                     .replace("'", "&apos;"))
 
-        # ── Extract title ───────────────────────────────────────────────────
-        title_text = ""
+        # ── Title ────────────────────────────────────────────────────────────
+        title_text  = ""
         title_shape = None
         try:
             if slide.shapes.title and slide.shapes.title.text.strip():
@@ -1086,46 +1119,53 @@ def _render_pptx_page(filepath, page_num, width=1280, height=720):
         except Exception:
             pass
 
-        # ── Extract body text (non-title shapes) ────────────────────────────
-        body_blocks = []
-        for shape in slide.shapes:
-            if not hasattr(shape, "text") or not shape.text.strip():
-                continue
-            if shape is title_shape:
-                continue
-            body_blocks.append(shape.text.strip())
+        # ── Body text (all shapes, sorted top→bottom) ────────────────────────
+        raw = _extract_pptx_shape_texts(slide.shapes)
+        raw = [(top, txt) for (top, txt) in raw if txt != title_text]
+        raw.sort(key=lambda x: x[0])
 
-        # ── Header bar ──────────────────────────────────────────────────────
-        draw.rectangle([(0, 0), (width, 108)], fill=(22, 22, 52))
-        draw.line([(0, 108), (width, 108)], fill=(80, 80, 200), width=2)
-
-        # ── Title ───────────────────────────────────────────────────────────
-        if title_text:
-            draw.text((52, 30), title_text[:90], fill=(220, 225, 255), font=font_title)
-
-        # ── Body content ────────────────────────────────────────────────────
-        y = 130
-        for block in body_blocks:
+        # ── Build body <text> elements ───────────────────────────────────────
+        body_els = []
+        y = 148
+        for _, block in raw:
             lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
             for line in lines:
-                if y > height - 72:
+                if y > H - 72:
                     break
-                draw.text((72, y), "▸  " + line[:115], fill=(175, 182, 210), font=font_content)
-                y += 36
-            y += 14
+                body_els.append(
+                    f'<text x="68" y="{y}" font-size="19" fill="#acb2d8" '
+                    f'font-family={CJK_FONTS!r}>'
+                    f'&#9656;&#160;&#160;{esc(line[:115])}</text>'
+                )
+                y += 34
+            y += 10
 
-        # ── Slide number badge ───────────────────────────────────────────────
-        badge = f"Slide {page_num} / {len(slides_list)}"
-        draw.rectangle([(width - 190, height - 50), (width - 20, height - 18)],
-                       fill=(30, 30, 72))
-        draw.text((width - 180, height - 45), badge, fill=(110, 120, 190), font=font_badge)
+        badge = f"Slide {page_num} / {total}"
 
-        buf = io.BytesIO()
-        img.save(buf, "PNG")
-        return buf.getvalue()
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
+            f'<defs>'
+            f'  <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">'
+            f'    <stop offset="0%" stop-color="#0c0c1c"/>'
+            f'    <stop offset="100%" stop-color="#10102a"/>'
+            f'  </linearGradient>'
+            f'</defs>'
+            f'<rect width="{W}" height="{H}" fill="url(#bg)"/>'
+            f'<rect width="{W}" height="114" fill="#161638"/>'
+            f'<rect x="0" y="112" width="{W}" height="2" fill="#4848c8"/>'
+            f'<text x="52" y="76" font-size="32" font-weight="700" fill="#d8dcff" '
+            f'font-family={CJK_FONTS!r}>{esc(title_text[:90])}</text>'
+            + "".join(body_els)
+            + f'<rect x="{W - 188}" y="{H - 48}" width="166" height="28" rx="5" fill="#1c1c44"/>'
+            f'<text x="{W - 180}" y="{H - 28}" font-size="13" fill="#6870aa" '
+            f'font-family="monospace,sans-serif">{esc(badge)}</text>'
+            f"</svg>"
+        )
+        return svg.encode("utf-8"), "image/svg+xml"
     except Exception as e:
         app.logger.error(f"_render_pptx_page page={page_num} failed: {e}")
-        return None
+        return None, None
 
 
 @app.route("/x/slide-image/<int:page>")
@@ -1147,13 +1187,14 @@ def slide_image(page):
 
     ext = os.path.splitext(filepath)[1].lstrip(".").lower()
 
-    # ── PPTX / PPT → Pillow renderer ────────────────────────────────────────
+    # ── PPTX / PPT → SVG renderer ───────────────────────────────────────────
     if ext in ("pptx", "ppt"):
-        img_bytes = _render_pptx_page(filepath, page)
-        if img_bytes is None:
+        svg_bytes, mime = _render_pptx_page(filepath, page)
+        if svg_bytes is None:
             return "Page out of range or render failed", 404
-        return _R(img_bytes, mimetype="image/png",
-                  headers={"Cache-Control": "max-age=3600"})
+        return _R(svg_bytes, mimetype=mime,
+                  headers={"Cache-Control": "max-age=3600",
+                           "X-Content-Type-Options": "nosniff"})
 
     # ── PDF → fitz renderer ─────────────────────────────────────────────────
     try:
