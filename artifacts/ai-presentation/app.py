@@ -243,7 +243,7 @@ MOCK_QA_BANK = [
 # ─────────────────────────────────────────────
 # PDF → BASE64 IMAGES PIPELINE (Step 1)
 # ─────────────────────────────────────────────
-def extract_pdf_images_as_base64(filepath, max_pages=6):
+def extract_pdf_images_as_base64(filepath, max_pages=20):
     """Convert PDF pages to base64-encoded PNG images for Vision API."""
     try:
         import fitz  # PyMuPDF
@@ -1295,12 +1295,8 @@ def api_upload():
 
         ext = orig_ext
 
-        # Step 1a: PDF → base64 images (fast — no AI call here)
-        images_b64 = []
-        if ext == "pdf":
-            app.logger.info("Extracting PDF pages as images...")
-            images_b64 = extract_pdf_images_as_base64(save_path)
-            app.logger.info(f"Extracted {len(images_b64)} page image(s)")
+        # Step 1a: PDF image extraction happens later in /x/start-session for Vision.
+        # We only do text extraction here so the config page shows the real page count fast.
 
         # Build real (text-extracted) slide previews immediately — no AI call.
         # These give the config page the REAL page count + titles.
@@ -1360,8 +1356,20 @@ def api_start_session():
                 app.logger.info(f"Vision: analysing {len(images_b64)} page(s)…")
                 ai_slides, ok = analyze_slides_with_claude(images_b64, filename)
                 if ok and ai_slides:
-                    slides = ai_slides
-                    app.logger.info(f"Vision done: {len(slides)} slide(s) — AI-enhanced")
+                    # Vision may have analysed fewer pages than text extraction (e.g. max_pages cap
+                    # or a short Vision response). Never let Vision shrink the deck — merge so that
+                    # every page the user uploaded is represented in the session.
+                    if len(ai_slides) < len(slides):
+                        seen_pages = {s["page"] for s in ai_slides}
+                        extra = [s for s in slides if s["page"] not in seen_pages]
+                        slides = sorted(ai_slides + extra, key=lambda s: s["page"])
+                        app.logger.info(
+                            f"Vision enhanced {len(ai_slides)} page(s); "
+                            f"merged with text-extracted to {len(slides)} total"
+                        )
+                    else:
+                        slides = ai_slides
+                        app.logger.info(f"Vision done: {len(slides)} slide(s) — AI-enhanced")
                 else:
                     app.logger.info("Vision returned empty — keeping text-extracted slides")
             elif ext in ("ppt", "pptx"):
