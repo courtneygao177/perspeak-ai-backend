@@ -1321,7 +1321,7 @@ def api_upload():
             "success":    True,
             "filename":   filename,
             "page_count": page_count,
-            "ai_pending": AI_ENABLED and bool(images_b64),
+            "ai_pending": AI_ENABLED and ext == "pdf",
             "message":    f"File uploaded. {page_count} page(s) ready for AI analysis.",
         })
 
