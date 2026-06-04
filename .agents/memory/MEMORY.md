@@ -2,3 +2,4 @@
 - [Academic QA Flow](academic-qa-flow.md) — Academic triggers post-session Q&A via ACADEMIC_QA_START; Thesis/MBA go direct to finish.
 - [Real Data Pipeline](real-data-pipeline.md) — frontend sends transcripts/QA/timer to /x/finish-presentation; backend merges with session; Gemini gets real WPM+filler+per-slide narration.
 - [Audio State Machine](audio-state-machine.md) — unified AudioMachine (audioMode: idle/narration/qa/acq); audioSuspendForQa() on INTERRUPT/ACADEMIC_QA_START; audioResumeAfterQa() on QA_FINISHED.
+- [Flask session disk offload](flask-session-disk-offload.md) — slides/reports must live on disk (not cookie) to avoid 4KB limit silently falling back to mock data and ending presentations early.

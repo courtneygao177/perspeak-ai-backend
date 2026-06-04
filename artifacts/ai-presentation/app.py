@@ -38,6 +38,29 @@ def _load_report(key):
     except (FileNotFoundError, json.JSONDecodeError):
         return None
 
+# ── Server-side slides store (avoids 4KB cookie overflow on large decks) ──────
+_SLIDES_DIR = os.path.join(os.path.dirname(__file__), "uploads", "slide_store")
+
+def _save_slides(slides):
+    """Write slides list to disk; return the UUID key to store in session."""
+    os.makedirs(_SLIDES_DIR, exist_ok=True)
+    key = str(uuid.uuid4())
+    with open(os.path.join(_SLIDES_DIR, f"{key}.json"), "w", encoding="utf-8") as fh:
+        json.dump(slides, fh, ensure_ascii=False)
+    return key
+
+def _load_slides(session_obj):
+    """Load slides from disk using session's slide_key. Falls back to MOCK_SLIDES."""
+    key = session_obj.get("slide_key", "")
+    if not key:
+        return MOCK_SLIDES
+    path = os.path.join(_SLIDES_DIR, f"{key}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return MOCK_SLIDES
+
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
 # ── CORS: allow all origins so the proxied iframe can reach Flask ──────────────
@@ -1025,9 +1048,9 @@ def index():
 
 @app.route("/config")
 def config_page():
-    if "slides" not in session:
+    if "slide_key" not in session and "slides" not in session:
         return redirect(url_for("index"))
-    return render_template("config.html", slides=session.get("slides", []), ai_enabled=AI_ENABLED)
+    return render_template("config.html", slides=_load_slides(session), ai_enabled=AI_ENABLED)
 
 
 @app.route("/sandbox")
@@ -1035,7 +1058,7 @@ def sandbox():
     if "state" not in session:
         return redirect(url_for("index"))
     state = session["state"]
-    slides = session.get("slides", [])
+    slides = _load_slides(session)
     cfg = session.get("config", {})
     current_slide = next((s for s in slides if s["page"] == state["current_page"]), slides[0])
     has_file = bool(session.get("filepath") and os.path.exists(session.get("filepath", "")))
@@ -1291,7 +1314,7 @@ def api_upload():
         else:
             slides_preview = MOCK_SLIDES
 
-        session["slides"]   = slides_preview   # real page count, real text
+        session["slide_key"] = _save_slides(slides_preview)   # real page count, real text
         session["filename"] = filename
         session["filepath"] = save_path        # start-session re-reads from disk
         session["answers"]  = []
@@ -1327,7 +1350,7 @@ def api_start_session():
     filepath = session.get("filepath", "")
     filename = session.get("filename", "")
     # Start with whatever text-extracted slides were stored during upload (real page count)
-    slides   = session.get("slides", MOCK_SLIDES)
+    slides   = _load_slides(session)
     try:
         if filepath and os.path.exists(filepath) and AI_ENABLED:
             ext = filepath.rsplit(".", 1)[-1].lower()
@@ -1345,16 +1368,17 @@ def api_start_session():
                 ppt_data = extract_ppt_images_as_base64(filepath)
                 if ppt_data:
                     slides = pptx_to_slides(ppt_data)
-            session["slides"] = slides
+            session["slide_key"] = _save_slides(slides)
         else:
             app.logger.info(f"Skipping Vision (filepath={filepath!r}, AI_ENABLED={AI_ENABLED})")
-            # slides already loaded from session above
+            # slides already loaded from session above — re-save to ensure disk key is fresh
+            if "slide_key" not in session:
+                session["slide_key"] = _save_slides(slides)
     except Exception as e:
         traceback.print_exc()
         app.logger.error(f"Vision failed — keeping text-extracted slides: {e}")
-        # Do NOT overwrite with MOCK_SLIDES; keep the real text-extracted slides from upload
-        slides = session.get("slides", MOCK_SLIDES)
-        session["slides"] = slides
+        slides = _load_slides(session)
+        session["slide_key"] = _save_slides(slides)
 
     # ── Step 3: Master Engine (Challenge seed + QA bank) ──────────────────────────
     try:
@@ -1393,7 +1417,7 @@ def api_session_state():
     return jsonify({
         "state": session.get("state", {}),
         "config": session.get("config", {}),
-        "slides": session.get("slides", []),
+        "slides": _load_slides(session),
     })
 
 
@@ -1409,7 +1433,7 @@ def api_check_slide():
     state = dict(session["state"])
     config = session.get("config", {})
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
-    slides = session.get("slides", MOCK_SLIDES)
+    slides = _load_slides(session)
 
     scenario = config.get("scenario", "Academic Presentation")
     trigger_page = (challenge_seed or {}).get("trigger_page", 2)
@@ -1490,7 +1514,7 @@ def api_submit_answer():
     user_answer = data.get("answer", "")
     state = dict(session["state"])
     config = session.get("config", {})
-    slides = session.get("slides", MOCK_SLIDES)
+    slides = _load_slides(session)
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
 
     follow_up_round = state.get("follow_up_round", 1)
@@ -1536,7 +1560,7 @@ def api_submit_answer():
         state["in_qa_mode"] = False
         state["chat_history"] = []
         state["total_interruptions"] = state.get("total_interruptions", 0) + 1
-        slides_list = session.get("slides", MOCK_SLIDES)
+        slides_list = _load_slides(session)
         next_page = state["current_page"] + 1
         if next_page <= len(slides_list):
             state["current_page"] = next_page
@@ -1607,7 +1631,7 @@ def api_finish_presentation():
     """
     config         = session.get("config", {})
     answers        = list(session.get("answers", []))
-    slides         = session.get("slides", MOCK_SLIDES)
+    slides         = _load_slides(session)
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
     scenario       = config.get("scenario", "Academic Presentation")
 
