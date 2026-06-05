@@ -411,7 +411,7 @@
 {% block scripts %}
 <script>
   const scores    = {{ evaluation.pillar.scores | tojson }};
-  const pitchData = {{ pitch_data | tojson }};
+  const pitchData = {{ (evaluation.pillar.pitch_data or []) | tojson }};
 
   // ── Radar chart ────────────────────────────────────────────────────────────
   new Chart(document.getElementById('radarChart'), {
