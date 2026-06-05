@@ -561,6 +561,21 @@ Return ONLY the question text. No preamble, no labels, no markdown."""
 
 
 # ─────────────────────────────────────────────
+def _generate_pitch_data(delivery_score, wpm=0):
+    """Return 20 simulated pitch values (Hz) for the Delivery chart.
+    Higher delivery score → more expressive variance; lower → flatter/monotone."""
+    import math
+    base = 120 + max(0, wpm - 130) * 0.5 if wpm > 0 else 125
+    base = max(90, min(180, float(base)))
+    amplitude = max(5.0, (delivery_score - 40) * 1.2)
+    data = []
+    for i in range(20):
+        wave = math.sin(i * 0.6) * amplitude + math.sin(i * 1.3) * amplitude * 0.4
+        v = int(base + wave + random.randint(-5, 5))
+        data.append(max(50, min(250, v)))
+    return data
+
+
 # GEMINI: 4-PILLAR EVALUATION ENGINE (Step 8)
 # ─────────────────────────────────────────────
 def run_pillar_evaluation(slides, answers, config, challenge_seed,
@@ -664,14 +679,18 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
 
     # ── Compose WPM / filler notes ─────────────────────────────────────────────
     if wpm_estimate > 0:
-        if wpm_estimate > 160:
-            wpm_note = f"{wpm_estimate} WPM — RUSHED DELIVERY (>160 WPM). Penalise Delivery."
-        elif wpm_estimate < 110:
-            wpm_note = f"{wpm_estimate} WPM — HESITANT DELIVERY (<110 WPM). Penalise Delivery."
+        if wpm_estimate > 165:
+            wpm_note = f"{wpm_estimate} WPM — RUSHED (>165 WPM). Score Delivery 60-74 range."
+        elif wpm_estimate > 150:
+            wpm_note = f"{wpm_estimate} WPM — slightly fast (151-165 WPM). Score Delivery 75-89 range."
+        elif wpm_estimate >= 120:
+            wpm_note = f"{wpm_estimate} WPM — GOLDEN ZONE (120-150 WPM). Score Delivery 90-100."
+        elif wpm_estimate >= 110:
+            wpm_note = f"{wpm_estimate} WPM — slightly slow (110-119 WPM). Score Delivery 75-89 range."
         else:
-            wpm_note = f"{wpm_estimate} WPM — good pace (110-160 WPM target)."
+            wpm_note = f"{wpm_estimate} WPM — HESITANT (<110 WPM). Score Delivery 60-74 range."
     else:
-        wpm_note = "WPM unknown (no timer data). Estimate from text density."
+        wpm_note = "WPM unknown (no timer data). Estimate from text density and content coverage."
 
     if filler_count > 10:
         filler_note = (
@@ -694,26 +713,42 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
         for s in slides
     )
 
-    prompt = f"""You are a friendly Presentation Coach for non-native English speakers. Run a 4-Pillar audit.
+    prompt = f"""You are a friendly Presentation Coach for non-native English speakers.
+Evaluate the presenter using a strict 4-Pillar rubric. Use ONLY the real data supplied below.
 
 ══════════════════════════════════════════════
-SCORING RUBRIC (0-100 each pillar)
+SCORING RUBRIC — 0-100 PER PILLAR
 ══════════════════════════════════════════════
-1. [Structure] — Award for clear intro/body/conclusion and transitions like "Moving on to…" or "To summarise…".
-   Deduct for abrupt slide changes with zero linking words.  Empty transcript → score 20-35.
-2. [Fluency]   — Use the PRE-COMPUTED filler word count as your ANCHOR. Deduct 3 pts per filler above 5.
-   Penalise broken grammar or repeated stops. Empty transcript → score 15-25.
-3. [Relevance] — Compare each slide's key facts vs. what the presenter actually said.
-   Deduct for slides where key data was ignored. Award for directly quoting slide data. Empty → 20-35.
-4. [Delivery]  — Use PRE-COMPUTED WPM as ANCHOR. Rushed >160 WPM or hesitant <110 WPM → penalise.
-   Award smooth pace variation. Empty transcript → score 18-30.
+1. [Structure] — Logic chain, signpost words, slide transitions
+   90-100 (Expert):     Perfect intro/body/conclusion; signpost on every slide change
+   75-89  (Competent):  Logic complete; 1-2 abrupt transitions without linking words
+   60-74  (Developing): No global frame; only reading titles; <20% transitions used
+   0-59   (Novice):     Wrong order, or mostly silent
+
+2. [Fluency] — Filler words per minute, awkward pauses
+   90-100 (Expert):     <2 filler words/min; no pause >2.5 seconds
+   75-89  (Competent):  3-5 filler words/min; short pauses (<3s) that don't break grammar
+   60-74  (Developing): Same filler repeated >3 times; OR pause >3s silence
+   0-59   (Novice):     Sentences mostly broken; fillers make meaning unclear
+
+3. [Content Relevance] — Slide keywords/data vs actual speech
+   90-100 (Expert):     >80% slide keywords + all key numbers mentioned
+   75-89  (Competent):  Core topic covered; 1-2 key numbers/percentages skipped
+   60-74  (Developing): <40% keyword match; speaker appears off-slide
+   0-59   (Novice):     Completely off-topic or random words
+
+4. [Delivery] — WPM calibrated to GOLDEN STANDARD
+   90-100 (Perfect):    120-150 WPM — international conference golden zone
+   75-89  (Good):       110-119 WPM (slightly slow) or 151-165 WPM (slightly fast)
+   60-74  (Needs Work): <110 WPM (hesitant) or >165 WPM (rushing)
+   0-59   (Novice):     Incoherent speed; impossible to follow
 
 ══════════════════════════════════════════════
-PRE-COMPUTED METRICS — USE THESE EXACTLY, DO NOT IGNORE
+PRE-COMPUTED METRICS — USE AS ANCHORS, DO NOT IGNORE
 ══════════════════════════════════════════════
-- Total words spoken : {total_words} (≥5 confirmed, presenter did speak)
-- WPM assessment     : {wpm_note}
-- Filler assessment  : {filler_note}
+Total words spoken : {total_words}
+WPM assessment     : {wpm_note}
+Filler assessment  : {filler_note}
 
 ══════════════════════════════════════════════
 SESSION CONTEXT
@@ -721,12 +756,12 @@ SESSION CONTEXT
 Audience: {audience} | Scenario: {scenario} | Difficulty: {difficulty} | Challenge: {challenge_type}
 
 ══════════════════════════════════════════════
-SLIDE CONTENT (screen text)
+SLIDE CONTENT (on-screen text)
 ══════════════════════════════════════════════
 {slide_content_text}
 
 ══════════════════════════════════════════════
-PRESENTER NARRATION (their actual speech, slide by slide)
+PRESENTER NARRATION (actual speech, slide by slide)
 ══════════════════════════════════════════════
 {slide_narration_text}
 
@@ -736,95 +771,77 @@ Q&A TRANSCRIPT
 {qa_history_text}
 
 ══════════════════════════════════════════════
-OUTPUT RULES — READ EVERY RULE BEFORE WRITING
+MANDATORY OUTPUT RULES — READ ALL BEFORE WRITING
 ══════════════════════════════════════════════
 
-⚡ CRITICAL SPEED CONSTRAINT — OBEY TO PREVENT API TIMEOUT ⚡
-You are evaluating a live rehearsal with multiple slides and Q&A history.
-Your JSON response MUST be concise:
-- "what_i_did_good"      → EXACTLY 3 items (no more, no fewer)
-- "areas_for_improvement" → EXACTLY 2 items (no more, no fewer)
-- Each item: maximum 2 sentences. Do NOT write essay-length text.
-- "dimensions_info" values: maximum 1 short sentence each.
-Verbose responses will cause an API timeout and waste the user's session.
+⚡ SPEED RULE: Max 2 sentences per feedback item. Be concise. No essay text.
 
-RULE 1 — LANGUAGE LEVEL
-All text in what_i_did_good and areas_for_improvement MUST use IELTS 5.5-6.0 vocabulary.
-Short, clear sentences only. Use "show" not "demonstrate". Use "fix" not "mitigate".
-Write as if talking to a university student who is NOT a native speaker.
+RULE 1 — LANGUAGE
+Use IELTS 5.5-6.0 vocabulary only. Short, clear sentences. Write for a university student who is NOT a native English speaker.
+Say "show" not "demonstrate". Say "fix" not "mitigate". Say "use" not "utilise".
 
-⚠️ FORMAT-ONLY WARNING — READ BEFORE WRITING ANY FEEDBACK ⚠️
-The examples below (EXAMPLE A and EXAMPLE B) exist ONLY to show the JSON structure and language level.
-Do NOT copy or echo those example words into your response.
-- Do NOT echo, copy, or paraphrase any example phrase shown in this prompt into your response.
-- Do NOT invent facts not present in the actual slide content or user narration above.
-- If the user's slides contain no statistics, DO NOT complain about missing statistics.
-- If the user did not use filler words, DO NOT mention filler words.
-- Every single sentence in your output MUST be grounded in the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION provided above.
+RULE 2 — QUOTE RULE (MOST IMPORTANT)
+Every item MUST be grounded in the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION above.
+NEVER invent quotes. NEVER write feedback that applies to any presenter.
+If the user said something specific, quote EXACT words. If they skipped a fact, name THAT EXACT FACT from the slide.
 
-RULE 2 — what_i_did_good FORMAT
-Each item MUST follow this pattern:
-  "[PillarTag] Strength title: 1-2 sentences explaining what they actually did well. Quote their exact words if they said something good."
+RULE 3 — 4×2 MATRIX (STRICTLY ENFORCED)
+what_i_did_good      → EXACTLY 4 items, one per pillar: Structure, Fluency, Content Relevance, Delivery
+areas_for_improvement → EXACTLY 4 items, one per pillar: Structure, Fluency, Content Relevance, Delivery
+NO pillar may be skipped. NO extra items. Write in that exact order.
 
-Pillar tags to use: [Structure], [Fluency], [Relevance], [Delivery]
+RULE 4 — what_i_did_good FORMAT
+"[PillarTag] Short Title: 1-2 sentences. Quote exact words from narration if possible."
+Tags: [Structure], [Fluency], [Content Relevance], [Delivery]
 
-EXAMPLE A (FORMAT ONLY — do NOT copy these words):
-  "[Structure] Clear Signposting: You connected two slides smoothly. You said, '<actual user quote>', which helps the audience follow."
+RULE 5 — areas_for_improvement FORMAT (4 JSON objects, exactly)
+Each object has EXACTLY these 4 keys:
+  "dimension" : "Structure" | "Fluency" | "Content Relevance" | "Delivery"
+  "issue"     : "Short title. 1 sentence: what went wrong and on which slide."
+  "example"   : "You said: \\"<EXACT quote from ACTUAL narration>\\" — OR — \\"On Slide N, you skipped [EXACT fact from slide content above].\\"  NEVER invent this."
+  "how_to_fix": "1 sentence of advice. Say this instead: \\"<corrected version at IELTS 5.5 level>\\""
 
-BAD (never write like this):
-  "The presenter demonstrated effective discourse management strategies."
-
-RULE 3 — areas_for_improvement FORMAT (STRICT 3-PART STRUCTURE)
-Each item MUST be a JSON object with exactly these 3 keys:
-
-  "issue"      : "[PillarTag] Short title. 1 sentence: what went wrong on which specific slide."
-  "example"    : "You said: \\"<EXACT quote from the ACTUAL narration above>\\"  OR  \\"On Slide N, you did not mention [EXACT fact from the ACTUAL slide content above].\\""
-  "how_to_fix" : "1 sentence of advice based on their actual mistake. Then: Say this instead: \\"<a corrected sentence at IELTS 5.5 level that fits their actual topic>\\""
-
-EXAMPLE B (FORMAT ONLY — do NOT copy these words):
-{{
-  "issue": "[Fluency] High filler word usage on Slide X.",
-  "example": "You said: \\"<copy EXACT phrase from ACTUAL narration above>\\"",
-  "how_to_fix": "Pause silently instead of using filler words. Say this instead: \\"<rewritten version of their ACTUAL sentence>\\""
-}}
-
-RULE 4 — SPECIFICITY (MOST IMPORTANT RULE)
-- Read the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION sections above before writing a single word.
-- Every issue, example, and suggestion MUST reference something the presenter ACTUALLY SAID or ACTUALLY skipped.
-- If they said nothing on a slide → state that exact slide number, e.g. "Slide 3 had no narration."
-- If they used a wrong word → quote THAT exact wrong word from their transcript.
-- NEVER write feedback that could apply to any presenter regardless of their actual words.
-- NEVER invent quotes the user did not actually say.
+RULE 6 — pitch_data
+Return exactly 20 integers (range 50-250) simulating pitch variance for the Delivery chart.
+Higher delivery score and WPM in golden zone → more variance and bigger swings.
+Lower score → flatter values near 100-130 with minimal variation.
 
 ══════════════════════════════════════════════
-Return ONLY valid JSON — no markdown fences, no extra text
+Return ONLY valid JSON. No markdown fences. No text outside the JSON object.
 ══════════════════════════════════════════════
 {{
-  "scores": {{
-    "structure": <integer 0-100>,
-    "fluency":   <integer 0-100>,
-    "relevance": <integer 0-100>,
-    "delivery":  <integer 0-100>
+  "radar_scores": {{
+    "structure": <int 0-100>,
+    "fluency":   <int 0-100>,
+    "relevance": <int 0-100>,
+    "delivery":  <int 0-100>
   }},
   "dimensions_info": {{
-    "structure": {{"explanation": "<1 sentence: reference their actual transitions or lack of them>", "calculation": "<1 sentence: how many slides had linking phrases>"}},
-    "fluency":   {{"explanation": "<1 sentence: reference their actual filler count>", "calculation": "<1 sentence: filler count + any grammar issues>"}},
-    "relevance": {{"explanation": "<1 sentence: which slides had good or poor coverage>", "calculation": "<1 sentence: how many slides matched the slide content>"}},
-    "delivery":  {{"explanation": "<1 sentence: their actual WPM value and verdict>", "calculation": "<1 sentence: WPM and pace judgement>"}}
+    "structure": {{"explanation": "<1 sentence: their actual transitions or lack of them>",
+                   "calculation": "<1 sentence: how many slides had linking phrases>"}},
+    "fluency":   {{"explanation": "<1 sentence: their actual filler count + impact>",
+                   "calculation": "<1 sentence: filler rate per minute>"}},
+    "relevance": {{"explanation": "<1 sentence: which slides had good or poor coverage>",
+                   "calculation": "<1 sentence: keyword match count>"}},
+    "delivery":  {{"explanation": "<1 sentence: exact WPM + verdict (golden/fast/slow)>",
+                   "calculation": "<1 sentence: WPM vs 120-150 golden zone>"}}
   }},
   "filler_log": [
-    {{"word": "<exact filler from transcript>", "timestamp": "<Slide N where it appeared>", "type": "Assistive or Disruptive"}}
+    {{"word": "<exact filler from transcript>", "timestamp": "Slide N", "type": "Assistive or Disruptive"}}
   ],
   "what_i_did_good": [
-    "<[PillarTag] Title: explanation with quote if possible>"
+    "[Structure] ...",
+    "[Fluency] ...",
+    "[Content Relevance] ...",
+    "[Delivery] ..."
   ],
   "areas_for_improvement": [
-    {{
-      "issue":      "<[PillarTag] Short title. 1 sentence stating what went wrong and which slide.>",
-      "example":    "<You said: \\"exact quote\\" OR On Slide N, you skipped [specific fact].>",
-      "how_to_fix": "<1 sentence advice. Say this instead: \\"corrected sentence at IELTS 5.5 level.\\">"
-    }}
-  ]
+    {{"dimension": "Structure",         "issue": "...", "example": "...", "how_to_fix": "Say this instead: \\"...\\""}},
+    {{"dimension": "Fluency",           "issue": "...", "example": "...", "how_to_fix": "Say this instead: \\"...\\""}},
+    {{"dimension": "Content Relevance", "issue": "...", "example": "...", "how_to_fix": "Say this instead: \\"...\\""}},
+    {{"dimension": "Delivery",          "issue": "...", "example": "...", "how_to_fix": "Say this instead: \\"...\\""}}
+  ],
+  "pitch_data": [<20 integers each 50-250>]
 }}"""
 
     # ── Audit log: confirm real user data is being sent ───────────────────────
@@ -846,12 +863,33 @@ Return ONLY valid JSON — no markdown fences, no extra text
         raw = re.sub(r"\s*```$", "", raw)
         result = json.loads(raw)
 
-        # Clamp scores 0-100
-        scores = result.get("scores", {})
+        # Normalise: accept radar_scores (new schema) or scores (old schema)
+        raw_scores = result.get("radar_scores") or result.get("scores") or {}
         result["scores"] = {
             k: int(min(100, max(0, float(v))))
-            for k, v in scores.items()
+            for k, v in raw_scores.items()
         }
+        if not result["scores"]:
+            result["scores"] = {"structure": 70, "fluency": 70, "relevance": 70, "delivery": 70}
+
+        # Ensure dimensions_info exists for Jinja2 template
+        if "dimensions_info" not in result:
+            result["dimensions_info"] = {
+                k: {"explanation": f"Score: {result['scores'].get(k, 70)}/100",
+                    "calculation": "Based on 4-pillar rubric."}
+                for k in ("structure", "fluency", "relevance", "delivery")
+            }
+
+        # Ensure pitch_data is valid (20 points)
+        pd = result.get("pitch_data", [])
+        if not isinstance(pd, list) or len(pd) < 5:
+            result["pitch_data"] = _generate_pitch_data(
+                result["scores"].get("delivery", 70), wpm_estimate
+            )
+
+        # Ensure filler_log exists
+        if "filler_log" not in result:
+            result["filler_log"] = []
 
         return result
 
@@ -880,13 +918,14 @@ def _mock_pillar_evaluation(difficulty):
     """Fallback mock when AI is unavailable. Returns the same schema as run_pillar_evaluation."""
     base = {"Easy": 74, "Medium": 61, "Hard": 49}.get(difficulty, 61)
     r = random.randint
+    d_score = min(100, base + r(-6, 9))
 
     return {
         "scores": {
             "structure": min(100, base + r(-4, 10)),
             "fluency":   min(100, base + r(-10, 5)),
             "relevance": min(100, base + r(-8, 8)),
-            "delivery":  min(100, base + r(-6, 9)),
+            "delivery":  d_score,
         },
         "dimensions_info": {
             "structure": {
@@ -902,25 +941,42 @@ def _mock_pillar_evaluation(difficulty):
                 "calculation": "Computed by matching slide keywords with your speech text.",
             },
             "delivery": {
-                "explanation": "Measures your speaking speed (WPM) and talking energy.",
-                "calculation": "Computed by dividing total words by your presentation time.",
+                "explanation": "Speaking speed in golden zone (120-150 WPM) gets the highest score.",
+                "calculation": "Computed by dividing total words by your presentation time (WPM).",
             },
         },
         "filler_log": [],
+        "pitch_data": _generate_pitch_data(d_score, 130),
         "what_i_did_good": [
-            "[Structure] Presentation Attempt: You completed the rehearsal flow and moved through the slides.",
-            "[Delivery] Session Completed: You reached the end of the presentation session.",
+            "[Structure] Rehearsal Completed: You moved through all slides in order and finished the session.",
+            "[Fluency] Steady Pace: Your speech kept a consistent flow without major stops.",
+            "[Content Relevance] Topic Covered: You addressed the main subject shown on the slides.",
+            "[Delivery] Session Finished: You reached the end of the presentation without stopping early.",
         ],
         "areas_for_improvement": [
             {
-                "issue": "[Structure] No linking words detected between slides.",
+                "dimension": "Structure",
+                "issue": "No linking words detected between slides.",
                 "example": "You moved between slides without using any transition phrases.",
-                "how_to_fix": "Use a short bridge before each new slide. Say this instead: \"Now let's move to the next point.\"",
+                "how_to_fix": "Use a short bridge before each slide. Say this instead: \"Now let's look at the next point.\"",
             },
             {
-                "issue": "[Relevance] Slide content may not have been fully covered in your speech.",
-                "example": "Some slides may have had key points that were not mentioned in your narration.",
-                "how_to_fix": "Before clicking Next Slide, check the slide and make sure you mentioned all the key information shown on screen.",
+                "dimension": "Fluency",
+                "issue": "Some hesitations or filler words may have slowed your delivery.",
+                "example": "Try to replace 'um' or 'uh' with a short silent pause.",
+                "how_to_fix": "Close your mouth and breathe for one second. Say this instead: \"[pause] The next key idea is...\"",
+            },
+            {
+                "dimension": "Content Relevance",
+                "issue": "Slide content may not have been fully covered in your speech.",
+                "example": "Some slides may have had key facts that were not mentioned in your narration.",
+                "how_to_fix": "Before clicking Next Slide, check the screen. Say this instead: \"As you can see on the slide, [key fact].\"",
+            },
+            {
+                "dimension": "Delivery",
+                "issue": "Speaking speed may need adjustment for the golden zone.",
+                "example": "Aim for 120-150 WPM for the clearest international presentation style.",
+                "how_to_fix": "Practice reading your script aloud at a steady pace. Say this instead: \"[speak at 130 WPM — one word every 0.46 seconds].\"",
             },
         ],
     }

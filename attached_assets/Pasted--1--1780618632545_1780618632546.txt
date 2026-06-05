@@ -1,0 +1,64 @@
+我们现在要全面升级最终报告页的打分算法与点评引擎，彻底消除点评单薄的问题。请严格执行以下重构任务：
+
+1. 【后端打分校准：部署精细化评分判定矩阵】
+- 请修改后端负责打分的计算权重与规则。雷达图的 4 个维度（Structure, Fluency, Relevance, Delivery）初始总分 100 分，必须严格按照以下量化刻度打分：
+  * Structure：检查整体逻辑链完整度与每页转场词（Signposts）的频率。
+  * Fluency：基于 Whisper 文本中 Filler Words 的每分钟出现频次与长停顿次数打分。
+  * Relevance：计算当前页 PPT 关键词/数字与用户真实 Speech 文本的语义对齐重合度（Alignment %）。
+  * Delivery：重新校准 WPM（语速）算法。将【120 - 150 WPM】定义为 90-100 分的最佳完美档位；低于 110 WPM 或高于 165 WPM 必须进行阶梯扣分。
+
+2. 【强制 4×2 全维度矩阵点评：拒绝单薄输出】
+- 必须修改发给 Gemini 1.5 Pro 的 System Prompt 约束。要求大模型针对用户这局演讲的实际表现，【必须且只能】从 Structure, Fluency, Relevance, Delivery 这四个维度【每个维度至少输出 1 条正面（What I did good）和 1 条反面（Areas for Improvement）反馈】，组成完整的 4×2 点评矩阵，严禁漏掉任何一个维度。
+- 强制大模型在生成评价时，【100% 必须基于用户的真实口语转录文字进行精确引用（Quote）】。如果用户没说错，绝不允许瞎编硬编码的例子。
+- 语言控制级别严格锁定在：雅思 5.5 - 6.0 级别简明英语。
+
+3. 【更新后端返回的 JSON Schema 约束】
+请确保后端在调用大模型返回时，严格按照以下扁平化且好解析的 JSON 格式输出，防止前端解析时数组越界或闪退：
+{
+  "radar_scores": {
+    "structure": 85,
+    "fluency": 72,
+    "relevance": 90,
+    "delivery": 64
+  },
+  "what_i_did_good": [
+    "[Structure] ... (必须带上真实 quote)",
+    "[Fluency] ... (必须带上真实 quote)",
+    "[Content Relevance] ... (必须带上真实 quote)",
+    "[Delivery] ... (必须带上真实 quote)"
+  ],
+  "areas_for_improvement": [
+    {
+      "dimension": "Structure",
+      "issue": "...",
+      "example": "...",
+      "how_to_fix": "Say this instead: '...'"
+    },
+    {
+      "dimension": "Fluency",
+      "issue": "...",
+      "example": "...",
+      "how_to_fix": "Say this instead: '...'"
+    },
+    {
+      "dimension": "Content Relevance",
+      "issue": "...",
+      "example": "...",
+      "how_to_fix": "Say this instead: '...'"
+    },
+    {
+      "dimension": "Delivery",
+      "issue": "...",
+      "example": "...",
+      "how_to_fix": "Say this instead: '...'"
+    }
+  ],
+  "pitch_data": [130, 135, 142, 120, 155, 138, 140] 
+}
+
+4. 【前端 UI 渲染增强：语速校准与语调图、双栏渲染】
+- 【语速校准】：请优化前端显示 WPM 的计算组件，确保与后端最新的 [120-150 WPM 黄金档位] 刻度完全统一。
+- 【语调效果图】：在 Delivery 点击弹窗或报告页中，利用 Chart.js 渲染一个随时间波动的 Pitch 变化折线图（使用 `pitch_data` 数组），用来向用户展示其演讲时声音的高低起伏和自信度。
+- 【双栏完美渲染】：前端遍历 `areas_for_improvement` 时，必须将 `dimension`, `issue`, `example`, `how_to_fix` 格式化为整齐、漂亮的段落卡片，确保每个维度清晰可见。
+
+请立即执行代码重构，全面丰富产品的质检厚度！
