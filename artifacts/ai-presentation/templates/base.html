@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,25 +7,23 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
           colors: {
-            brand: {
-              50:  '#fdf8ee',
-              100: '#f7eccc',
-              400: '#E6C687',
-              500: '#D9A752',
-              600: '#C4892A',
-              700: '#A36B18',
-              900: '#1A1612',
+            ivy: {
+              50:  '#f0fdf6',
+              100: '#E6F4EA',
+              400: '#34d399',
+              500: '#059669',
+              600: '#047857',
+              700: '#065f46',
             },
-            surface: {
-              900: '#0D0E11',
-              800: '#16181D',
-              700: '#1E2028',
-              600: '#22252E',
-              500: '#2A2E37',
+            oxford: {
+              900: '#0F172A',
+              800: '#1e293b',
+              700: '#334155',
+              600: '#475569',
+              500: '#64748b',
             },
           },
           fontFamily: {
@@ -53,34 +51,22 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    body { background-color: #0D0E11; }
+    body { background-color: #F8FAFC; color: #0F172A; }
     .glass {
-      background: rgba(22, 24, 29, 0.75);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(217, 167, 82, 0.1);
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 4px rgba(15,23,42,0.06);
     }
     .glass-strong {
-      background: rgba(18, 19, 23, 0.92);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid rgba(42, 46, 55, 0.9);
-    }
-    .gradient-border {
-      background: linear-gradient(135deg, rgba(217,167,82,0.08), rgba(230,198,135,0.04)) padding-box,
-                  linear-gradient(135deg, #D9A752, #E6C687) border-box;
-      border: 1px solid transparent;
+      background: rgba(255,255,255,0.97);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid #e2e8f0;
     }
     .text-gradient {
-      background: linear-gradient(135deg, #ffffff, #D2E4F9);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .gold-gradient {
-      background: linear-gradient(135deg, #D9A752, #E6C687);
+      background: linear-gradient(135deg, #0F172A 0%, #1e40af 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -88,38 +74,57 @@
     .orb {
       position: absolute;
       border-radius: 50%;
-      filter: blur(80px);
+      filter: blur(70px);
       pointer-events: none;
     }
     ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #0D0E11; }
-    ::-webkit-scrollbar-thumb { background: #2A2E37; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #D9A752; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #059669; }
     .btn-primary {
-      background: linear-gradient(135deg, #C4892A, #D9A752);
+      background: linear-gradient(135deg, #047857, #059669);
       transition: all 0.2s;
     }
     .btn-primary:hover {
-      background: linear-gradient(135deg, #D9A752, #E6C687);
+      background: linear-gradient(135deg, #059669, #10b981);
       transform: translateY(-1px);
-      box-shadow: 0 8px 28px rgba(217,167,82,0.25);
+      box-shadow: 0 8px 28px rgba(5,150,105,0.25);
     }
     .btn-primary:active { transform: translateY(0); }
+    .scene-card {
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 1rem;
+      transition: all 0.22s ease;
+    }
+    .scene-card:hover {
+      border-color: #059669;
+      box-shadow: 0 4px 20px rgba(5,150,105,0.1);
+      transform: translateY(-2px);
+    }
+    .dropzone-aura {
+      transition: box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+    .dropzone-aura:hover, .dropzone-aura.drag-over {
+      box-shadow: 0 0 0 6px rgba(5,150,105,0.07), 0 4px 24px rgba(5,150,105,0.12);
+      background: rgba(5,150,105,0.025);
+      border-color: #059669 !important;
+    }
   </style>
   {% block head %}{% endblock %}
 </head>
-<body class="text-gray-100 font-sans min-h-screen" style="background-color:#0D0E11;">
+<body class="font-sans min-h-screen" style="background:#F8FAFC;color:#0F172A;">
 
   <!-- Top Nav -->
-  <nav class="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-[#2A2E37]">
+  <nav class="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-slate-200">
     <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2.5">
         <div class="w-7 h-7 rounded-lg btn-primary flex items-center justify-center text-sm font-bold text-white">P</div>
-        <span class="font-semibold text-white tracking-tight">PerspeakAI</span>
+        <span class="font-semibold text-[#0F172A] tracking-tight">PerspeakAI</span>
         <span class="text-xs font-mono px-2 py-0.5 rounded-full border"
-              style="color:#D9A752;background:rgba(217,167,82,0.08);border-color:rgba(217,167,82,0.2)">BETA</span>
+              style="color:#059669;background:#E6F4EA;border-color:#bbf7d0">BETA</span>
       </a>
-      <div class="flex items-center gap-6 text-sm text-gray-500">
+      <div class="flex items-center gap-6 text-sm text-slate-500">
         {% block nav_steps %}{% endblock %}
       </div>
     </div>

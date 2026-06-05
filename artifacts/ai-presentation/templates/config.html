@@ -2,38 +2,38 @@
 {% block title %}PerspeakAI — Set Up Your Practice{% endblock %}
 
 {% block nav_steps %}
-<span class="text-gray-600">Upload</span>
-<span class="text-gray-700">→</span>
-<span class="font-medium" style="color:#D9A752">Step 2 of 4 — Configure</span>
+<span class="text-slate-400">Upload</span>
+<span class="text-slate-300 mx-1">→</span>
+<span class="font-semibold" style="color:#059669">Step 2 of 4 — Configure</span>
 {% endblock %}
 
 {% block content %}
 <div class="relative min-h-screen px-6 py-16 overflow-hidden">
-  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(217,167,82,0.04)"></div>
-  <div class="orb w-64 h-64 bottom-0 left-0" style="background:rgba(210,228,249,0.03)"></div>
+  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(5,150,105,0.06)"></div>
+  <div class="orb w-64 h-64 bottom-0 left-0" style="background:rgba(59,130,246,0.05)"></div>
 
   <div class="relative z-10 max-w-4xl mx-auto animate-fade-in">
     <div class="text-center mb-10">
       <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full mb-5 border"
-           style="color:#D9A752;background:rgba(217,167,82,0.07);border-color:rgba(217,167,82,0.2)">
-        <span class="w-1.5 h-1.5 rounded-full" style="background:#D9A752"></span>
+           style="color:#059669;background:#E6F4EA;border-color:#bbf7d0">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:#059669"></span>
         {{ slides|length }} slides ready
         {% if ai_enabled %} · AI Engine Active{% endif %}
       </div>
-      <h2 class="text-4xl font-bold text-white mb-3">Set Up Your Practice</h2>
-      <p class="text-gray-400 text-base">Choose your audience, scenario, and pressure level.</p>
+      <h2 class="text-4xl font-bold text-[#0F172A] mb-3">Set Up Your Practice</h2>
+      <p class="text-slate-400 text-base">Choose your audience, scenario, and pressure level.</p>
     </div>
 
     <!-- PPT Logic Tree Panel -->
     <details id="logicTree" open
              class="mb-8 rounded-2xl overflow-hidden"
-             style="background:#16181D;border:1px solid #2A2E37">
+             style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(15,23,42,0.06)"
       <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none select-none
-                      hover:bg-white/[0.02] transition-colors">
+                      hover:bg-slate-50 transition-colors">
         <div class="flex items-center gap-3">
           <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-               style="background:rgba(217,167,82,0.12)">
-            <svg class="w-3.5 h-3.5" style="color:#D9A752" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               style="background:#E6F4EA">
+            <svg class="w-3.5 h-3.5" style="color:#059669" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M4 6h16M4 10h16M4 14h8"/>
             </svg>
@@ -53,7 +53,7 @@
         <div class="relative">
           <!-- Vertical connecting spine -->
           <div class="absolute left-[1.375rem] top-6 w-px"
-               style="bottom:1.75rem;background:linear-gradient(180deg,rgba(217,167,82,.3),rgba(217,167,82,.04))">
+               style="bottom:1.75rem;background:linear-gradient(180deg,rgba(5,150,105,.35),rgba(5,150,105,.04))">
           </div>
 
           <div class="space-y-2.5">
@@ -63,19 +63,19 @@
               <div class="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center z-10
                           text-xs font-bold font-mono
                           {% if loop.first %}
-                            text-white" style="background:rgba(217,167,82,.8)"
+                            text-white" style="background:#059669"
                           {% elif loop.last %}
-                            text-white/70" style="background:rgba(217,167,82,.35)"
+                            text-white" style="background:#34d399"
                           {% else %}
-                            border" style="color:#D9A752;border-color:rgba(217,167,82,0.2);background:#16181D"
+                            border" style="color:#059669;border-color:#bbf7d0;background:#f0fdf6"
                           {% endif %}>
                 {{ slide.page }}
               </div>
               <!-- Content card -->
               <div class="flex-1 min-w-0 rounded-xl px-4 py-2.5
-                          {% if loop.first %}border" style="border-color:rgba(217,167,82,0.2);background:rgba(217,167,82,0.05)"
-                          {% else %}border" style="border-color:#2A2E37;background:rgba(22,24,29,0.6)"{% endif %}>
-                <p class="text-sm font-semibold text-white leading-snug mb-0.5 truncate">
+                          {% if loop.first %}border" style="border-color:#bbf7d0;background:#f0fdf6"
+                          {% else %}border" style="border-color:#e2e8f0;background:#ffffff"{% endif %}>
+                <p class="text-sm font-semibold text-[#0F172A] leading-snug mb-0.5 truncate">
                   {{ slide.title or ('Slide ' ~ slide.page) }}
                 </p>
                 {% if slide.content %}
@@ -95,9 +95,9 @@
 
       <!-- AUDIENCE -->
       <div>
-        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2" style="color:#D9A752">
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
-                style="background:rgba(217,167,82,0.25)">1</span>
+                style="background:#059669">1</span>
           Audience
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -128,7 +128,7 @@
               <ul class="space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#D9A752;opacity:.6">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -140,9 +140,9 @@
 
       <!-- SCENARIO -->
       <div>
-        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2" style="color:#D9A752">
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
-                style="background:rgba(217,167,82,0.25)">2</span>
+                style="background:#059669">2</span>
           Scenario
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -180,7 +180,7 @@
               <ul class="space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#D9A752;opacity:.6">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -192,9 +192,9 @@
 
       <!-- DIFFICULTY -->
       <div>
-        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2" style="color:#D9A752">
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
-                style="background:rgba(217,167,82,0.25)">3</span>
+                style="background:rgba(5,150,105,0.25)">3</span>
           Pressure Level
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -223,12 +223,12 @@
               <div class="text-2xl mb-3">{{ dot }}</div>
               <div class="font-semibold text-white mb-0.5">
                 {{ val }}
-                <span class="text-xs font-normal ml-1.5" style="color:#D9A752;opacity:.8">{{ zh }}</span>
+                <span class="text-xs font-normal ml-1.5" style="color:#059669;opacity:.8">{{ zh }}</span>
               </div>
               <ul class="mt-3 space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#D9A752;opacity:.6">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -254,7 +254,7 @@
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
           </svg>
         </button>
-        <p id="engineStatus" class="hidden text-center text-xs mt-3 animate-pulse" style="color:#D9A752">
+        <p id="engineStatus" class="hidden text-center text-xs mt-3 animate-pulse" style="color:#059669">
           AI is reading your slides…
         </p>
       </div>
@@ -274,7 +274,7 @@
         d.style.borderColor = 'transparent';
         d.style.background = '';
       });
-      if (radio.checked) { inner.style.borderColor = '#D9A752'; inner.style.background = 'rgba(217,167,82,0.06)'; }
+      if (radio.checked) { inner.style.borderColor = '#059669'; inner.style.background = 'rgba(5,150,105,0.06)'; }
     }
     card.addEventListener('click', () => {
       if (card.dataset.disabled === 'true') return;   // block disabled cards
@@ -320,7 +320,7 @@
           d.style.background = '';
         });
         const profGlass = profCard?.querySelector('.glass');
-        if (profGlass) { profGlass.style.borderColor = '#D9A752'; profGlass.style.background = 'rgba(217,167,82,0.06)'; }
+        if (profGlass) { profGlass.style.borderColor = '#059669'; profGlass.style.background = 'rgba(5,150,105,0.06)'; }
       }
     }
   }

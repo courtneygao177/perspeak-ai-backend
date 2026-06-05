@@ -1,124 +1,154 @@
 {% extends "base.html" %}
-{% block title %}PerspeakAI — Upload Your Presentation{% endblock %}
+{% block title %}PerspeakAI — Own the Stage{% endblock %}
 
 {% block nav_steps %}
-<span class="font-medium" style="color:#D9A752">Step 1 of 4 — Upload</span>
+<span class="font-semibold" style="color:#059669">Step 1 of 4 — Upload</span>
 {% endblock %}
 
 {% block content %}
-<div class="relative min-h-screen flex items-center justify-center overflow-hidden px-6 py-20">
-  <div class="orb w-96 h-96 bottom-20 right-10" style="background:rgba(217,167,82,0.04)"></div>
-  <div class="orb w-72 h-72 top-10 -left-20"   style="background:rgba(210,228,249,0.04)"></div>
+<div class="relative min-h-screen overflow-hidden" style="background:#F8FAFC;">
+  <div class="orb w-[600px] h-[400px] top-0 right-0 -translate-y-1/4 translate-x-1/4"
+       style="background:rgba(5,150,105,0.06)"></div>
+  <div class="orb w-[500px] h-[350px] bottom-0 left-0 translate-y-1/4 -translate-x-1/4"
+       style="background:rgba(59,130,246,0.05)"></div>
 
-  <div class="relative z-10 w-full max-w-2xl animate-fade-in">
-    <!-- Hero -->
-    <div class="text-center mb-12">
-      <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full mb-6 border"
-           style="{% if ai_enabled %}color:#D9A752;background:rgba(217,167,82,0.07);border-color:rgba(217,167,82,0.2){% else %}color:#9CA3AF;background:rgba(42,46,55,0.5);border-color:#2A2E37{% endif %}">
+  <div class="relative z-10 max-w-3xl mx-auto px-6 py-16 animate-fade-in">
+
+    <!-- AI Status -->
+    <div class="flex justify-center mb-8">
+      <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border"
+           style="{% if ai_enabled %}color:#059669;background:#E6F4EA;border-color:#bbf7d0{% else %}color:#64748b;background:#f1f5f9;border-color:#e2e8f0{% endif %}">
         <span class="w-1.5 h-1.5 rounded-full {% if ai_enabled %}animate-pulse{% endif %}"
-              style="background:{% if ai_enabled %}#D9A752{% else %}#6B7280{% endif %}"></span>
-        {% if ai_enabled %}AI Engine Active{% else %}AI Engine Offline — Mock Mode{% endif %}
+              style="background:{% if ai_enabled %}#059669{% else %}#94a3b8{% endif %}"></span>
+        {% if ai_enabled %}AI Engine Active — Powered by GPT-4o + Gemini{% else %}AI Engine Offline — Mock Mode{% endif %}
       </div>
-      <h1 class="text-5xl font-bold mb-4 leading-tight">
-        <span class="text-white">Master Your</span><br/>
-        <span class="text-gradient">Presentation Skills</span>
+    </div>
+
+    <!-- Hero -->
+    <div class="text-center mb-10">
+      <h1 class="text-4xl md:text-[3.4rem] font-extrabold text-[#0F172A] tracking-tight leading-[1.1] mb-5">
+        Own the Stage<br/>
+        <span style="background:linear-gradient(135deg,#059669,#1d4ed8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+          Before You Step on It.
+        </span>
       </h1>
-      <p class="text-gray-400 text-lg max-w-lg mx-auto leading-relaxed">
-        Upload your slides and face an AI examiner that adapts to your audience —
-        professor, classmates, or venture capitalist.
+      <p class="text-lg text-slate-600 max-w-2xl mx-auto mt-4 leading-relaxed">
+        Meet your 24/7 AI sparring partner. We analyze your logic tree, simulate real-time Q&amp;A interruptions,
+        and polish your delivery—so you can deliver an unshakeable presentation when it actually matters.
       </p>
     </div>
 
+    <!-- Scene Cards -->
+    <div class="grid grid-cols-3 gap-4 mb-10">
+      <div class="scene-card p-5 text-center">
+        <div class="text-3xl mb-3">🎓</div>
+        <div class="text-sm font-semibold text-[#0F172A] leading-snug">Academic Defense</div>
+        <div class="text-xs text-slate-500 mt-1">Thesis &amp; Viva</div>
+      </div>
+      <div class="scene-card p-5 text-center">
+        <div class="text-3xl mb-3">🏫</div>
+        <div class="text-sm font-semibold text-[#0F172A] leading-snug">Class Presentation</div>
+        <div class="text-xs text-slate-500 mt-1">Group Work</div>
+      </div>
+      <div class="scene-card p-5 text-center">
+        <div class="text-3xl mb-3">💼</div>
+        <div class="text-sm font-semibold text-[#0F172A] leading-snug">Venture Pitch</div>
+        <div class="text-xs text-slate-500 mt-1">Startup &amp; Competition</div>
+      </div>
+    </div>
+
     <!-- Upload Card -->
-    <div class="rounded-2xl p-8 mb-6" style="background:#16181D;border:1px solid #2A2E37;">
+    <div class="bg-white rounded-2xl p-6 mb-5 border border-slate-200 shadow-sm">
       <div id="dropzone"
-           class="relative rounded-xl p-12 flex flex-col items-center justify-center gap-4
-                  cursor-pointer transition-all duration-300 group"
-           style="border:2px dashed #2A2E37;"
-           onmouseenter="this.style.borderColor='rgba(217,167,82,0.45)';this.style.background='rgba(217,167,82,0.03)'"
-           onmouseleave="this.style.borderColor='#2A2E37';this.style.background=''"
+           class="dropzone-aura relative rounded-xl p-12 flex flex-col items-center justify-center gap-4
+                  cursor-pointer border-2 border-dashed border-slate-300"
            onclick="document.getElementById('fileInput').click()">
 
-        <div class="w-16 h-16 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform"
-             style="background:rgba(217,167,82,0.08);border:1px solid rgba(217,167,82,0.2)">
-          <svg class="w-8 h-8" style="color:#D9A752" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105"
+             style="background:#E6F4EA;border:1.5px solid #bbf7d0">
+          <svg class="w-7 h-7" style="color:#059669" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
           </svg>
         </div>
+
         <div class="text-center">
-          <p class="text-white font-semibold text-lg mb-1">Drop your presentation here</p>
-          <p class="text-gray-500 text-sm">PDF, PPT, or PPTX · Max 50 MB</p>
+          <p class="text-[#0F172A] font-semibold text-base mb-1">Drop your presentation here</p>
+          <p class="text-slate-400 text-sm">PDF, PPT, or PPTX · Max 50 MB</p>
           {% if ai_enabled %}
-          <p class="text-xs mt-2" style="color:#D9A752;opacity:.75">PDF files are read by AI Vision for deeper analysis</p>
+          <p class="text-xs mt-1.5" style="color:#059669">PDF files are analyzed by AI Vision for deeper insights</p>
           {% endif %}
         </div>
-        <div class="flex items-center gap-2 text-xs text-gray-700">
-          <div class="h-px w-12" style="background:#2A2E37"></div>or click to browse<div class="h-px w-12" style="background:#2A2E37"></div>
+
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <div class="h-px w-10 bg-slate-200"></div>or click to browse<div class="h-px w-10 bg-slate-200"></div>
         </div>
+
         <input id="fileInput" type="file" accept=".pdf,.ppt,.pptx" class="hidden" />
         <div id="dragOverlay"
              class="hidden absolute inset-0 rounded-xl flex items-center justify-center"
-             style="background:rgba(217,167,82,0.07);border:2px solid rgba(217,167,82,0.5)">
-          <p class="font-semibold text-lg" style="color:#E6C687">Release to upload</p>
+             style="background:rgba(5,150,105,0.06);border:2px solid #059669">
+          <p class="font-semibold text-base" style="color:#047857">Release to upload</p>
         </div>
       </div>
 
+      <!-- File Selected -->
       <div id="fileSelected" class="hidden mt-4 flex items-center gap-3 rounded-xl px-4 py-3"
-           style="background:rgba(217,167,82,0.06);border:1px solid rgba(217,167,82,0.15)">
+           style="background:#E6F4EA;border:1px solid #bbf7d0">
         <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-             style="background:rgba(217,167,82,0.15)">
-          <svg class="w-4 h-4" style="color:#D9A752" fill="currentColor" viewBox="0 0 20 20">
+             style="background:rgba(5,150,105,0.15)">
+          <svg class="w-4 h-4" style="color:#059669" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/>
           </svg>
         </div>
         <div class="flex-1 min-w-0">
-          <p id="fileName" class="text-white text-sm font-medium truncate"></p>
-          <p id="fileSize" class="text-gray-500 text-xs"></p>
+          <p id="fileName" class="text-[#0F172A] text-sm font-medium truncate"></p>
+          <p id="fileSize" class="text-slate-500 text-xs"></p>
         </div>
-        <button onclick="clearFile()" class="text-gray-600 hover:text-gray-400 transition-colors">
+        <button onclick="clearFile()" class="text-slate-400 hover:text-slate-600 transition-colors">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
       </div>
 
-      <!-- Upload progress -->
-      <!-- PPTX tip banner — shown only when user selects .ppt/.pptx -->
+      <!-- PPTX Tip -->
       <div id="pptxTipBanner" class="hidden mt-4 flex items-start gap-3 rounded-xl px-4 py-3
-            bg-amber-950/40 border border-amber-700/40">
-        <span class="text-amber-400 text-lg leading-none mt-0.5 flex-shrink-0">💡</span>
+            bg-amber-50 border border-amber-200">
+        <span class="text-amber-500 text-lg leading-none mt-0.5 flex-shrink-0">💡</span>
         <div class="flex-1 min-w-0">
-          <p class="text-amber-300 text-sm font-medium mb-0.5">Tip for better results</p>
-          <p class="text-amber-200/70 text-xs leading-relaxed">
-            To see your original slide pictures and design perfectly, please export your presentation
-            as a <strong>PDF file</strong> in PowerPoint or Keynote first, then upload the PDF here.
-            Your PPTX will still work — only the text content will be used.
+          <p class="text-amber-800 text-sm font-medium mb-0.5">Tip for better results</p>
+          <p class="text-amber-700/80 text-xs leading-relaxed">
+            Export your presentation as a <strong>PDF file</strong> in PowerPoint or Keynote first for richer AI analysis.
+            Your PPTX will still work — only text content will be used.
           </p>
         </div>
         <button onclick="document.getElementById('pptxTipBanner').classList.add('hidden')"
-                class="text-amber-600 hover:text-amber-400 flex-shrink-0 transition-colors mt-0.5">
+                class="text-amber-400 hover:text-amber-600 flex-shrink-0 transition-colors mt-0.5">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
       </div>
 
+      <!-- Progress -->
       <div id="uploadProgress" class="hidden mt-4">
         <div class="flex items-center justify-between mb-2">
-          <span id="uploadStepText" class="text-xs font-medium" style="color:#D9A752">Uploading...</span>
-          <span id="uploadPct" class="text-xs text-gray-500 font-mono">0%</span>
+          <span id="uploadStepText" class="text-xs font-medium" style="color:#059669">Uploading...</span>
+          <span id="uploadPct" class="text-xs text-slate-400 font-mono">0%</span>
         </div>
-        <div class="h-1 rounded-full overflow-hidden" style="background:#2A2E37">
+        <div class="h-1.5 rounded-full overflow-hidden bg-slate-100">
           <div id="uploadBar" class="h-full rounded-full transition-all duration-500"
-               style="width:0%;background:linear-gradient(90deg,#C4892A,#E6C687)"></div>
+               style="width:0%;background:linear-gradient(90deg,#047857,#10b981)"></div>
         </div>
       </div>
     </div>
 
+    <!-- CTA Button -->
     <button id="uploadBtn" onclick="uploadFile()"
-            class="w-full btn-primary text-white font-semibold py-4 rounded-xl text-base
-                   flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+            class="w-full btn-primary text-white font-bold py-4 rounded-xl text-base
+                   flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed
+                   shadow-sm" disabled>
       <span id="uploadBtnText">Select a file to continue</span>
       <svg id="uploadArrow" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -129,18 +159,21 @@
       </svg>
     </button>
 
-    <div id="errorMsg" class="hidden mt-4 text-red-400 text-sm text-center bg-red-950/30
-          border border-red-900/50 rounded-xl px-4 py-3"></div>
+    <div id="errorMsg" class="hidden mt-4 text-red-600 text-sm text-center bg-red-50
+          border border-red-200 rounded-xl px-4 py-3"></div>
 
-    <div class="flex flex-wrap justify-center gap-3 mt-8">
-      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">🎯 3 Audience Personas</span>
-      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">⚡ Real-time Interruptions</span>
-      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">📊 Dual Quality Analysis</span>
-      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">🗺️ Custom Training Plan</span>
+    <!-- Feature Pills -->
+    <div class="flex flex-wrap justify-center gap-2.5 mt-8">
+      <span class="text-xs text-slate-600 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-full">🎯 3 Audience Personas</span>
+      <span class="text-xs text-slate-600 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-full">⚡ Real-time Interruptions</span>
+      <span class="text-xs text-slate-600 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-full">📊 Dual Quality Analysis</span>
+      <span class="text-xs text-slate-600 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-full">🗺️ Custom Training Plan</span>
       {% if ai_enabled %}
-      <span class="text-xs px-3 py-1.5 rounded-full" style="color:#D9A752;background:rgba(217,167,82,0.07);border:1px solid rgba(217,167,82,0.2)">✨ AI Vision Analysis</span>
+      <span class="text-xs font-medium px-3 py-1.5 rounded-full border"
+            style="color:#059669;background:#E6F4EA;border-color:#bbf7d0">✨ AI Vision Analysis</span>
       {% endif %}
     </div>
+
   </div>
 </div>
 {% endblock %}
@@ -155,10 +188,20 @@
   let selectedFile = null;
 
   fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
-  dropzone.addEventListener('dragover', e => { e.preventDefault(); dragOverlay.classList.remove('hidden'); });
-  dropzone.addEventListener('dragleave', () => dragOverlay.classList.add('hidden'));
+
+  dropzone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropzone.classList.add('drag-over');
+    dragOverlay.classList.remove('hidden');
+  });
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('drag-over');
+    dragOverlay.classList.add('hidden');
+  });
   dropzone.addEventListener('drop', e => {
-    e.preventDefault(); dragOverlay.classList.add('hidden');
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    dragOverlay.classList.add('hidden');
     const f = e.dataTransfer.files[0]; if (f) setFile(f);
   });
 
@@ -172,13 +215,9 @@
     uploadBtn.disabled = false;
     document.getElementById('uploadBtnText').textContent = 'Upload & Analyze Presentation';
     hideError();
-    // Show PDF tip banner when a PPTX/PPT file is selected
     const banner = document.getElementById('pptxTipBanner');
-    if (['ppt','pptx'].includes(ext)) {
-      banner.classList.remove('hidden');
-    } else {
-      banner.classList.add('hidden');
-    }
+    if (['ppt','pptx'].includes(ext)) { banner.classList.remove('hidden'); }
+    else { banner.classList.add('hidden'); }
   }
 
   function clearFile() {
@@ -196,52 +235,38 @@
     document.getElementById('uploadProgress').classList.remove('hidden');
     hideError();
 
-    // Upload is fast now (just save + extract page images, no AI call)
-    // AI Vision + Master Engine run during the config step
     const steps = [
-      { pct: 20, text: '上传文件中...', delay: 0 },
-      { pct: 60, text: '正在提取 PDF 页面图像...', delay: 1000 },
-      { pct: 90, text: '准备完毕，即将进入配置页...', delay: 2500 },
+      { pct: 20, text: 'Uploading file...', delay: 0 },
+      { pct: 60, text: 'Extracting PDF pages...', delay: 1000 },
+      { pct: 90, text: 'Preparing session...', delay: 2500 },
     ];
     const timers = steps.map(s => setTimeout(() => setProgress(s.pct, s.text), s.delay));
 
     const fd = new FormData();
     fd.append('file', selectedFile);
 
-    // 60-second timeout via AbortController — AI Vision calls can take 10-20s
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const res = await fetch('/x/upload', {
-        method: 'POST',
-        body: fd,
-        signal: controller.signal,
-      });
+      const res = await fetch('/x/upload', { method: 'POST', body: fd, signal: controller.signal });
       clearTimeout(timeoutId);
       timers.forEach(clearTimeout);
-
       let data;
-      try { data = await res.json(); }
-      catch (_) { data = {}; }
-
+      try { data = await res.json(); } catch (_) { data = {}; }
       if (!res.ok) {
-        // Show the real backend error message so it's visible
-        const msg = data.error || data.message || `服务器错误 (HTTP ${res.status})`;
-        showError(`上传失败：${msg}`);
-        resetBtn();
-        return;
+        showError(`Upload failed: ${data.error || data.message || `Server error (HTTP ${res.status})`}`);
+        resetBtn(); return;
       }
-      setProgress(100, data.ai_used ? '✓ AI 分析完成！正在跳转...' : '✓ 幻灯片解析完成！');
+      setProgress(100, data.ai_used ? '✓ AI analysis complete!' : '✓ Slides parsed!');
       setTimeout(() => window.location.href = '/config', 700);
-
     } catch (err) {
       clearTimeout(timeoutId);
       timers.forEach(clearTimeout);
       if (err.name === 'AbortError') {
-        showError('请求超时（60 秒）。AI Vision 分析耗时过长，请检查中转站响应速度后重试。');
+        showError('Request timed out (60s). AI Vision is slow — check relay speed and retry.');
       } else {
-        showError(`网络错误：${err.message || '请检查网络连接后重试。'}`);
+        showError(`Network error: ${err.message || 'Check your connection and retry.'}`);
       }
       resetBtn();
     }

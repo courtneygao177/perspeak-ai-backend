@@ -4,49 +4,48 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  .section-card { background:#16181D; border:1px solid #2A2E37; border-radius:1rem; }
-  .dim-card { cursor:pointer; transition:all .2s; border:1px solid #2A2E37; border-radius:.875rem;
-              background:#16181D; }
-  .dim-card:hover { border-color:rgba(217,167,82,.45); background:rgba(217,167,82,.04); transform:translateY(-2px); }
-  .score-bar { background:linear-gradient(90deg,#C4892A,#E6C687); border-radius:9999px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
-  .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:100;
+  .section-card { background:#ffffff; border:1px solid #e2e8f0; border-radius:1rem; box-shadow:0 1px 4px rgba(15,23,42,0.06); }
+  .dim-card { cursor:pointer; transition:all .2s; border:1px solid #e2e8f0; border-radius:.875rem;
+              background:#ffffff; box-shadow:0 1px 3px rgba(15,23,42,0.05); }
+  .dim-card:hover { border-color:#059669; background:#f0fdf6; transform:translateY(-2px); box-shadow:0 4px 16px rgba(5,150,105,0.1); }
+  .score-bar { background:linear-gradient(90deg,#047857,#34d399); border-radius:9999px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(15,23,42,.4); z-index:100;
               align-items:center; justify-content:center; backdrop-filter:blur(4px); }
   .modal-bg.open { display:flex; }
-  .modal-box { background:#16181D; border:1px solid rgba(217,167,82,.25); border-radius:1.25rem;
+  .modal-box { background:#ffffff; border:1px solid #e2e8f0; border-radius:1.25rem; box-shadow:0 20px 60px rgba(15,23,42,0.15);
                max-width:480px; width:90%; padding:1.75rem; position:relative; animation:modalIn .2s ease; }
   @keyframes modalIn { from { opacity:0; transform:scale(.95) translateY(8px); } to { opacity:1; transform:none; } }
-  .tp h2 { font-size:1.05rem;font-weight:700;color:#D9A752;margin:1.25rem 0 .5rem; }
-  .tp h3 { font-size:.875rem;font-weight:600;color:#E6C687;margin:1rem 0 .4rem; }
-  .tp p  { color:#9ca3af;font-size:.85rem;line-height:1.65;margin-bottom:.5rem; }
-  .tp strong { color:#e2e8f0; }
+  .tp h2 { font-size:1.05rem;font-weight:700;color:#047857;margin:1.25rem 0 .5rem; }
+  .tp h3 { font-size:.875rem;font-weight:600;color:#059669;margin:1rem 0 .4rem; }
+  .tp p  { color:#475569;font-size:.85rem;line-height:1.65;margin-bottom:.5rem; }
+  .tp strong { color:#0F172A; }
   .tp ul { list-style:none;padding:0; }
-  .tp li { color:#9ca3af;font-size:.85rem;line-height:1.7;padding-left:1rem;position:relative; }
-  .tp li::before { content:'›';position:absolute;left:0;color:#D9A752; }
+  .tp li { color:#475569;font-size:.85rem;line-height:1.7;padding-left:1rem;position:relative; }
+  .tp li::before { content:'›';position:absolute;left:0;color:#059669; }
   canvas { max-height:260px; }
-  .good-item { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem; background:rgba(16,42,24,.6);
-               border:1px solid rgba(34,197,94,.15); border-radius:.625rem; }
-  .fix-item  { background:rgba(45,28,8,.5); border:1px solid rgba(234,179,8,.2); border-radius:.75rem;
-               overflow:hidden; }
-  .fix-header{ padding:.75rem 1rem; background:rgba(234,179,8,.06); border-bottom:1px solid rgba(234,179,8,.12); }
+  .good-item { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem; background:#f0fdf6;
+               border:1px solid #bbf7d0; border-radius:.625rem; }
+  .fix-item  { background:#fffbeb; border:1px solid #fde68a; border-radius:.75rem; overflow:hidden; }
+  .fix-header{ padding:.75rem 1rem; background:#fef9c3; border-bottom:1px solid #fde68a; }
   .fix-body  { padding:.875rem 1rem; display:grid; gap:.5rem; }
   .fix-label { font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
-  .say-instead { background:rgba(16,42,24,.7); border:1px solid rgba(34,197,94,.25); border-radius:.5rem;
+  .say-instead { background:#f0fdf6; border:1px solid #bbf7d0; border-radius:.5rem;
                  padding:.5rem .75rem; margin-top:.25rem; }
-  .say-instead-arrow { color:#4ade80; font-weight:700; margin-right:.35rem; }
+  .say-instead-arrow { color:#059669; font-weight:700; margin-right:.35rem; }
   .pillar-tag { display:inline-block; font-size:.6rem; font-weight:700; letter-spacing:.06em;
                 text-transform:uppercase; padding:.15rem .45rem; border-radius:.25rem; margin-right:.35rem; }
-  .pillar-structure { background:rgba(99,102,241,.2); color:#a5b4fc; }
-  .pillar-fluency   { background:rgba(167,139,250,.2); color:#c4b5fd; }
-  .pillar-relevance { background:rgba(34,211,238,.2); color:#67e8f9; }
-  .pillar-delivery  { background:rgba(245,158,11,.2); color:#fcd34d; }
+  .pillar-structure { background:#ede9fe; color:#6d28d9; }
+  .pillar-fluency   { background:#fce7f3; color:#be185d; }
+  .pillar-relevance { background:#cffafe; color:#0e7490; }
+  .pillar-delivery  { background:#fef3c7; color:#92400e; }
 </style>
 {% endblock %}
 
 {% block nav_steps %}
-<span class="text-gray-600">Upload</span><span class="text-gray-700">→</span>
-<span class="text-gray-600">Configure</span><span class="text-gray-700">→</span>
+<span class="text-slate-400">Upload</span><span class="text-slate-300 mx-1">→</span>
+<span class="text-slate-400">Configure</span><span class="text-slate-300 mx-1">→</span>
 <span class="text-gray-600">Rehearsal</span><span class="text-gray-700">→</span>
-<span class="font-medium" style="color:#D9A752">Step 4 of 4 — Report</span>
+<span class="font-semibold" style="color:#059669">Step 4 of 4 — Report</span>
 {% endblock %}
 
 {% block content %}
@@ -57,15 +56,15 @@
 {% set avg_score = ((scores.structure + scores.fluency + scores.relevance + scores.delivery) / 4) | round | int %}
 
 <div class="relative max-w-5xl mx-auto px-5 py-10 animate-fade-in">
-  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(217,167,82,0.04)"></div>
+  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(5,150,105,0.04)"></div>
   <div class="orb w-64 h-64 bottom-40 left-0" style="background:rgba(210,228,249,0.03)"></div>
 
   <!-- Header -->
   <div class="relative z-10 mb-8">
     <div class="flex flex-wrap items-center gap-2 mb-4">
       <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border"
-           style="color:#D9A752;background:rgba(217,167,82,0.07);border-color:rgba(217,167,82,0.2)">
-        <span class="w-1.5 h-1.5 rounded-full animate-pulse" style="background:#D9A752"></span>
+           style="color:#059669;background:rgba(5,150,105,0.07);border-color:rgba(5,150,105,0.2)">
+        <span class="w-1.5 h-1.5 rounded-full animate-pulse" style="background:#059669"></span>
         {{ evaluation.scenario }} · {{ evaluation.audience }} · {{ evaluation.difficulty }}
       </div>
       {% if evaluation.ai_powered %}
@@ -82,8 +81,8 @@
       </div>
       {% endif %}
     </div>
-    <h1 class="text-4xl font-bold text-white mb-2">Rehearsal Report</h1>
-    <p class="text-gray-500 text-sm">4-pillar precision audit · AAC&amp;U + Toastmasters rubric</p>
+    <h1 class="text-4xl font-bold text-[#0F172A] mb-2">Rehearsal Report</h1>
+    <p class="text-slate-500 text-sm">4-pillar precision audit · AAC&amp;U + Toastmasters rubric</p>
   </div>
 
   <!-- Overall Score + Radar -->
@@ -102,13 +101,13 @@
                     stroke-linecap="round"/>
           </svg>
           <div class="absolute inset-0 flex items-center justify-center">
-            <span class="text-lg font-bold text-white">{{ avg_score }}</span>
+            <span class="text-lg font-bold text-[#0F172A]">{{ avg_score }}</span>
           </div>
         </div>
         <div>
-          <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Overall Score</p>
-          <p class="text-3xl font-bold text-white">{{ avg_score }}<span class="text-gray-600 text-xl">/100</span></p>
-          <p class="text-xs text-gray-500 mt-1">Click any pillar card to see details</p>
+          <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">Overall Score</p>
+          <p class="text-3xl font-bold text-[#0F172A]">{{ avg_score }}<span class="text-gray-600 text-xl">/100</span></p>
+          <p class="text-xs text-slate-500 mt-1">Click any pillar card to see details</p>
         </div>
       </div>
 
@@ -132,8 +131,8 @@
         </div>
         <div class="flex items-end justify-between">
           <div>
-            <span class="text-2xl font-bold text-white">{{ sc }}</span>
-            <span class="text-xs text-gray-500 ml-2">{{ tag }}</span>
+            <span class="text-2xl font-bold text-[#0F172A]">{{ sc }}</span>
+            <span class="text-xs text-slate-500 ml-2">{{ tag }}</span>
           </div>
           <svg class="w-4 h-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -148,7 +147,7 @@
 
     <!-- Right: Radar chart -->
     <div class="lg:col-span-3 section-card p-6 flex flex-col">
-      <h2 class="text-sm font-semibold text-white mb-1">Performance Radar</h2>
+      <h2 class="text-sm font-semibold text-[#0F172A] mb-1">Performance Radar</h2>
       <p class="text-xs text-gray-600 mb-4">4-pillar breakdown (0–100)</p>
       <div class="flex-1 flex items-center justify-center">
         <canvas id="radarChart"></canvas>
@@ -159,7 +158,7 @@
   <!-- Filler Word Log -->
   {% if pillar.filler_log %}
   <div class="relative z-10 section-card p-6 mb-6">
-    <h2 class="text-sm font-semibold text-white mb-1">Filler Word Log</h2>
+    <h2 class="text-sm font-semibold text-[#0F172A] mb-1">Filler Word Log</h2>
     <p class="text-xs text-gray-600 mb-4">Words that slowed your speech down</p>
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
@@ -173,13 +172,13 @@
         <tbody class="divide-y divide-gray-800/30">
           {% for f in pillar.filler_log %}
           <tr>
-            <td class="py-2 pr-4 font-mono text-white">"{{ f.word }}"</td>
-            <td class="py-2 pr-4 text-gray-400">{{ f.timestamp }}</td>
+            <td class="py-2 pr-4 font-mono text-[#0F172A]">"{{ f.word }}"</td>
+            <td class="py-2 pr-4 text-slate-400">{{ f.timestamp }}</td>
             <td class="py-2">
               {% if f.type == 'Disruptive' %}
               <span class="bg-red-950/40 text-red-400 border border-red-800/30 px-2 py-0.5 rounded-full text-xs font-mono">Disruptive</span>
               {% else %}
-              <span class="bg-gray-800/60 text-gray-400 border border-gray-700/30 px-2 py-0.5 rounded-full text-xs font-mono">Assistive</span>
+              <span class="bg-gray-800/60 text-slate-400 border border-gray-700/30 px-2 py-0.5 rounded-full text-xs font-mono">Assistive</span>
               {% endif %}
             </td>
           </tr>
@@ -192,8 +191,8 @@
 
   <!-- Performance Analysis (dual column) -->
   <div class="relative z-10 mb-8">
-    <h2 class="text-sm font-semibold text-white mb-5 flex items-center gap-2">
-      <svg class="w-4 h-4" style="color:#D9A752" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <h2 class="text-sm font-semibold text-[#0F172A] mb-5 flex items-center gap-2">
+      <svg class="w-4 h-4" style="color:#059669" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
       </svg>
       Performance Analysis
@@ -206,7 +205,7 @@
           <svg class="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
           </svg>
-          <h3 class="text-sm font-semibold text-white">👍 What I did good</h3>
+          <h3 class="text-sm font-semibold text-[#0F172A]">👍 What I did good</h3>
         </div>
         <div class="space-y-2.5">
           {% for item in pillar.what_i_did_good %}
@@ -219,7 +218,7 @@
             <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
             </svg>
-            <p class="text-gray-300 text-sm leading-relaxed">
+            <p class="text-slate-600 text-sm leading-relaxed">
               {% if tag_class %}
                 {% set parts = item.split(']', 1) %}
                 <span class="pillar-tag {{ tag_class }}">{{ parts[0][1:] }}</span>{{ parts[1] if parts|length > 1 else '' }}
@@ -238,7 +237,7 @@
           <svg class="w-4 h-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
-          <h3 class="text-sm font-semibold text-white">⚠️ Areas for Improvement</h3>
+          <h3 class="text-sm font-semibold text-[#0F172A]">⚠️ Areas for Improvement</h3>
         </div>
         <div class="space-y-3">
           {% for item in pillar.areas_for_improvement %}
@@ -267,21 +266,21 @@
             <div class="fix-body">
               <div>
                 <p class="fix-label text-orange-400 mb-1">Example from your speech</p>
-                <p class="text-gray-400 text-xs leading-relaxed italic">{{ item.example }}</p>
+                <p class="text-slate-400 text-xs leading-relaxed italic">{{ item.example }}</p>
               </div>
               <div>
                 <p class="fix-label text-green-400 mb-1">👉 How to fix</p>
                 {% set fix = item.how_to_fix if item.how_to_fix is string else '' %}
                 {% if 'Say this instead:' in fix %}
                   {% set fix_parts = fix.split('Say this instead:', 1) %}
-                  <p class="text-gray-300 text-xs leading-relaxed mb-1.5">{{ fix_parts[0] }}</p>
+                  <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ fix_parts[0] }}</p>
                   <div class="say-instead">
                     <p class="text-green-300 text-xs leading-relaxed font-medium">
                       <span class="say-instead-arrow">→</span>Say this instead:{{ fix_parts[1] }}
                     </p>
                   </div>
                 {% else %}
-                  <p class="text-gray-200 text-xs leading-relaxed">{{ fix }}</p>
+                  <p class="text-slate-700 text-xs leading-relaxed">{{ fix }}</p>
                 {% endif %}
               </div>
             </div>
@@ -297,13 +296,13 @@
     <div class="flex items-center gap-3 mb-5">
       <div class="w-8 h-8 rounded-lg flex items-center justify-center"
            style="background:rgba(217,167,82,0.15)">
-        <svg class="w-4 h-4" style="color:#D9A752" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="w-4 h-4" style="color:#059669" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
         </svg>
       </div>
       <div>
-        <h2 class="text-sm font-semibold text-white">Personalized Training Plan</h2>
+        <h2 class="text-sm font-semibold text-[#0F172A]">Personalized Training Plan</h2>
         <p class="text-xs text-gray-600">
           {% if ai_enabled %}AI-generated · IELTS 5.5 language level{% else %}Template-based plan{% endif %}
         </p>
@@ -316,7 +315,7 @@
 
   <!-- CTA -->
   <div class="relative z-10 flex gap-4 pb-10">
-    <a href="/" class="flex-1 btn-primary text-white font-semibold py-4 rounded-xl text-sm
+    <a href="/" class="flex-1 btn-primary text-[#0F172A] font-semibold py-4 rounded-xl text-sm
                        flex items-center justify-center gap-2">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -325,8 +324,8 @@
       Practice Again
     </a>
     <button onclick="window.print()"
-            class="px-8 glass text-gray-300 font-semibold py-4 rounded-xl text-sm
-                   flex items-center justify-center gap-2 transition-all hover:border-[#D9A752]/40">
+            class="px-8 glass text-slate-600 font-semibold py-4 rounded-xl text-sm
+                   flex items-center justify-center gap-2 transition-all hover:border-[#059669]/40">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
@@ -352,20 +351,20 @@
 <div id="modal-{{ key }}" class="modal-bg" onclick="if(event.target===this)closeModal('{{ key }}')">
   <div class="modal-box" style="max-width:520px">
     <button onclick="closeModal('{{ key }}')"
-            class="absolute top-4 right-4 text-gray-600 hover:text-white transition-colors">
+            class="absolute top-4 right-4 text-gray-600 hover:text-[#0F172A] transition-colors">
       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
       </svg>
     </button>
     <p class="text-xs font-bold uppercase tracking-widest mb-2" style="color:{{ color }}">{{ label }}</p>
     <div class="flex items-baseline gap-3 mb-3">
-      <span class="text-5xl font-bold text-white">{{ sc }}</span>
+      <span class="text-5xl font-bold text-[#0F172A]">{{ sc }}</span>
       <span class="text-xl font-semibold" style="color:{{ color }}">{{ tag }}</span>
     </div>
-    <p class="text-gray-400 text-sm leading-relaxed mb-4">{{ info.explanation if info else '' }}</p>
+    <p class="text-slate-400 text-sm leading-relaxed mb-4">{{ info.explanation if info else '' }}</p>
     <div class="bg-gray-900/60 rounded-xl p-4 border border-gray-800/40 mb-3">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">How it's calculated</p>
-      <p class="text-gray-400 text-sm leading-relaxed">{{ info.calculation if info else '' }}</p>
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">How it's calculated</p>
+      <p class="text-slate-400 text-sm leading-relaxed">{{ info.calculation if info else '' }}</p>
     </div>
     {% if key == 'delivery' %}
     <!-- WPM golden zone legend -->
