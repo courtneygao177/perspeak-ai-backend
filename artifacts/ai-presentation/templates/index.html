@@ -2,22 +2,21 @@
 {% block title %}PerspeakAI — Upload Your Presentation{% endblock %}
 
 {% block nav_steps %}
-<span class="text-indigo-400 font-medium">Step 1 of 4 — Upload</span>
+<span class="font-medium" style="color:#D9A752">Step 1 of 4 — Upload</span>
 {% endblock %}
 
 {% block content %}
 <div class="relative min-h-screen flex items-center justify-center overflow-hidden px-6 py-20">
-  <div class="orb w-96 h-96 bg-indigo-600/20 top-10 -left-20"></div>
-  <div class="orb w-72 h-72 bg-purple-600/15 bottom-20 right-10"></div>
-  <div class="orb w-48 h-48 bg-blue-600/10 top-1/2 left-1/2 -translate-x-1/2"></div>
+  <div class="orb w-96 h-96 bottom-20 right-10" style="background:rgba(217,167,82,0.04)"></div>
+  <div class="orb w-72 h-72 top-10 -left-20"   style="background:rgba(210,228,249,0.04)"></div>
 
   <div class="relative z-10 w-full max-w-2xl animate-fade-in">
     <!-- Hero -->
     <div class="text-center mb-12">
-      <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full mb-6
-                  {% if ai_enabled %}text-green-400 bg-green-950/40 border border-green-800/50
-                  {% else %}text-yellow-400 bg-yellow-950/40 border border-yellow-800/50{% endif %}">
-        <span class="w-1.5 h-1.5 rounded-full {% if ai_enabled %}bg-green-400 animate-pulse{% else %}bg-yellow-400{% endif %}"></span>
+      <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full mb-6 border"
+           style="{% if ai_enabled %}color:#D9A752;background:rgba(217,167,82,0.07);border-color:rgba(217,167,82,0.2){% else %}color:#9CA3AF;background:rgba(42,46,55,0.5);border-color:#2A2E37{% endif %}">
+        <span class="w-1.5 h-1.5 rounded-full {% if ai_enabled %}animate-pulse{% endif %}"
+              style="background:{% if ai_enabled %}#D9A752{% else %}#6B7280{% endif %}"></span>
         {% if ai_enabled %}AI Engine Active{% else %}AI Engine Offline — Mock Mode{% endif %}
       </div>
       <h1 class="text-5xl font-bold mb-4 leading-tight">
@@ -31,16 +30,18 @@
     </div>
 
     <!-- Upload Card -->
-    <div class="glass rounded-2xl p-8 mb-6">
+    <div class="rounded-2xl p-8 mb-6" style="background:#16181D;border:1px solid #2A2E37;">
       <div id="dropzone"
-           class="relative border-2 border-dashed border-indigo-700/50 rounded-xl p-12
-                  flex flex-col items-center justify-center gap-4 cursor-pointer
-                  transition-all duration-300 hover:border-indigo-500 hover:bg-indigo-950/20 group"
+           class="relative rounded-xl p-12 flex flex-col items-center justify-center gap-4
+                  cursor-pointer transition-all duration-300 group"
+           style="border:2px dashed #2A2E37;"
+           onmouseenter="this.style.borderColor='rgba(217,167,82,0.45)';this.style.background='rgba(217,167,82,0.03)'"
+           onmouseleave="this.style.borderColor='#2A2E37';this.style.background=''"
            onclick="document.getElementById('fileInput').click()">
 
-        <div class="w-16 h-16 rounded-2xl bg-indigo-950/80 border border-indigo-700/40
-                    flex items-center justify-center group-hover:scale-105 transition-transform">
-          <svg class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform"
+             style="background:rgba(217,167,82,0.08);border:1px solid rgba(217,167,82,0.2)">
+          <svg class="w-8 h-8" style="color:#D9A752" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
           </svg>
@@ -49,24 +50,25 @@
           <p class="text-white font-semibold text-lg mb-1">Drop your presentation here</p>
           <p class="text-gray-500 text-sm">PDF, PPT, or PPTX · Max 50 MB</p>
           {% if ai_enabled %}
-          <p class="text-indigo-500 text-xs mt-2">PDF files are read by AI Vision for deeper analysis</p>
+          <p class="text-xs mt-2" style="color:#D9A752;opacity:.75">PDF files are read by AI Vision for deeper analysis</p>
           {% endif %}
         </div>
-        <div class="flex items-center gap-2 text-xs text-gray-600">
-          <div class="h-px w-12 bg-gray-800"></div>or click to browse<div class="h-px w-12 bg-gray-800"></div>
+        <div class="flex items-center gap-2 text-xs text-gray-700">
+          <div class="h-px w-12" style="background:#2A2E37"></div>or click to browse<div class="h-px w-12" style="background:#2A2E37"></div>
         </div>
         <input id="fileInput" type="file" accept=".pdf,.ppt,.pptx" class="hidden" />
         <div id="dragOverlay"
-             class="hidden absolute inset-0 rounded-xl bg-indigo-600/10 border-2
-                    border-indigo-400 flex items-center justify-center">
-          <p class="text-indigo-300 font-semibold text-lg">Release to upload</p>
+             class="hidden absolute inset-0 rounded-xl flex items-center justify-center"
+             style="background:rgba(217,167,82,0.07);border:2px solid rgba(217,167,82,0.5)">
+          <p class="font-semibold text-lg" style="color:#E6C687">Release to upload</p>
         </div>
       </div>
 
-      <div id="fileSelected" class="hidden mt-4 flex items-center gap-3 bg-indigo-950/40
-            border border-indigo-800/40 rounded-xl px-4 py-3">
-        <div class="w-8 h-8 rounded-lg bg-indigo-600/30 flex items-center justify-center flex-shrink-0">
-          <svg class="w-4 h-4 text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
+      <div id="fileSelected" class="hidden mt-4 flex items-center gap-3 rounded-xl px-4 py-3"
+           style="background:rgba(217,167,82,0.06);border:1px solid rgba(217,167,82,0.15)">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background:rgba(217,167,82,0.15)">
+          <svg class="w-4 h-4" style="color:#D9A752" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/>
           </svg>
         </div>
@@ -104,12 +106,12 @@
 
       <div id="uploadProgress" class="hidden mt-4">
         <div class="flex items-center justify-between mb-2">
-          <span id="uploadStepText" class="text-xs text-indigo-400 font-medium">Uploading...</span>
+          <span id="uploadStepText" class="text-xs font-medium" style="color:#D9A752">Uploading...</span>
           <span id="uploadPct" class="text-xs text-gray-500 font-mono">0%</span>
         </div>
-        <div class="h-1 bg-surface-500 rounded-full overflow-hidden">
-          <div id="uploadBar" class="h-full bg-gradient-to-r from-indigo-600 to-purple-500
-                                    rounded-full transition-all duration-500" style="width:0%"></div>
+        <div class="h-1 rounded-full overflow-hidden" style="background:#2A2E37">
+          <div id="uploadBar" class="h-full rounded-full transition-all duration-500"
+               style="width:0%;background:linear-gradient(90deg,#C4892A,#E6C687)"></div>
         </div>
       </div>
     </div>
@@ -131,12 +133,12 @@
           border border-red-900/50 rounded-xl px-4 py-3"></div>
 
     <div class="flex flex-wrap justify-center gap-3 mt-8">
-      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">🎯 3 Audience Personas</span>
-      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">⚡ Real-time Interruptions</span>
-      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">📊 Dual Quality Analysis</span>
-      <span class="text-xs text-gray-600 bg-surface-700/40 border border-gray-800/40 px-3 py-1.5 rounded-full">🗺️ Custom Training Plan</span>
+      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">🎯 3 Audience Personas</span>
+      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">⚡ Real-time Interruptions</span>
+      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">📊 Dual Quality Analysis</span>
+      <span class="text-xs text-gray-600 px-3 py-1.5 rounded-full" style="background:#16181D;border:1px solid #2A2E37">🗺️ Custom Training Plan</span>
       {% if ai_enabled %}
-      <span class="text-xs text-indigo-500 bg-indigo-950/30 border border-indigo-800/30 px-3 py-1.5 rounded-full">✨ AI Vision Analysis</span>
+      <span class="text-xs px-3 py-1.5 rounded-full" style="color:#D9A752;background:rgba(217,167,82,0.07);border:1px solid rgba(217,167,82,0.2)">✨ AI Vision Analysis</span>
       {% endif %}
     </div>
   </div>

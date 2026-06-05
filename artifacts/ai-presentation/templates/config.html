@@ -4,19 +4,19 @@
 {% block nav_steps %}
 <span class="text-gray-600">Upload</span>
 <span class="text-gray-700">→</span>
-<span class="text-indigo-400 font-medium">Step 2 of 4 — Configure</span>
+<span class="font-medium" style="color:#D9A752">Step 2 of 4 — Configure</span>
 {% endblock %}
 
 {% block content %}
 <div class="relative min-h-screen px-6 py-16 overflow-hidden">
-  <div class="orb w-80 h-80 bg-indigo-600/15 top-0 right-0"></div>
-  <div class="orb w-64 h-64 bg-purple-600/10 bottom-0 left-0"></div>
+  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(217,167,82,0.04)"></div>
+  <div class="orb w-64 h-64 bottom-0 left-0" style="background:rgba(210,228,249,0.03)"></div>
 
   <div class="relative z-10 max-w-4xl mx-auto animate-fade-in">
     <div class="text-center mb-10">
-      <div class="inline-flex items-center gap-2 text-xs font-mono text-green-400
-                  bg-green-950/40 border border-green-800/50 px-3 py-1.5 rounded-full mb-5">
-        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+      <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full mb-5 border"
+           style="color:#D9A752;background:rgba(217,167,82,0.07);border-color:rgba(217,167,82,0.2)">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:#D9A752"></span>
         {{ slides|length }} slides ready
         {% if ai_enabled %} · AI Engine Active{% endif %}
       </div>
@@ -27,12 +27,13 @@
     <!-- PPT Logic Tree Panel -->
     <details id="logicTree" open
              class="mb-8 rounded-2xl overflow-hidden"
-             style="background:rgba(18,18,31,.85);border:1px solid rgba(99,102,241,.18)">
+             style="background:#16181D;border:1px solid #2A2E37">
       <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none select-none
-                      hover:bg-indigo-950/20 transition-colors">
+                      hover:bg-white/[0.02] transition-colors">
         <div class="flex items-center gap-3">
-          <div class="w-7 h-7 rounded-lg bg-indigo-600/30 flex items-center justify-center flex-shrink-0">
-            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+               style="background:rgba(217,167,82,0.12)">
+            <svg class="w-3.5 h-3.5" style="color:#D9A752" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M4 6h16M4 10h16M4 14h8"/>
             </svg>
@@ -52,7 +53,7 @@
         <div class="relative">
           <!-- Vertical connecting spine -->
           <div class="absolute left-[1.375rem] top-6 w-px"
-               style="bottom:1.75rem;background:linear-gradient(180deg,rgba(99,102,241,.4),rgba(99,102,241,.08))">
+               style="bottom:1.75rem;background:linear-gradient(180deg,rgba(217,167,82,.3),rgba(217,167,82,.04))">
           </div>
 
           <div class="space-y-2.5">
@@ -62,18 +63,18 @@
               <div class="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center z-10
                           text-xs font-bold font-mono
                           {% if loop.first %}
-                            text-white" style="background:rgba(99,102,241,.8)"
+                            text-white" style="background:rgba(217,167,82,.8)"
                           {% elif loop.last %}
-                            text-purple-200" style="background:rgba(139,92,246,.5)"
+                            text-white/70" style="background:rgba(217,167,82,.35)"
                           {% else %}
-                            text-indigo-400 border border-indigo-900/60" style="background:rgba(15,15,30,.8)"
+                            border" style="color:#D9A752;border-color:rgba(217,167,82,0.2);background:#16181D"
                           {% endif %}>
                 {{ slide.page }}
               </div>
               <!-- Content card -->
               <div class="flex-1 min-w-0 rounded-xl px-4 py-2.5
-                          {% if loop.first %}border border-indigo-800/30" style="background:rgba(30,25,70,.5)"
-                          {% else %}border border-gray-800/20" style="background:rgba(15,15,25,.5)"{% endif %}>
+                          {% if loop.first %}border" style="border-color:rgba(217,167,82,0.2);background:rgba(217,167,82,0.05)"
+                          {% else %}border" style="border-color:#2A2E37;background:rgba(22,24,29,0.6)"{% endif %}>
                 <p class="text-sm font-semibold text-white leading-snug mb-0.5 truncate">
                   {{ slide.title or ('Slide ' ~ slide.page) }}
                 </p>
@@ -94,8 +95,9 @@
 
       <!-- AUDIENCE -->
       <div>
-        <h3 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <span class="w-5 h-5 rounded bg-indigo-600/30 flex items-center justify-center text-xs">1</span>
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2" style="color:#D9A752">
+          <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
+                style="background:rgba(217,167,82,0.25)">1</span>
           Audience
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -119,13 +121,14 @@
           {% for val, icon, bullets in audiences %}
           <label class="config-card cursor-pointer group" data-group="audience" data-value="{{ val }}">
             <input type="radio" name="audience" value="{{ val }}" class="sr-only" {% if val == 'Professor' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
+            <div class="glass rounded-xl p-5 border-2 transition-all duration-200 h-full"
+                 style="border-color:transparent">
               <div class="text-2xl mb-3">{{ icon }}</div>
               <div class="font-semibold text-white mb-3">{{ val }}</div>
               <ul class="space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="text-indigo-600 mt-0.5 flex-shrink-0">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#D9A752;opacity:.6">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -137,8 +140,9 @@
 
       <!-- SCENARIO -->
       <div>
-        <h3 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <span class="w-5 h-5 rounded bg-indigo-600/30 flex items-center justify-center text-xs">2</span>
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2" style="color:#D9A752">
+          <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
+                style="background:rgba(217,167,82,0.25)">2</span>
           Scenario
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -162,7 +166,8 @@
           {% for val, icon, has_interrupt, bullets in scenarios %}
           <label class="config-card cursor-pointer group" data-group="scenario" data-value="{{ val }}">
             <input type="radio" name="scenario" value="{{ val }}" class="sr-only" {% if val == 'Academic Presentation' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
+            <div class="glass rounded-xl p-5 border-2 transition-all duration-200 h-full"
+                 style="border-color:transparent">
               <div class="text-2xl mb-3">{{ icon }}</div>
               <div class="flex items-start justify-between mb-3">
                 <div class="font-semibold text-white leading-tight">{{ val }}</div>
@@ -175,7 +180,7 @@
               <ul class="space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="text-indigo-600 mt-0.5 flex-shrink-0">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#D9A752;opacity:.6">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -187,8 +192,9 @@
 
       <!-- DIFFICULTY -->
       <div>
-        <h3 class="text-sm font-semibold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <span class="w-5 h-5 rounded bg-indigo-600/30 flex items-center justify-center text-xs">3</span>
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2" style="color:#D9A752">
+          <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
+                style="background:rgba(217,167,82,0.25)">3</span>
           Pressure Level
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -212,16 +218,17 @@
           {% for val, dot, zh, bullets in difficulties %}
           <label class="config-card cursor-pointer group" data-group="difficulty" data-value="{{ val }}">
             <input type="radio" name="difficulty" value="{{ val }}" class="sr-only" {% if val == 'Medium' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 border-transparent transition-all duration-200 group-hover:border-indigo-600/50 h-full">
+            <div class="glass rounded-xl p-5 border-2 transition-all duration-200 h-full"
+                 style="border-color:transparent">
               <div class="text-2xl mb-3">{{ dot }}</div>
               <div class="font-semibold text-white mb-0.5">
                 {{ val }}
-                <span class="text-xs text-indigo-400 font-normal ml-1.5">{{ zh }}</span>
+                <span class="text-xs font-normal ml-1.5" style="color:#D9A752;opacity:.8">{{ zh }}</span>
               </div>
               <ul class="mt-3 space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="text-indigo-600 mt-0.5 flex-shrink-0">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#D9A752;opacity:.6">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -247,7 +254,7 @@
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
           </svg>
         </button>
-        <p id="engineStatus" class="hidden text-center text-xs text-indigo-400 mt-3 animate-pulse">
+        <p id="engineStatus" class="hidden text-center text-xs mt-3 animate-pulse" style="color:#D9A752">
           AI is reading your slides…
         </p>
       </div>
@@ -264,10 +271,10 @@
     const inner = card.querySelector('.glass');
     function updateState() {
       document.querySelectorAll(`[data-group="${card.dataset.group}"] .glass`).forEach(d => {
-        d.classList.remove('border-indigo-500', 'bg-indigo-950/20');
-        d.classList.add('border-transparent');
+        d.style.borderColor = 'transparent';
+        d.style.background = '';
       });
-      if (radio.checked) { inner.classList.add('border-indigo-500', 'bg-indigo-950/20'); inner.classList.remove('border-transparent'); }
+      if (radio.checked) { inner.style.borderColor = '#D9A752'; inner.style.background = 'rgba(217,167,82,0.06)'; }
     }
     card.addEventListener('click', () => {
       if (card.dataset.disabled === 'true') return;   // block disabled cards
@@ -309,11 +316,11 @@
         if (profRadio) { profRadio.checked = true; }
         // Refresh all audience card highlights
         document.querySelectorAll('[data-group="audience"] .glass').forEach(d => {
-          d.classList.remove('border-indigo-500', 'bg-indigo-950/20');
-          d.classList.add('border-transparent');
+          d.style.borderColor = 'transparent';
+          d.style.background = '';
         });
-        profCard?.querySelector('.glass')?.classList.add('border-indigo-500', 'bg-indigo-950/20');
-        profCard?.querySelector('.glass')?.classList.remove('border-transparent');
+        const profGlass = profCard?.querySelector('.glass');
+        if (profGlass) { profGlass.style.borderColor = '#D9A752'; profGlass.style.background = 'rgba(217,167,82,0.06)'; }
       }
     }
   }

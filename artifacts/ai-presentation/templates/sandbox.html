@@ -3,7 +3,7 @@
 
 {% block head %}
 <style>
-  .slide-panel { background: linear-gradient(135deg, #12121f, #1a1a2e); border: 1px solid rgba(99,102,241,0.2); }
+  .slide-panel { background: #16181D; border: 1px solid #2A2E37; }
   .alarm-overlay { background: rgba(153,27,27,0.15); border: 1px solid rgba(239,68,68,0.4); animation: alarmPulse 1.5s ease-in-out infinite; }
   @keyframes alarmPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } }
   @keyframes wave { from { transform: scaleY(0.4); } to { transform: scaleY(1.0); } }
@@ -17,7 +17,7 @@
 {% block nav_steps %}
 <span class="text-gray-600">Upload</span><span class="text-gray-700">→</span>
 <span class="text-gray-600">Configure</span><span class="text-gray-700">→</span>
-<span class="text-indigo-400 font-medium">Step 3 of 4 — Rehearsal</span>
+<span class="font-medium" style="color:#D9A752">Step 3 of 4 — Rehearsal</span>
 {% endblock %}
 
 {% block content %}
@@ -34,7 +34,7 @@
       <span class="text-gray-400">{{ config.scenario }}</span>
       <span class="text-gray-700">·</span>
       <span class="{% if config.difficulty == 'Hard' %}text-red-400{% elif config.difficulty == 'Medium' %}text-yellow-400{% else %}text-green-400{% endif %}">{{ config.difficulty }}</span>
-      {% if ai_enabled %}<span class="text-gray-700">·</span><span class="text-indigo-500 text-xs">✨ AI Live</span>{% endif %}
+      {% if ai_enabled %}<span class="text-gray-700">·</span><span class="text-xs" style="color:#D9A752">✨ AI Live</span>{% endif %}
     </div>
     <div class="flex items-center gap-3 text-xs font-mono">
       <span id="interruptBadge" class="{% if state.total_interruptions > 0 %}text-orange-400 bg-orange-950/30 border border-orange-800/30{% else %}text-gray-700{% endif %} px-2 py-0.5 rounded">
@@ -53,7 +53,8 @@
       <div id="slidePanel" class="slide-panel rounded-2xl flex-1 flex flex-col relative overflow-hidden">
         <!-- Label -->
         <div class="absolute top-3 left-3 z-10 flex items-center gap-2">
-          <span class="font-mono text-xs text-indigo-400 bg-indigo-950/80 px-2 py-1 rounded-lg border border-indigo-800/30">
+          <span class="font-mono text-xs px-2 py-1 rounded-lg border"
+                style="color:#D9A752;background:rgba(13,14,17,0.9);border-color:rgba(217,167,82,0.2)">
             SLIDE <span id="slideNum">{{ state.current_page }}</span>
           </span>
         </div>
@@ -80,8 +81,8 @@
             <span class="text-xs text-gray-700 font-mono" id="progPct">{{ ((state.current_page / total_pages) * 100)|round|int }}%</span>
           </div>
           <div class="h-1 bg-surface-500 rounded-full overflow-hidden">
-            <div id="progressFill" class="progress-bar-fill h-full bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full"
-                 style="width: {{ ((state.current_page / total_pages) * 100)|round|int }}%"></div>
+            <div id="progressFill" class="progress-bar-fill h-full rounded-full"
+                 style="background:linear-gradient(90deg,#C4892A,#E6C687);width:{{ ((state.current_page / total_pages) * 100)|round|int }}%"></div>
           </div>
         </div>
 
@@ -89,7 +90,8 @@
         <div class="flex justify-center gap-2 pb-3">
           {% for slide in slides %}
           <div class="slide-dot transition-all duration-300 rounded-full
-                      {% if slide.page == state.current_page %}bg-indigo-400 w-5 h-2{% else %}bg-gray-700 w-2 h-2{% endif %}"
+                      {% if slide.page == state.current_page %}w-5 h-2{% else %}bg-gray-700 w-2 h-2{% endif %}"
+                      style="{% if slide.page == state.current_page %}background:#D9A752{% endif %}"
                data-page="{{ slide.page }}"></div>
           {% endfor %}
         </div>
@@ -113,40 +115,41 @@
 
       <!-- Academic Post-Presentation Q&A Panel -->
       <div id="academicQaPanel" class="hidden rounded-2xl p-6"
-           style="background:rgba(16,30,61,0.85);border:1px solid rgba(99,102,241,0.5);">
+           style="background:#16181D;border:1px solid rgba(217,167,82,0.35);">
         <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-xl bg-indigo-900/60 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <svg class="w-5 h-5 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+               style="background:rgba(217,167,82,0.12)">
+            <svg class="w-5 h-5" style="color:#D9A752" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
           </div>
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-2 flex-wrap">
-              <span class="text-indigo-300 font-semibold text-sm">📋 POST-SESSION Q&amp;A</span>
-              <span id="acqNumBadge" class="text-xs bg-indigo-900/50 border border-indigo-700/40 text-indigo-300 px-2 py-0.5 rounded-full font-mono">Q 1 / 2</span>
+              <span class="font-semibold text-sm" style="color:#D9A752">📋 POST-SESSION Q&amp;A</span>
+              <span id="acqNumBadge" class="text-xs px-2 py-0.5 rounded-full font-mono"
+                    style="color:#D9A752;background:rgba(217,167,82,0.1);border:1px solid rgba(217,167,82,0.3)">Q 1 / 2</span>
               <span id="acqTypeBadge" class="hidden text-xs bg-blue-950/40 border border-blue-800/40 text-blue-300 px-2 py-0.5 rounded-full font-mono"></span>
             </div>
-            <p class="text-xs text-indigo-400/70 mb-3">Answer each question before generating your report.</p>
-            <p id="acqQuestion" class="text-indigo-100 text-base font-medium leading-relaxed mb-4"></p>
+            <p class="text-xs mb-3" style="color:rgba(217,167,82,0.6)">Answer each question before generating your report.</p>
+            <p id="acqQuestion" class="text-white text-base font-medium leading-relaxed mb-4"></p>
             <div class="space-y-3">
               <textarea id="acqInput"
                         placeholder="Type your answer, or use Voice…"
                         class="w-full rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none text-sm focus:outline-none transition-colors"
-                        style="background:rgba(30,30,80,0.5);border:1px solid rgba(99,102,241,0.3)"
+                        style="background:rgba(22,24,29,0.8);border:1px solid #2A2E37"
                         rows="3"></textarea>
               <div class="flex gap-3">
                 <button onclick="submitAcademicQa()" id="acqSubmitBtn"
-                        class="flex-1 text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
-                        style="background:rgba(99,102,241,0.7)">
+                        class="flex-1 text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 btn-primary">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                   </svg>
                   Submit Answer
                 </button>
                 <button onclick="toggleAcqVoice()" id="acqVoiceBtn"
-                        class="px-4 rounded-xl text-sm transition-all flex items-center gap-2 text-indigo-300"
-                        style="background:rgba(30,30,80,0.5);border:1px solid rgba(99,102,241,0.3)">
+                        class="px-4 rounded-xl text-sm transition-all flex items-center gap-2"
+                        style="color:#D9A752;background:rgba(22,24,29,0.8);border:1px solid #2A2E37">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
@@ -223,17 +226,15 @@
         <style>@keyframes recordPulse { 0%,100% { transform:scale(1);opacity:0.8;} 50%{transform:scale(1.1);opacity:1;}}</style>
         <div class="flex items-end gap-0.5 h-10 mb-4 justify-center">
           {% for i in range(20) %}
-          <div class="bg-indigo-600/40 rounded-full w-1.5"
-               style="height:{{ [15,25,35,28,42,20,32,45,18,38,22,40,30,15,35,28,42,18,32,25][loop.index0] }}%;
-                      animation:wave {{ [0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1][loop.index0] }}s ease-in-out infinite alternate;
-                      animation-delay:{{ (loop.index0*0.05)|round(2) }}s;"></div>
+          <div class="rounded-full w-1.5"
+               style="background:rgba(217,167,82,0.35);height:{{ [15,25,35,28,42,20,32,45,18,38,22,40,30,15,35,28,42,18,32,25][loop.index0] }}%;animation:wave {{ [0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1][loop.index0] }}s ease-in-out infinite alternate;animation-delay:{{ (loop.index0*0.05)|round(2) }}s;"></div>
           {% endfor %}
         </div>
         <textarea id="narrationInput"
                   placeholder="Type your narration notes here…"
                   class="w-full bg-surface-700/40 border border-gray-800/40 rounded-xl px-3 py-2
                          text-gray-300 placeholder-gray-700 resize-none text-xs focus:outline-none
-                         focus:border-indigo-600/40 transition-colors"
+                         focus:border-[#D9A752]/30 transition-colors"
                   rows="4"></textarea>
       </div>
 
@@ -241,8 +242,8 @@
       <div class="glass rounded-2xl p-5">
         <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Voice Input</h3>
         <button onclick="toggleNarrationVoice()" id="narrationVoiceBtn"
-                class="w-full bg-indigo-950/40 hover:bg-indigo-950/60 border border-indigo-800/40
-                       text-indigo-300 rounded-xl text-xs py-2.5 transition-all flex items-center justify-center gap-2">
+                class="w-full rounded-xl text-xs py-2.5 transition-all flex items-center justify-center gap-2 border"
+                style="color:#D9A752;background:rgba(217,167,82,0.06);border-color:rgba(217,167,82,0.2)">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
@@ -318,9 +319,9 @@
      class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center
             bg-gray-950/95 backdrop-blur-sm">
   <div class="text-center max-w-sm px-6">
-    <div class="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-700/40
-                flex items-center justify-center mx-auto mb-6">
-      <svg class="w-8 h-8 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24">
+    <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"
+         style="background:rgba(217,167,82,0.1);border:1px solid rgba(217,167,82,0.25)">
+      <svg class="w-8 h-8 animate-spin" style="color:#D9A752" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
       </svg>
@@ -331,8 +332,8 @@
     </p>
     <div class="mt-6 h-1 bg-surface-500 rounded-full overflow-hidden">
       <div id="reportLoadingBar"
-           class="h-full bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full
-                  transition-all duration-1000" style="width: 5%"></div>
+           class="h-full rounded-full transition-all duration-1000"
+           style="background:linear-gradient(90deg,#C4892A,#E6C687);width:5%"></div>
     </div>
     <p class="text-xs text-gray-700 mt-3">This may take 30–60 seconds. Please wait.</p>
   </div>
@@ -773,8 +774,8 @@
 
     document.querySelectorAll('.slide-dot').forEach(dot => {
       const p = parseInt(dot.dataset.page);
-      if (p === slide.page) { dot.classList.add('bg-indigo-400','w-5'); dot.classList.remove('bg-gray-700','w-2'); }
-      else { dot.classList.remove('bg-indigo-400','w-5'); dot.classList.add('bg-gray-700','w-2'); }
+      if (p === slide.page) { dot.style.background='#D9A752'; dot.classList.add('w-5'); dot.classList.remove('bg-gray-700','w-2'); }
+      else { dot.style.background=''; dot.classList.remove('w-5'); dot.classList.add('bg-gray-700','w-2'); }
     });
 
     // Refresh upcoming preview
@@ -846,7 +847,7 @@
       ? `<span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>Stop`
       : `${MIC_SVG}Voice`;
     if (aBtn) aBtn.innerHTML = audioMode === 'acq'
-      ? `<span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>Stop`
+      ? `<span class="w-2 h-2 rounded-full animate-pulse" style="background:#D9A752"></span>Stop`
       : `${MIC_SVG}Voice`;
 
     // Recording status badge in the Recording panel header
