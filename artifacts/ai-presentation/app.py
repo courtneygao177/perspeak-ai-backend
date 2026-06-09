@@ -618,6 +618,95 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
     filler_count    = len(filler_matches)
     filler_density  = round(filler_count / max(total_words, 1) * 100, 1)
 
+    # ── TED Talk Like TED: Rule of Three detection ─────────────────────────────
+    # Check opening (~first 120 words) for explicit 3-point framing
+    opening_text = " ".join(all_narration_text.split()[:120]).lower()
+    RULE_OF_THREE_RE = (
+        r'\b(three\s+(?:things|points|key\s+points|main\s+points|areas|reasons|ideas|'
+        r'steps|sections|aspects|topics|parts|takeaways|pillars))'
+        r'|first[,\.].*second[,\.].*third'
+        r'|firstly.*secondly.*thirdly'
+        r'|number\s+one.*number\s+two.*number\s+three'
+    )
+    rule_of_three_hit = bool(re.search(RULE_OF_THREE_RE, opening_text, re.DOTALL))
+    rule_of_three_note = (
+        "RULE OF THREE DETECTED in opening — award +10 Structure bonus (cap at 100)."
+        if rule_of_three_hit else
+        "No Rule of Three framing detected in the opening."
+    )
+
+    # ── TED Conversational Dialogue vs Script ──────────────────────────────────
+    CONV_RE = (
+        r"\b(let'?s|imagine|think about|picture this|consider this|what if|"
+        r"here'?s (?:the thing|why|what)|in other words|for example|for instance|"
+        r"what does this mean|the key takeaway|the bottom line|dive into|"
+        r"let me show you|the truth is|in fact|actually|right\?|you see|"
+        r"now[,\s]|so[,\s](?:what|here|the|let'?s)|and here'?s|"
+        r"think of it this way|the reason is|here'?s the (?:key|point|thing))\b"
+    )
+    conv_marker_count = len(re.findall(CONV_RE, all_narration_text.lower()))
+    if conv_marker_count >= 5:
+        conv_note = (
+            f"{conv_marker_count} conversational markers found — "
+            "speaker is engaging and dialogue-style. Boost Fluency slightly."
+        )
+    elif conv_marker_count >= 2:
+        conv_note = (
+            f"{conv_marker_count} conversational markers found — "
+            "some dialogue style, but could be more engaging."
+        )
+    else:
+        conv_note = (
+            f"Only {conv_marker_count} conversational markers — "
+            "speech sounds like script-reading. Penalize Fluency (−5 to −10 pts)."
+        )
+
+    # ── TED Picture Superiority Effect (PSE) per slide ────────────────────────
+    # Fires when a slide has heavy text AND the user mirrors it word-for-word
+    pse_triggered_pages = []
+    for s in slides:
+        pg = s["page"]
+        slide_words = re.findall(r'\b\w{4,}\b', (s.get("content", "") + " " + s.get("title", "")).lower())
+        user_words  = re.findall(r'\b\w{4,}\b', narration_map.get(pg, "").lower())
+        if len(slide_words) > 25 and user_words:
+            overlap = len(set(user_words) & set(slide_words)) / len(set(slide_words))
+            if overlap > 0.55:
+                pse_triggered_pages.append(pg)
+    if pse_triggered_pages:
+        pse_note = (
+            f"PSE TRIGGERED on slide(s) {pse_triggered_pages}: heavy bullet-point slides "
+            "with >55% word-mirror narration. Cap Relevance score at 70 for those slides. "
+            "Deduct −10 from overall Relevance and note it in areas_for_improvement."
+        )
+    else:
+        pse_note = "No PSE triggered — user added oral explanation beyond slide text."
+
+    # ── TED Jaw-Dropping Moment heuristic ─────────────────────────────────────
+    full_qa_text = " ".join(
+        (a.get("text") or "") for a in answers
+        if a.get("type") in ("qa_answer", "academic_qa")
+    )
+    JAW_DROP_RE = (
+        r'\b(\d+(?:\.\d+)?%|'
+        r'\d[\d,]*\s*(?:million|billion|trillion)|'
+        r'every\s+\d+\s+(?:second|minute|hour|day|person|people)|'
+        r'one\s+in\s+\d+|'
+        r'(?:shocking|remarkable|unprecedented|transformative|revolutionary|groundbreaking)|'
+        r'\d{4,}\s*(?:people|students|countries|cases|deaths|lives))\b'
+    )
+    jaw_drop_heuristic = bool(
+        re.search(JAW_DROP_RE, all_narration_text, re.IGNORECASE) or
+        re.search(JAW_DROP_RE, full_qa_text, re.IGNORECASE)
+    )
+    jaw_drop_note = (
+        "JAW-DROPPING MOMENT CANDIDATE: user cited a striking stat/data point or "
+        "used powerful language. Set jaw_dropping_moment=true if you verify it was "
+        "impactful AND accompanied by a pause or emphasis in context."
+        if jaw_drop_heuristic else
+        "No obvious jaw-dropping stat or story detected. Set jaw_dropping_moment=false "
+        "unless the speech content itself contains a compelling case or conclusion."
+    )
+
     # ── BRANCH A: Zero / near-zero speech — fast return, skip Gemini entirely ──
     # This fires when the user never spoke (< 5 real words across all slides).
     # Calling Gemini with an empty transcript produces hallucinated, generic praise
@@ -678,17 +767,43 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
         return _mock_pillar_evaluation(difficulty)
 
     # ── Compose WPM / filler notes ─────────────────────────────────────────────
+    # ── WPM calibration: Talk Like TED conversational golden zone = 160-190 WPM ──
     if wpm_estimate > 0:
-        if wpm_estimate > 165:
-            wpm_note = f"{wpm_estimate} WPM — RUSHED (>165 WPM). Score Delivery 60-74 range."
-        elif wpm_estimate > 150:
-            wpm_note = f"{wpm_estimate} WPM — slightly fast (151-165 WPM). Score Delivery 75-89 range."
-        elif wpm_estimate >= 120:
-            wpm_note = f"{wpm_estimate} WPM — GOLDEN ZONE (120-150 WPM). Score Delivery 90-100."
-        elif wpm_estimate >= 110:
-            wpm_note = f"{wpm_estimate} WPM — slightly slow (110-119 WPM). Score Delivery 75-89 range."
+        if 160 <= wpm_estimate <= 190:
+            wpm_note = (
+                f"{wpm_estimate} WPM — TED GOLDEN ZONE (160-190 WPM). "
+                "Score Delivery 95-100."
+            )
+        elif 145 <= wpm_estimate < 160:
+            wpm_note = (
+                f"{wpm_estimate} WPM — slightly below TED golden (145-159 WPM). "
+                "Score Delivery 80-94."
+            )
+        elif 190 < wpm_estimate <= 215:
+            wpm_note = (
+                f"{wpm_estimate} WPM — slightly fast (191-215 WPM). "
+                "Score Delivery 72-85."
+            )
+        elif 120 <= wpm_estimate < 145:
+            wpm_note = (
+                f"{wpm_estimate} WPM — noticeably slow (120-144 WPM). "
+                "Score Delivery 60-78."
+            )
+        elif 110 <= wpm_estimate < 120:
+            wpm_note = (
+                f"{wpm_estimate} WPM — HESITANT (110-119 WPM). "
+                "Score Delivery 50-65."
+            )
+        elif wpm_estimate > 215:
+            wpm_note = (
+                f"{wpm_estimate} WPM — RUSHING (>215 WPM). "
+                "Score Delivery 45-65."
+            )
         else:
-            wpm_note = f"{wpm_estimate} WPM — HESITANT (<110 WPM). Score Delivery 60-74 range."
+            wpm_note = (
+                f"{wpm_estimate} WPM — TOO SLOW (<110 WPM). "
+                "Score Delivery 35-55."
+            )
     else:
         wpm_note = "WPM unknown (no timer data). Estimate from text density and content coverage."
 
@@ -713,38 +828,75 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
         for s in slides
     )
 
-    prompt = f"""You are a friendly Presentation Coach for non-native English speakers.
-Evaluate the presenter using a strict 4-Pillar rubric. Use ONLY the real data supplied below.
+    prompt = f"""You are a world-class Presentation Coach inspired by the TED Talk methodology from "Talk Like TED" by Carmine Gallo. Evaluate the presenter using the 4-Pillar rubric below. Use ONLY the real data supplied. Every quote MUST come from the actual narration text.
 
 ══════════════════════════════════════════════
-SCORING RUBRIC — 0-100 PER PILLAR
+TALK LIKE TED — SCORING RUBRIC (0-100 per pillar)
 ══════════════════════════════════════════════
-1. [Structure] — Logic chain, signpost words, slide transitions
-   90-100 (Expert):     Perfect intro/body/conclusion; signpost on every slide change
-   75-89  (Competent):  Logic complete; 1-2 abrupt transitions without linking words
-   60-74  (Developing): No global frame; only reading titles; <20% transitions used
-   0-59   (Novice):     Wrong order, or mostly silent
 
-2. [Fluency] — Filler words per minute, awkward pauses
-   90-100 (Expert):     <2 filler words/min; no pause >2.5 seconds
-   75-89  (Competent):  3-5 filler words/min; short pauses (<3s) that don't break grammar
-   60-74  (Developing): Same filler repeated >3 times; OR pause >3s silence
-   0-59   (Novice):     Sentences mostly broken; fillers make meaning unclear
+1. [Structure] — Logic chain, Rule of Three, Message Map
+   90-100 (TED Master):   Perfect intro/body/conclusion; Rule of Three framing; Twitter-style headline
+   75-89  (Competent):    Logic complete; 1-2 abrupt transitions; no explicit 3-point frame
+   60-74  (Developing):   No global frame; reading titles only; <20% transitions used
+   0-59   (Novice):       Wrong order or mostly silent
 
-3. [Content Relevance] — Slide keywords/data vs actual speech
-   90-100 (Expert):     >80% slide keywords + all key numbers mentioned
-   75-89  (Competent):  Core topic covered; 1-2 key numbers/percentages skipped
-   60-74  (Developing): <40% keyword match; speaker appears off-slide
-   0-59   (Novice):     Completely off-topic or random words
+   BONUS RULE — Rule of Three (+10 pts, cap 100):
+   If the user explicitly states "I will cover three things / three points / three key areas" in the opening AND delivers on it, award a +10 bonus to Structure score.
+   PRE-COMPUTED: {rule_of_three_note}
 
-4. [Delivery] — WPM calibrated to GOLDEN STANDARD
-   90-100 (Perfect):    120-150 WPM — international conference golden zone
-   75-89  (Good):       110-119 WPM (slightly slow) or 151-165 WPM (slightly fast)
-   60-74  (Needs Work): <110 WPM (hesitant) or >165 WPM (rushing)
-   0-59   (Novice):     Incoherent speed; impossible to follow
+   PENALTY — Information Overload (−10 pts):
+   If the presenter introduces >5 separate themes with no unifying frame, deduct 10 pts.
+
+2. [Fluency] — Filler words, Dialogue vs Script reading, Conversational markers
+   90-100 (Expert):     <2 filler words/min; natural conversational flow; uses "Let's", "Imagine", "Now"
+   75-89  (Competent):  3-5 filler words/min; some connectors; not robotic
+   60-74  (Developing): Sounds like reading a paper; zero conversational markers; OR filler >3/min
+   0-59   (Novice):     Broken sentences; fillers make meaning unclear
+
+   DIALOGUE ASSESSMENT:
+   PRE-COMPUTED: {conv_note}
+   Apply the penalty or boost indicated above.
+
+3. [Content Relevance] — Slide coverage + Picture Superiority Effect (PSE)
+   90-100 (Expert):    >80% slide keywords covered; added vivid descriptions beyond slide text; metaphors used
+   75-89  (Competent): Core topic covered; 1-2 key facts skipped; some original explanation
+   60-74  (Developing): <40% keyword match; speaker mirrors slides word-for-word (PSE violation)
+   0-59   (Novice):    Completely off-topic or random words
+
+   PSE PENALTY — Picture Superiority Effect:
+   If the presenter only reads bullet points off a text-heavy slide word-for-word, cap Relevance at 70.
+   PRE-COMPUTED: {pse_note}
+
+4. [Delivery] — TED Conversational Golden Zone WPM + Punching Key Words
+   95-100 (TED Golden):    160-190 WPM — TED conversational zone; varied pace; pauses for emphasis
+   80-94  (Near Golden):   145-159 WPM — slightly below golden; mostly smooth
+   72-85  (Slightly Fast): 191-215 WPM — could slow down at key moments
+   60-78  (Noticeably Slow): 120-144 WPM — sounds hesitant; needs more confidence
+   50-65  (Hesitant):      110-119 WPM — significant hesitation
+   0-59   (Out of Zone):   <110 or >215 WPM — hard to follow
+
+   PUNCHING KEY WORDS BONUS (+5 pts, cap 100):
+   If the narrator shows clear emphasis before/after a key stat or conclusion
+   (evidenced by natural phrasing like "and the number is...", "the answer is...",
+   "here is the key...", or a dramatic single-word sentence), award +5.
+
+   PRE-COMPUTED: {wpm_note}
 
 ══════════════════════════════════════════════
-PRE-COMPUTED METRICS — USE AS ANCHORS, DO NOT IGNORE
+JAW-DROPPING MOMENT DETECTION
+══════════════════════════════════════════════
+A "Jaw-Dropping Moment" (from Talk Like TED) is when the speaker delivers:
+  (a) A shocking statistic with clear emphasis
+  (b) A vivid real-world story or case
+  (c) A powerful one-sentence conclusion after a pause
+
+PRE-COMPUTED HEURISTIC: {jaw_drop_note}
+
+Set "jaw_dropping_moment": true ONLY if you can identify a specific quote in the narration
+that is genuinely impactful, surprising, or emotionally resonant. Otherwise false.
+
+══════════════════════════════════════════════
+PRE-COMPUTED METRICS — USE AS HARD ANCHORS
 ══════════════════════════════════════════════
 Total words spoken : {total_words}
 WPM assessment     : {wpm_note}
@@ -756,7 +908,7 @@ SESSION CONTEXT
 Audience: {audience} | Scenario: {scenario} | Difficulty: {difficulty} | Challenge: {challenge_type}
 
 ══════════════════════════════════════════════
-SLIDE CONTENT (on-screen text)
+SLIDE CONTENT (on-screen text, what the audience sees)
 ══════════════════════════════════════════════
 {slide_content_text}
 
@@ -777,34 +929,65 @@ MANDATORY OUTPUT RULES — READ ALL BEFORE WRITING
 ⚡ SPEED RULE: Max 2 sentences per feedback item. Be concise. No essay text.
 
 RULE 1 — LANGUAGE
-Use IELTS 5.5-6.0 vocabulary only. Short, clear sentences. Write for a university student who is NOT a native English speaker.
-Say "show" not "demonstrate". Say "fix" not "mitigate". Say "use" not "utilise".
+Use IELTS 5.5-6.0 vocabulary only. Short, clear sentences. Write for a university student who is NOT a native English speaker. Say "show" not "demonstrate". Say "fix" not "mitigate". Say "use" not "utilise".
 
 RULE 2 — QUOTE RULE (MOST IMPORTANT)
 Every item MUST be grounded in the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION above.
-NEVER invent quotes. NEVER write feedback that applies to any presenter.
-If the user said something specific, quote EXACT words. If they skipped a fact, name THAT EXACT FACT from the slide.
+NEVER invent quotes. NEVER write feedback that applies to any presenter generically.
+If the user said something specific, quote EXACT words in double quotes. If they skipped a fact, name THAT EXACT FACT from the slide.
 
 RULE 3 — 4×2 MATRIX (STRICTLY ENFORCED)
 what_i_did_good      → EXACTLY 4 items, one per pillar: Structure, Fluency, Content Relevance, Delivery
 areas_for_improvement → EXACTLY 4 items, one per pillar: Structure, Fluency, Content Relevance, Delivery
 NO pillar may be skipped. NO extra items. Write in that exact order.
 
-RULE 4 — what_i_did_good FORMAT
-"[PillarTag] Short Title: 1-2 sentences. Quote exact words from narration if possible."
-Tags: [Structure], [Fluency], [Content Relevance], [Delivery]
+RULE 4 — what_i_did_good FORMAT — USE TED SENTENCE TEMPLATES
+Each item must follow ONE of these TED-style templates:
 
-RULE 5 — areas_for_improvement FORMAT (4 JSON objects, exactly)
-Each object has EXACTLY these 4 keys:
-  "dimension" : "Structure" | "Fluency" | "Content Relevance" | "Delivery"
-  "issue"     : "Short title. 1 sentence: what went wrong and on which slide."
-  "example"   : "You said: \\"<EXACT quote from ACTUAL narration>\\" — OR — \\"On Slide N, you skipped [EXACT fact from slide content above].\\"  NEVER invent this."
-  "how_to_fix": "1 sentence of advice. Say this instead: \\"<corrected version at IELTS 5.5 level>\\""
+  [Structure] Rule of Three / Message Map:
+  "[Structure] The Rule of Three: You opened with a clear 3-point frame, saying: '[exact opening quote]'. This kept your audience focused and prevented information overload."
+
+  [Fluency] Dialogue Style:
+  "[Fluency] Conversational Delivery: Instead of reading a script, you used natural connectors like '[exact quote with connector]', which gave your talk a TED-style conversational feel."
+
+  [Content Relevance] Picture Superiority:
+  "[Content Relevance] Picture Superiority: Instead of just reading the slides, you used vivid language: '[exact descriptive quote]', which painted a mental image for your audience."
+
+  [Delivery] Punching Key Words:
+  "[Delivery] Punching Key Words: You emphasized a key point when you said: '[exact quote near stat or conclusion]', creating a natural pause effect that boosted impact."
+
+  If the above templates don't match what the user DID (e.g., they didn't use Rule of Three),
+  write an honest positive observation using: "[Pillar] Short Title: [exact quote]. [1 sentence why it works]."
+
+RULE 5 — areas_for_improvement FORMAT — USE TED IMPROVEMENT TEMPLATES
+Each object has EXACTLY these 4 keys. Use TED-style fix language:
+
+  Structure weakness template:
+  "issue": "[Structure] Weak Message Map: Your headline was not clear enough when transitioning between ideas."
+  "example": "You said: '[exact quote at a weak transition]', which lost the logical focus for the audience."
+  "how_to_fix": "Make it a Twitter-style headline (under 140 characters). Say this instead: 'Let's connect this to our main point: [rewritten example at IELTS 5.5 level].'"
+
+  Fluency weakness template:
+  "issue": "[Fluency] Script Reading over Dialogue: Your tone sounded like reading a paper rather than a TED-style talk."
+  "example": "You literally read: '[exact mechanical quote from narration]', with no natural connectors."
+  "how_to_fix": "Internalize your content and speak like a conversation. Say this instead: '[more natural, shorter version at IELTS 5.5 level].'"
+
+  Relevance weakness template:
+  "issue": "[Content Relevance] Picture Superiority Violation: You echoed the slide bullets instead of painting a picture."
+  "example": "On Slide [N], the slide listed '[exact bullet from slide]', and you said almost the same words: '[exact mirrored quote]'."
+  "how_to_fix": "Add a visual metaphor or real example. Say this instead: 'Think of it like [vivid analogy].'"
+
+  Delivery weakness template:
+  "issue": "[Delivery] [Speed verdict]: Your WPM of [X] is [outside/below/above] the TED golden zone of 160-190 WPM."
+  "example": "You said: '[exact quote where speed was most noticeable]', which sounded [rushed/hesitant]."
+  "how_to_fix": "Record yourself and aim for 160-190 WPM. Say this instead: '[same sentence at correct pacing with pauses marked as / ]'."
+
+  If the above doesn't match, use the standard format:
+  "dimension": "...", "issue": "...", "example": "You said: '...'" or "On Slide N, you skipped [fact].", "how_to_fix": "Say this instead: '...'"
 
 RULE 6 — pitch_data
 Return exactly 20 integers (range 50-250) simulating pitch variance for the Delivery chart.
-Higher delivery score and WPM in golden zone → more variance and bigger swings.
-Lower score → flatter values near 100-130 with minimal variation.
+TED golden zone WPM → high variance (180-230 range with swings). Low WPM → flat (90-120).
 
 ══════════════════════════════════════════════
 Return ONLY valid JSON. No markdown fences. No text outside the JSON object.
@@ -817,14 +1000,14 @@ Return ONLY valid JSON. No markdown fences. No text outside the JSON object.
     "delivery":  <int 0-100>
   }},
   "dimensions_info": {{
-    "structure": {{"explanation": "<1 sentence: their actual transitions or lack of them>",
-                   "calculation": "<1 sentence: how many slides had linking phrases>"}},
-    "fluency":   {{"explanation": "<1 sentence: their actual filler count + impact>",
-                   "calculation": "<1 sentence: filler rate per minute>"}},
-    "relevance": {{"explanation": "<1 sentence: which slides had good or poor coverage>",
-                   "calculation": "<1 sentence: keyword match count>"}},
-    "delivery":  {{"explanation": "<1 sentence: exact WPM + verdict (golden/fast/slow)>",
-                   "calculation": "<1 sentence: WPM vs 120-150 golden zone>"}}
+    "structure": {{"explanation": "<1 sentence: their actual transitions or Rule of Three usage>",
+                   "calculation": "<1 sentence: how many slides had linking phrases + Rule of Three bonus if applied>"}},
+    "fluency":   {{"explanation": "<1 sentence: filler count + dialogue vs script verdict>",
+                   "calculation": "<1 sentence: filler rate + conversational markers count>"}},
+    "relevance": {{"explanation": "<1 sentence: which slides had good or poor coverage + PSE verdict>",
+                   "calculation": "<1 sentence: keyword match + PSE penalty if applied>"}},
+    "delivery":  {{"explanation": "<1 sentence: exact WPM + TED golden zone verdict>",
+                   "calculation": "<1 sentence: WPM vs 160-190 TED golden zone + punching bonus if applied>"}}
   }},
   "filler_log": [
     {{"word": "<exact filler from transcript>", "timestamp": "Slide N", "type": "Assistive or Disruptive"}}
@@ -841,7 +1024,8 @@ Return ONLY valid JSON. No markdown fences. No text outside the JSON object.
     {{"dimension": "Content Relevance", "issue": "...", "example": "...", "how_to_fix": "Say this instead: \\"...\\""}},
     {{"dimension": "Delivery",          "issue": "...", "example": "...", "how_to_fix": "Say this instead: \\"...\\""}}
   ],
-  "pitch_data": [<20 integers each 50-250>]
+  "pitch_data": [<20 integers each 50-250>],
+  "jaw_dropping_moment": <true or false>
 }}"""
 
     # ── Audit log: confirm real user data is being sent ───────────────────────
@@ -890,6 +1074,12 @@ Return ONLY valid JSON. No markdown fences. No text outside the JSON object.
         # Ensure filler_log exists
         if "filler_log" not in result:
             result["filler_log"] = []
+
+        # Normalise jaw_dropping_moment — Gemini may return it or we fall back to heuristic
+        if "jaw_dropping_moment" in result:
+            result["jaw_dropping_moment"] = bool(result["jaw_dropping_moment"])
+        else:
+            result["jaw_dropping_moment"] = jaw_drop_heuristic
 
         return result
 
@@ -946,6 +1136,7 @@ def _mock_pillar_evaluation(difficulty):
             },
         },
         "filler_log": [],
+        "jaw_dropping_moment": False,
         "pitch_data": _generate_pitch_data(d_score, 130),
         "what_i_did_good": [
             "[Structure] Rehearsal Completed: You moved through all slides in order and finished the session.",

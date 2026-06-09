@@ -1,0 +1,39 @@
+我们要基于全球顶级演讲圣经《Talk Like TED》的核心法则，全面升级系统的打分算法（Scores Engine）与报告生成器（Gemini Prompt）。请不要修改页面的基本布局，严格按照以下量化标准和逻辑重构后端代码：
+
+1. 【全面升级后端打分引擎：融入 TED 量化指标】
+请修改四个维度的打分计算器，将以下具体规则写入算法：
+
+- 【Structure (结构与逻辑) 权重 25%】
+  * “三的法则 (Rule of Three)”：AI 必须扫描全篇演讲文字（Transcripts）。如果在开头或前 3 页内明确提出了 3 个核心要点（如 "Today, I will present three things..."），并且之后的演讲围绕这 3 点展开，给予【+10分】奖励。如果信息块超过 5 个或全篇无核心聚焦，判定为信息超载，扣分。
+  * “消息映射 (Message Map)”：检查用户是否有 Conclusion First（结论先行）的 Twitter 式核心主题（140字以内）。
+
+- 【Fluency (流利度与内化) 权重 25%】
+  * “对话式沟通 (The 3 Ps)”：通过分析语句的连贯性，区分是“念稿”还是“沟通”。如果全篇 100% 机械对齐 PPT 字面，没有口语化的连接词（如 "Let's dive into", "Imagine this"），视为死板念稿，扣分。
+
+- 【Relevance (内容相关性与 PSE) 权重 25%】
+  * “图片优势效应 (Picture Superiority Effect)”：后端检查当前页 PPT 的字数。如果单页 PPT 包含大量 Bullet Points（项目符号列表/密麻文字），而用户只是在机械地朗读这些文字，触发 PSE 惩罚机制，本页 Relevance 维度最高不超过 70 分。鼓励用户多用口语描述具有“画面感”的比喻来配合视觉。
+
+- 【Delivery (语速与掌控力) 权重 25%】
+  * “TED 对话式黄金语速”：重新校准 WPM 算法。根据《Talk Like TED》的测试，最舒适的对话式演讲语速基准调整为【160 - 190 WPM】。在此区间为 95-100 分。
+  * “重点词汇加重停顿 (Punching Key Words)”：通过 Whisper 传回的时间戳，分析语速的波动率。如果全程处于绝对均等的语速（Monotone），判定为没有抑扬顿挫；如果在关键核心数据或结论词前后有 1.5-2 秒的“刻意停顿”，给予【+5分】的掌控力奖励。
+
+2. 【重构发给 Gemini 1.5 Pro 的 System Prompt 评价规范】
+请更新最终报告生成的提示词模板，强制大模型在生成评价时，必须套用以下最新的 TED 简明评价句式（100% 结合用户真实 Quote）：
+
+👍 What I did good (正面反馈规范句式)
+- "[Structure] The Rule of Three: You perfectly limited your core takeaways to three points in your opening, saying: '[插入用户开场原话]'. This prevented information overload."
+- "[Relevance] Picture Superiority: Instead of just reading the slides, you used vivid descriptive language: '[插入用户生动比喻的原话]', which effectively enhanced the visual impact."
+- "[Delivery] Punching Key Words: You effectively used strategic pauses and punched your key numbers when you said: '[插入用户在数据前后的停顿原话]', creating a true 'Jaw-Dropping Moment'."
+
+⚠️ Areas for Improvement (反面反馈与手把手教学)
+- "[Structure] Weak Message Map: Your core headline is too vague. When transition from Slide 2 to 3, you said: '[插入原话]', which lost the logical focus."
+  👉 How to fix: Make it a sharp 'Twitter-style' headline. Say this instead: "Let's connect this to our primary objective: [给出具体的改写建议]."
+- "[Fluency] Scripts Reading over Dialogue: Your tone sounded like reading a paper rather than delivering a TED-style talk. You literally read: '[插入用户机械念稿的原话]'."
+  👉 How to fix: Internalize your content and speak like a conversation. Say this instead: "[给出更自然、对话式的雅思5.5/6.0级短句]."
+
+3. 【增加亮点勋章判定（Jaw-Dropping Moment Badge）】
+- 检查后端 JSON 返回结构。新增一个布尔变量字段 `"jaw_dropping_moment": true/false`。
+- 【触发条件】：当 AI 检测到用户在演讲或 Q&A 过程中，引用了一个极具震撼力的统计数据、现场鲜活的 Case 故事、或者得出了一个极具说服力的结论（并且语速有明显的刻意停顿强调）时，该字段标记为 `true`。
+- 前端收到后，在报告页雷达图上方闪亮渲染一枚 🌟 "Jaw-Dropping Moment Achieved!" 勋章卡片，极大提升大学生/留学生的模拟成就感。
+
+请立即搜索并重构项目的评分算法逻辑文件和大模型提示词配置文件，让系统的审计视角完美对接《Talk Like TED》的顶尖水准！

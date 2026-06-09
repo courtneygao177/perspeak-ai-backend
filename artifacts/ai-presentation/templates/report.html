@@ -44,7 +44,7 @@
 {% block nav_steps %}
 <span class="text-slate-400">Upload</span><span class="text-slate-300 mx-1">→</span>
 <span class="text-slate-400">Configure</span><span class="text-slate-300 mx-1">→</span>
-<span class="text-gray-600">Rehearsal</span><span class="text-gray-700">→</span>
+<span class="text-slate-400">Rehearsal</span><span class="text-slate-300 mx-1">→</span>
 <span class="font-semibold" style="color:#059669">Step 4 of 4 — Report</span>
 {% endblock %}
 
@@ -54,10 +54,11 @@
 {% set diminfo  = pillar.dimensions_info %}
 {% set pitch_data = pillar.pitch_data if pillar.pitch_data else [] %}
 {% set avg_score = ((scores.structure + scores.fluency + scores.relevance + scores.delivery) / 4) | round | int %}
+{% set jaw_drop = pillar.jaw_dropping_moment %}
 
 <div class="relative max-w-5xl mx-auto px-5 py-10 animate-fade-in">
-  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(5,150,105,0.04)"></div>
-  <div class="orb w-64 h-64 bottom-40 left-0" style="background:rgba(210,228,249,0.03)"></div>
+  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(5,150,105,0.05)"></div>
+  <div class="orb w-64 h-64 bottom-40 left-0" style="background:rgba(59,130,246,0.04)"></div>
 
   <!-- Header -->
   <div class="relative z-10 mb-8">
@@ -68,15 +69,15 @@
         {{ evaluation.scenario }} · {{ evaluation.audience }} · {{ evaluation.difficulty }}
       </div>
       {% if evaluation.ai_powered %}
-      <div class="inline-flex items-center gap-2 text-xs font-mono text-green-400
-                  bg-green-950/40 border border-green-800/40 px-3 py-1.5 rounded-full">
-        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+      <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border"
+           style="color:#047857;background:#E6F4EA;border-color:#bbf7d0">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:#059669"></span>
         AI-Powered
       </div>
       {% endif %}
       {% if evaluation.challenge_type %}
-      <div class="inline-flex items-center gap-1.5 text-xs font-mono text-yellow-400
-                  bg-yellow-950/30 border border-yellow-800/30 px-3 py-1.5 rounded-full">
+      <div class="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full
+                  bg-amber-50 border border-amber-200 text-amber-700">
         ⚡ {{ evaluation.challenge_type }}
       </div>
       {% endif %}
@@ -84,6 +85,30 @@
     <h1 class="text-4xl font-bold text-[#0F172A] mb-2">Rehearsal Report</h1>
     <p class="text-slate-500 text-sm">4-pillar precision audit · AAC&amp;U + Toastmasters rubric</p>
   </div>
+
+  <!-- Jaw-Dropping Moment Badge -->
+  {% if jaw_drop %}
+  <div class="relative z-10 mb-6 animate-slide-up">
+    <div class="flex items-center gap-4 rounded-2xl px-6 py-4 border"
+         style="background:linear-gradient(135deg,#f0fdf6,#fff);border-color:#bbf7d0;box-shadow:0 4px 24px rgba(5,150,105,0.1)">
+      <div class="text-4xl animate-pulse-slow flex-shrink-0">🌟</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold tracking-wide uppercase mb-0.5" style="color:#047857">
+          Jaw-Dropping Moment Achieved!
+        </p>
+        <p class="text-slate-600 text-sm leading-snug">
+          The AI detected a powerful, high-impact moment in your presentation — a striking statistic,
+          vivid story, or compelling conclusion delivered with emphasis. This is the hallmark of a
+          <span class="font-semibold text-[#047857]">Talk Like TED</span> presenter.
+        </p>
+      </div>
+      <div class="flex-shrink-0 hidden sm:flex flex-col items-center gap-1">
+        <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-full border"
+              style="color:#047857;background:#E6F4EA;border-color:#bbf7d0">TED Technique</span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Overall Score + Radar -->
   <div class="relative z-10 grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
@@ -95,8 +120,8 @@
       <div class="section-card p-6 flex items-center gap-5">
         <div class="relative w-20 h-20 flex-shrink-0">
           <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1e1e35" stroke-width="3.5"/>
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" stroke-width="3.5"
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="3.5"/>
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#059669" stroke-width="3.5"
                     stroke-dasharray="{{ avg_score }} {{ 100 - avg_score }}"
                     stroke-linecap="round"/>
           </svg>
