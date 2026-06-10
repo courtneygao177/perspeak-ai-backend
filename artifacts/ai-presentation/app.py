@@ -758,6 +758,7 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
 
     # ── TED Picture Superiority Effect (PSE) per slide ────────────────────────
     # Fires when a slide has heavy text AND the user mirrors it word-for-word
+    narration_map = {a["page"]: (a.get("text") or "") for a in narration_entries if "page" in a}
     pse_triggered_pages = []
     for s in slides:
         pg = s["page"]
