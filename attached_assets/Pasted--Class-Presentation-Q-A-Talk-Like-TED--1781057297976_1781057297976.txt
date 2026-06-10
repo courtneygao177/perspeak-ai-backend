@@ -1,0 +1,47 @@
+我们现在要对【Class Presentation（课堂演讲）】场景下的 Q&A 提问库进行一次精准的、前后端联动的精细化升级。
+
+我们需要引入《Talk Like TED》的三个核心设问维度，并且提问角色必须【绝对锁死】在用户于最开始主动勾选的“Audience（同学/教授）”身份上，严禁使用任何随机逻辑（random.choice）。请严格执行以下全栈重构：
+
+1. 【前端：Audience 状态捕获与数据流传参 (Frontend State Mapping)】
+- 请检查用户在上传完 PPT 后选择演讲受众（Audience）的 UI 组件。确保当用户点击选择“Professor (教授)”或“Classmate (同学)”时，该状态被完整保存在全局的 `selected_audience` 状态中。
+- 当用户完成演练并点击进入 Q&A 阶段时，前端向后端请求 Q&A 问题列表的 POST API 请求中，【必须】在 Payload 中带上当前的受众参数：`{ "audience": selected_audience }`。
+
+2. 【后端：提问库增量扩展与身份精准对齐 (Backend Audience Pinning)】
+- 请在后端的 Q&A 生成逻辑文件（如 qa_engine.py 或相关的 API 路由）中，找到 class_presentation 的提问池。
+- 【严禁完全覆盖或删改之前的设问模板】，请采用【增量扩展（Append/Extend）】的方式，将以下根据《Talk Like TED》定制的【同学/教授】双轨英文句子库追加进去。
+- 确保所有英文句子严格控制在 IELTS 5.5 - 6.0 难度级别，用词犀利、地道、符合真实的校园答辩语境：
+
+\"\"\"
+# 增量追加的 《Talk Like TED》 专属双轨提问矩阵
+TED_QA_MATRIX = {
+    "twitter_headline": {
+        "logic": "Check if the speaker can summarize the core idea within 140 characters to avoid information overload.",
+        "classmate": "You shared a lot of cool details, but honestly, it's a bit too much to remember. If you had to tweet your main point in less than 140 characters right now, what would it be?",
+        "professor": "Your presentation covered various facts, but I want to test your clarity. Can you summarize the absolute core message of your research in just one or two simple sentences?"
+    },
+    "novelty_challenge": {
+        "logic": "The brain cannot ignore novelty. A good talk must offer a fresh perspective instead of clichés.",
+        "classmate": "To be fair, most of this information can be easily found on Google. What is the most surprising or unique thing you shared today that we probably didn't know before?",
+        "professor": "An effective presentation must deliver original value. Apart from the standard textbooks and public data, what is the most distinctive or unexpected insight your project brings to the table?"
+    },
+    "rule_of_three": {
+        "logic": "Short-term memory can only process three chunks of information efficiently.",
+        "classmate": "If our classmates wake up tomorrow morning and can only remember three key things from your presentation, which three things do you hope they will stick to?",
+        "professor": "Human working memory is limited, so focus is essential. If I am grading you based on your three most important arguments, how would you define them right now?"
+    }
+}
+\"\"\"
+
+3. 【后端 API 条件路由重构】
+- 彻底取消任何关于提问角色的随机化代码（如删除类似 `random.choice(['Classmate', 'Professor'])`）。
+- 改为严格读取前端传来的 `audience` 参数：
+  * 如果 `request.json.get('audience').lower() == 'professor'`：系统在触发到上述三个 TED 维度时，【100% 只能】抽取调用 `professor` 字段下的硬核学术提问文本。
+  * 如果参数为 `classmate`：【100% 只能】抽取调用 `classmate` 字段下的同辈平级挑衅文本。
+
+4. 【前端 UI：头像与身份状态完美同步】
+- 在第四步演练舱的 Q&A 交互弹窗组件中，前端渲染提问者的 Avatar 头像和名字时，必须与初始选择完全对齐：
+  * 用户最开始选了教授，Q&A 界面就必须亮出 “Professor (教授)” 的专家头像和克制高冷的 UI 样式。
+  * 用户最开始选了同学，就亮出 “Classmate (同学)” 的头像与更具青春活力的校园 Vibe。
+- 确保原有的其他常规 Q&A 追问问题依然保留在池子里作为兜底。
+
+请立即执行代码重构，让前后端通信管道彻底锁死对齐！

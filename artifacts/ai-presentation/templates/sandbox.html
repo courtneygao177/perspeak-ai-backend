@@ -113,25 +113,22 @@
         </p>
       </div>
 
-      <!-- Academic Post-Presentation Q&A Panel -->
+      <!-- Academic / Class Presentation Post-Session Q&A Panel -->
       <div id="academicQaPanel" class="hidden rounded-2xl p-6"
-           style="background:#ffffff;border:1px solid rgba(217,167,82,0.35);">
+           style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(15,23,42,0.06);">
         <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-               style="background:rgba(5,150,105,0.12)">
-            <svg class="w-5 h-5" style="color:#059669" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-          </div>
+          <!-- Questioner avatar — updated by showAcademicQa() -->
+          <div id="acqAvatarWrap" class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 text-xl"
+               style="background:rgba(5,150,105,0.10)">🎓</div>
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-2 flex-wrap">
-              <span class="font-semibold text-sm" style="color:#059669">📋 POST-SESSION Q&amp;A</span>
+              <span id="acqQuestionerLabel" class="font-semibold text-sm" style="color:#059669">📋 POST-SESSION Q&amp;A</span>
               <span id="acqNumBadge" class="text-xs px-2 py-0.5 rounded-full font-mono"
                     style="color:#059669;background:rgba(5,150,105,0.1);border:1px solid rgba(5,150,105,0.3)">Q 1 / 2</span>
-              <span id="acqTypeBadge" class="hidden text-xs bg-blue-950/40 border border-blue-800/40 text-blue-300 px-2 py-0.5 rounded-full font-mono"></span>
+              <span id="acqTypeBadge" class="hidden text-xs px-2 py-0.5 rounded-full font-mono border"
+                    style="color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe"></span>
             </div>
-            <p class="text-xs mb-3" style="color:rgba(217,167,82,0.6)">Answer each question before generating your report.</p>
+            <p id="acqSubtitle" class="text-xs mb-3 text-slate-400">Answer each question before generating your report.</p>
             <p id="acqQuestion" class="text-white text-base font-medium leading-relaxed mb-4"></p>
             <div class="space-y-3">
               <textarea id="acqInput"
@@ -352,8 +349,10 @@
     total_interruptions:{{ state.total_interruptions }},
     challenge_type:     '',
   };
-  let slides     = {{ slides | tojson }};
-  let hasFile    = {{ 'true' if has_file else 'false' }};
+  let slides      = {{ slides | tojson }};
+  let hasFile     = {{ 'true' if has_file else 'false' }};
+  const audienceRole = {{ config.audience | tojson }};   // 'Professor' | 'Classmates' | 'VC'
+  const scenarioType = {{ config.scenario | tojson }};   // 'Class Presentation' | 'Academic Presentation' | …
 
   // ── Real data pipeline accumulators ─────────────────────────────────────────
   // These are sent to /x/finish-presentation so Gemini sees actual user speech
@@ -474,13 +473,41 @@
     } catch(err) { console.error(err); resetBtn(); }
   }
 
-  // ── Academic Post-Session Q&A ──────────────────────────────────────────────
+  // ── Academic / Class Presentation Post-Session Q&A ────────────────────────
   function showAcademicQa(question, num, total, challengeType, category) {
     document.getElementById('acqQuestion').textContent = question;
     document.getElementById('acqNumBadge').textContent = `Q ${num} / ${total}`;
     const typeBadge = document.getElementById('acqTypeBadge');
     if (challengeType) { typeBadge.textContent = challengeType; typeBadge.classList.remove('hidden'); }
     else               { typeBadge.classList.add('hidden'); }
+
+    // ── Audience-pinned avatar & identity ─────────────────────────────────
+    const avatarWrap = document.getElementById('acqAvatarWrap');
+    const labelEl    = document.getElementById('acqQuestionerLabel');
+    const subtitleEl = document.getElementById('acqSubtitle');
+    const isClassPres = scenarioType === 'Class Presentation';
+
+    if (isClassPres && audienceRole === 'Professor') {
+      avatarWrap.textContent = '👨‍🏫';
+      avatarWrap.style.background = 'rgba(99,102,241,0.10)';
+      labelEl.style.color = '#4f46e5';
+      labelEl.textContent = '👨‍🏫 Professor — Post-Presentation Review';
+      subtitleEl.textContent = 'Your professor is testing the intellectual depth of your talk.';
+    } else if (isClassPres && (audienceRole === 'Classmates' || audienceRole === 'VC')) {
+      avatarWrap.textContent = '👥';
+      avatarWrap.style.background = 'rgba(5,150,105,0.10)';
+      labelEl.style.color = '#059669';
+      labelEl.textContent = '👥 Classmate — Quick Q&A';
+      subtitleEl.textContent = 'Your classmates want to understand your key takeaways.';
+    } else {
+      // Academic Presentation — keep default green academic style
+      avatarWrap.textContent = '🎓';
+      avatarWrap.style.background = 'rgba(5,150,105,0.10)';
+      labelEl.style.color = '#059669';
+      labelEl.textContent = '📋 POST-SESSION Q&A';
+      subtitleEl.textContent = 'Answer each question before generating your report.';
+    }
+
     document.getElementById('academicQaPanel').classList.remove('hidden');
     document.getElementById('acqInput').value = '';
     document.getElementById('acqInput').focus();

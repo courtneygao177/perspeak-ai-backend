@@ -1,0 +1,33 @@
+我们现在要对【Class Presentation（课堂演讲）】场景下的 Q&A 提问库进行一次精准的、前后端联动的精细化升级。
+
+我们需要引入《Talk Like TED》的三个核心设问维度，并且提问角色必须【绝对锁死】在用户于最开始主动勾选的“Audience（同学/教授）”身份上，严禁使用任何随机逻辑（random.choice）。请严格执行以下全栈重构：
+
+1. 【前端：Audience 状态捕获与数据流传参 (Frontend State Mapping)】
+- 请检查用户在上传完 PPT 后选择演讲受众（Audience）的 UI 组件。确保当用户点击选择“Professor (教授)”或“Classmate (同学)”时，该状态被完整保存在全局的 `selected_audience` 状态中。
+- 当用户完成演练并点击进入 Q&A 阶段时，前端向后端请求 Q&A 问题列表的 POST API 请求中，【必须】在 Payload 中带上当前的受众参数：`{ "audience": selected_audience }`。
+
+2. 【后端：提问库增量扩展与身份精准对齐 (Backend Audience Pinning)】
+- 请在后端的 Q&A 生成逻辑文件（如 qa_engine.py 或相关的 API 路由）中，找到 class_presentation 的提问池。
+- 【严禁完全覆盖或删改之前的设问模板】，请采用【增量扩展（Append/Extend）】的方式，将以下根据《Talk Like TED》定制的【同学/教授】双轨英文句子库追加进去。
+- 确保所有英文句子严格控制在 IELTS 5.5 - 6.0 难度级别，用词犀利、地道、符合真实的校园答辩语境：
+
+\"\"\"
+# 增量追加的 《Talk Like TED》 专属双轨提问矩阵
+TED_QA_MATRIX = {
+    "twitter_headline": {
+        "logic": "Check if the speaker can summarize the core idea within 140 characters to avoid information overload.",
+        "classmate": "You shared a lot of cool details, but honestly, it's a bit too much to remember. If you had to tweet your main point in less than 140 characters right now, what would it be?",
+        "professor": "Your presentation covered various facts, but I want to test your clarity. Can you summarize the absolute core message of your research in just one or two simple sentences?"
+    },
+    "novelty_challenge": {
+        "logic": "The brain cannot ignore novelty. A good talk must offer a fresh perspective instead of clichés.",
+        "classmate": "To be fair, most of this information can be easily found on Google. What is the most surprising or unique thing you shared today that we probably didn't know before?",
+        "professor": "An effective presentation must deliver original value. Apart from the standard textbooks and public data, what is the most distinctive or unexpected insight your project brings to the table?"
+    },
+    "rule_of_three": {
+        "logic": "Short-term memory can only process three chunks of information efficiently.",
+        "classmate": "If our classmates wake up tomorrow morning and can only remember three key things from your presentation, which three things do you hope they will stick to?",
+        "professor": "Human working memory is limited, so focus is essential. If I am grading you based on your three most important arguments, how would you define them right now?"
+    }
+}
+\"\"\"

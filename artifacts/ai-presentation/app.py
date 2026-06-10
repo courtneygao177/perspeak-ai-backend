@@ -239,6 +239,62 @@ MOCK_QA_BANK = [
      "category": "Legal & Compliance", "difficulty": "Medium", "challenge_type": "Unsupported Claim"},
 ]
 
+# ─────────────────────────────────────────────
+# CLASS PRESENTATION: TED Q&A MATRIX
+# Audience-pinned dual-track question bank.
+# No random.choice — track is decided by the user-selected audience.
+# ─────────────────────────────────────────────
+TED_QA_MATRIX = {
+    "twitter_headline": {
+        "logic": "Tests ability to summarise the core idea in ≤140 characters",
+        "classmate": (
+            "You shared a lot of cool details, but honestly, it's a bit too much to remember. "
+            "If you had to tweet your main point in less than 140 characters right now, what would it be?"
+        ),
+        "professor": (
+            "Your presentation covered various facts, but I want to test your clarity. "
+            "Can you summarise the absolute core message of your research in just one or two simple sentences?"
+        ),
+    },
+    "novelty_challenge": {
+        "logic": "Tests whether the talk delivers a fresh perspective instead of clichés",
+        "classmate": (
+            "To be fair, most of this information can be easily found on Google. "
+            "What is the most surprising or unique thing you shared today that we probably didn't know before?"
+        ),
+        "professor": (
+            "An effective presentation must deliver original value. "
+            "Apart from standard textbooks and public data, what is the most distinctive or unexpected insight "
+            "your project brings to the table?"
+        ),
+    },
+    "rule_of_three": {
+        "logic": "Tests whether speaker can distil the talk to three memorable chunks",
+        "classmate": (
+            "If our classmates wake up tomorrow morning and can only remember three key things "
+            "from your presentation, which three things do you hope they will stick to?"
+        ),
+        "professor": (
+            "Human working memory is limited, so focus is essential. "
+            "If I am grading you based on your three most important arguments, how would you define them right now?"
+        ),
+    },
+}
+
+# Baseline fallback pool for Class Presentation (audience-neutral)
+CLASS_PRES_QA_POOL = [
+    {"id": 10, "question": "Can you give a real-life example that supports your main point?",
+     "category": "Class Presentation", "difficulty": "Easy", "challenge_type": "Unsupported Claim"},
+    {"id": 11, "question": "How does this topic connect to what we have been learning in class?",
+     "category": "Class Presentation", "difficulty": "Easy", "challenge_type": "Relevance"},
+    {"id": 12, "question": "What would change if your main assumption turned out to be wrong?",
+     "category": "Class Presentation", "difficulty": "Medium", "challenge_type": "Causality Issue"},
+    {"id": 13, "question": "Which part of your presentation do you think needed more evidence, and why?",
+     "category": "Class Presentation", "difficulty": "Medium", "challenge_type": "Clarity"},
+    {"id": 14, "question": "If you had one more minute, what extra detail would you add and where?",
+     "category": "Class Presentation", "difficulty": "Hard", "challenge_type": "Depth"},
+]
+
 
 # ─────────────────────────────────────────────
 # PDF → BASE64 IMAGES PIPELINE (Step 1)
@@ -558,6 +614,45 @@ Return ONLY the question text. No preamble, no labels, no markdown."""
         used = [h["content"] for h in chat_history if h["role"] == "assistant"]
         available = [q for q in MOCK_FOLLOWUP_POOL if q not in used]
         return random.choice(available) if available else MOCK_FOLLOWUP_POOL[0]
+
+
+# ─────────────────────────────────────────────
+# CLASS PRESENTATION Q&A BUILDER
+# ─────────────────────────────────────────────
+def build_class_presentation_qa(audience, difficulty):
+    """
+    Build an audience-pinned Q&A bank for the Class Presentation scenario.
+
+    - 'Professor' audience  → pulls professor-track questions from TED_QA_MATRIX
+    - 'Classmates' audience → pulls classmate-track questions from TED_QA_MATRIX
+    - No random.choice on questioner role — strictly follows the user-selected audience.
+    - Baseline CLASS_PRES_QA_POOL items are appended as fallback depth.
+    """
+    track = "professor" if audience.lower() == "professor" else "classmate"
+    qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
+
+    ted_questions = []
+    for idx, (dim_key, dim_data) in enumerate(TED_QA_MATRIX.items()):
+        ted_questions.append({
+            "id":            100 + idx,
+            "question":      dim_data[track],
+            "category":      "Class Presentation — TED Framework",
+            "difficulty":    difficulty,
+            "challenge_type": dim_key.replace("_", " ").title(),
+            "ted_dimension": dim_key,
+            "questioner":    audience,
+        })
+
+    # Annotate baseline pool with questioner identity
+    baseline = []
+    for q in CLASS_PRES_QA_POOL:
+        item = dict(q)
+        item["questioner"] = audience
+        baseline.append(item)
+
+    # TED questions first; baseline as extra depth; trim to qa_count
+    combined = (ted_questions + baseline)[:qa_count]
+    return combined
 
 
 # ─────────────────────────────────────────────
@@ -1652,7 +1747,12 @@ def api_start_session():
         "persona":   AUDIENCE_PERSONA.get(audience, AUDIENCE_PERSONA["Professor"]),
     }
     session["challenge_seed"] = challenge_seed
-    session["qa_bank"] = static_qa_bank if scenario == "Academic Presentation" else []
+    if scenario == "Academic Presentation":
+        session["qa_bank"] = static_qa_bank
+    elif scenario == "Class Presentation":
+        session["qa_bank"] = build_class_presentation_qa(audience, difficulty)
+    else:
+        session["qa_bank"] = []
 
     max_rounds = MAX_FOLLOWUP_ROUNDS.get(difficulty, 2)
     session["state"] = {
@@ -1722,8 +1822,8 @@ def api_check_slide():
 
     next_page = current_page + 1
     if next_page > len(slides):
-        # ── Academic Presentation: trigger post-session Q&A before report ──
-        if scenario == "Academic Presentation":
+        # ── Academic / Class Presentation: trigger post-session Q&A before report ──
+        if scenario in ("Academic Presentation", "Class Presentation"):
             qa_bank = session.get("qa_bank", [])
             difficulty = config.get("difficulty", "Medium")
             qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
