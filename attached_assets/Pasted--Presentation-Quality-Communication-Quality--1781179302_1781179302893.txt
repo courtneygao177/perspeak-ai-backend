@@ -1,0 +1,51 @@
+我们现在要在最终报告页中，紧跟在现有的 Presentation Quality 板块之后，全新构建一个独立的【Communication Quality (沟通质量)】评估与打分引擎。
+
+【核心铁律：现有的 Presentation Quality 评分标准、代码、打分机制与 UI 模块绝对不要删除，也完全不要乱动！此次开发是纯增量构建新板块。】
+
+Communication Quality 必须 100% 严格基于用户在【Q&A 环节与中途打断环节】的实际口语转录文本（Communication Transcripts）与交流表现来进行评价和打分。请严格执行以下全栈重构：
+
+1. 【前端数据流传参：场景与角色锁死 (Frontend State Passing)】
+- 请检查用户在上传完 PPT 后选择演讲受众（Audience）与场景（Scene）的 UI 组件。确保全局状态完整记录了用户的选择：`selected_scene` (thesis_defense / case_pitch / class_presentation) 和 `selected_audience` (professor / classmate)。
+- 当用户进入对抗演练并最终请求生成报告时，前端向后端请求 `generate_rehearsal_report` 的 POST API 中，Payload 必须完整携带这两个参数：
+  {
+    "scene": selected_scene,
+    "audience": selected_audience
+  }
+- 【UI 延续性】：Communication Quality 报告板块的 UI 视觉风格必须完全延续原有的“常春藤高智白（Academic Ivy Light Mode）”风格。卡片背景使用 `bg-white`，带有柔和阴影 `shadow-sm` 与淡蓝灰边框 `border-slate-200`，文字使用深邃的牛津蓝（`text-[#0F172A]`）。
+
+2. 【后端重构：场景靶向 Communication Quality 独立评分算法】
+请在后端评分引擎中，将新板块 Communication Quality 的 100 分满分，根据前端传入的 `scene` 参数，进行如下条件分支的硬核卡尺量化计算：
+
+- 【分支 A：scene == 'thesis_defense' (学术答辩打断场景)】
+  * 指标 1：正面回应度 (Directness) -> 权重 40%。算法审计用户被教授打断后回答的前 15-20 个单词。若连续两句都在叙述背景而没有正面回应质疑，判定为 Question Dodging，直接扣 15 分。
+  * 指标 2：抗辩质量 (Defensibility) -> 权重 40%。扫描文本中是否包含客观学术事实元素（如具体数据、百分比、学术文献词汇）。若全是主观形容词，判定为 Low Persuasiveness 阶梯扣分。
+  * 指标 3：外交手腕 (Tact & Yes-Response) -> 权重 20%。检查用户是否使用了卡耐基的“肯定性响应”策略，在反驳前先寻找双方共识（如 'That is a valid concern...'），若生硬对立则扣分。
+
+- 【分支 B：scene == 'case_pitch' (商业路演/MBA打断与Q&A场景)】
+  * 指标 1：结论先行 (Conclusion First) -> 权重 40%。依据麦肯锡金字塔原理，回答的第一句话必须完成定性回应（Yes/No/Clear Stance），第二句必须出现逻辑支撑词（Because, The reason is...）。不满足此结构扣 15 分。
+  * 指标 2：说服力结构比 (The Persuasion Mix) -> 权重 30%。大模型审计回答中 Ethos (公信力)、Logos (数据) 与 Pathos (用户故事/痛点比喻) 的平衡度。纯罗列数字缺乏 Pathos 扣分。
+  * 指标 3：指令性气场 (Command Presence) -> 权重 30%。检测面对 VC 挑战时语速是否稳定在 160-190 WPM 黄金对话区间。若语速因紧张飙升至 220 WPM 以上或出现超过 3 秒的长停顿，给予扣分。
+
+- 【分支 C：scene == 'class_presentation' (课堂演讲结束后的Q&A场景)】
+  * 指标 1：三的法则 (Rule of Three) -> 权重 40%。审计用户在应对同学或教授提问时，是否有意识地将解释归纳为 3 个容易记住的信息块，或包含明确的序数词（First, Second, Thirdly）。
+  * 指标 2：谈话感与双向沟通 (Conversational Sense) -> 权重 30%。检查回答文本是否机械复制 PPT 字面。如果完全无口语化互动词，判定为僵硬背诵答案，予以扣分。
+  * 指标 3：实例支撑 (Illustrative Support) -> 权重 30%。评估用户是否能根据卡耐基即兴表达原则，“立即切入一个包含 5-W 细节（时间、地点、人物）的具体例子”来支撑观点。
+
+3. 【大模型 System Prompt 增强：4×2 矩阵点评与精准 Quote 约束】
+请更新最终报告生成的提示词配置文件。在 Presentation Quality 分析之后，命令 Gemini 1.5 Pro 针对 Communication Quality 部分输出专用的 What I did good 和 Areas for Improvement 扁平化 JSON 数组。
+强制大模型【必须且只能基于用户在对抗环节的真实口语转录文字进行精确引用（Quote）】，保持雅思 5.5 - 6.0 的地道简明英语：
+
+👍 What I did good (正面反馈规范句式)
+- "[Thesis Defense] Directness & Tact: When the professor challenged your sample size, you used a strong 'Yes-Response' by saying: '[插入用户交互原话]'. You acknowledged the concern gracefully before building your defense."
+- "[Case Pitch] Conclusion First: Excellent corporate delivery. Your very first sentence gave a clear stance: '[插入用户首句原话]', followed immediately by a solid logic pillar. This kept the investors engaged."
+- "[Class Presentation] Illustrative Support: Instead of giving a dry explanation, you immediately jumped into a specific example when you said: '[插入用户讲故事原话]', which made your answer highly memorable."
+
+⚠️ Areas for Improvement (反面反馈与手把手教学样例)
+- "[Thesis Defense] Question Dodging detected: When asked about methodology limitations, you dodged the question and gave background padding instead. You said: '[插入用户绕弯子的原话]'."
+  👉 How to fix: Address the flaw directly. Say this instead: "That is a critical point. While our controlled cohort has limitations, our statistical power analysis indicates..."
+- "[Case Pitch] Low Pathos & Monotone: Your response to the market competition question was purely filled with Logos (raw data). You spoke at a flat pace: '[插入用户无感情机械念稿的原话]'."
+  👉 How to fix: Inject a real customer success story to build an emotional connection. Say this instead: "To illustrate this, one of our beta users recently reported a 40% cost reduction by using..."
+- "[Class Presentation] Information Overload: Your answer was a bit unstructured and lacked the 'Rule of Three'. You listed too many random points when you said: '[插入用户散乱叙述的原话]'."
+  👉 How to fix: Structure your impromptu answer into three clear buckets. Say this instead: "To answer your question, there are three distinct pillars we need to look at: first..."
+
+请立刻执行代码重构与前后端通信的管道焊接，确保在不破坏现有演讲演练打分的前提下，完美上线这套具备常春藤、麦肯锡和卡耐基理论支撑的即兴沟通质检引擎！

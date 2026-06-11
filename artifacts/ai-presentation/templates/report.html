@@ -38,6 +38,16 @@
   .pillar-fluency   { background:#fce7f3; color:#be185d; }
   .pillar-relevance { background:#cffafe; color:#0e7490; }
   .pillar-delivery  { background:#fef3c7; color:#92400e; }
+  /* CQ section */
+  .cq-dim-bar { background:linear-gradient(90deg,#3b82f6,#60a5fa); border-radius:9999px;
+                transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+  .cq-fix-header { padding:.75rem 1rem; background:#eff6ff; border-bottom:1px solid #bfdbfe; }
+  .cq-fix-item   { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.75rem; overflow:hidden; }
+  .cq-good-item  { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem;
+                   background:#f0fdf6; border:1px solid #bbf7d0; border-radius:.625rem; }
+  .cq-tag { display:inline-block; font-size:.6rem; font-weight:700; letter-spacing:.06em;
+            text-transform:uppercase; padding:.15rem .45rem; border-radius:.25rem;
+            margin-right:.35rem; background:#dbeafe; color:#1d4ed8; }
 </style>
 {% endblock %}
 
@@ -316,6 +326,173 @@
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════════════════════════════════
+       COMMUNICATION QUALITY (CQ) SECTION
+       Scene-targeted evaluation of Q&A and interrupt exchanges.
+       Incremental addition — PQ section above is NOT modified.
+       ══════════════════════════════════════════════════════════════════════ -->
+  {% set cq = evaluation.communication_quality if evaluation.communication_quality is defined else None %}
+  {% if cq and cq.has_data %}
+  <div class="relative z-10 mb-8">
+
+    <!-- Section header -->
+    <h2 class="text-sm font-semibold text-[#0F172A] mb-5 flex items-center gap-2">
+      <svg class="w-4 h-4" style="color:#3b82f6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+      </svg>
+      Communication Quality — {{ cq.scene_label }}
+      <span class="ml-1 text-xs font-mono px-2 py-0.5 rounded-full border"
+            style="color:#3b82f6;background:#eff6ff;border-color:#bfdbfe">
+        {{ cq.exchange_count }} Q&amp;A exchange{{ 's' if cq.exchange_count != 1 }}
+      </span>
+      {% if evaluation.ai_powered %}
+      <span class="text-xs font-mono px-2 py-0.5 rounded-full border"
+            style="color:#047857;background:#E6F4EA;border-color:#bbf7d0">AI-Powered</span>
+      {% endif %}
+    </h2>
+
+    <!-- CQ Score ring + dimension bars -->
+    <div class="section-card p-5 mb-5">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6">
+
+        <!-- CQ total score ring -->
+        <div class="relative w-20 h-20 flex-shrink-0">
+          <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="3.5"/>
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#3b82f6" stroke-width="3.5"
+                    stroke-dasharray="{{ cq.cq_total }} {{ 100 - cq.cq_total }}"
+                    stroke-linecap="round"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-lg font-bold text-[#0F172A]">{{ cq.cq_total }}</span>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">CQ Overall</p>
+          <p class="text-3xl font-bold text-[#0F172A]">{{ cq.cq_total }}<span class="text-gray-500 text-xl">/100</span></p>
+          <p class="text-xs text-slate-500 mt-1">Evaluated from {{ cq.exchange_count }} Q&amp;A exchange{{ 's' if cq.exchange_count != 1 }}</p>
+        </div>
+
+        <!-- Scene + theory badges -->
+        <div class="sm:ml-auto flex flex-wrap gap-2">
+          {% if cq.scene_slug == 'thesis_defense' %}
+          <span class="text-xs px-2 py-1 rounded-full border font-mono" style="color:#6d28d9;background:#ede9fe;border-color:#c4b5fd">📚 Directness · Evidence · Tact</span>
+          {% elif cq.scene_slug == 'case_pitch' %}
+          <span class="text-xs px-2 py-1 rounded-full border font-mono" style="color:#0e7490;background:#cffafe;border-color:#a5f3fc">🏦 Pyramid · Aristotle · Presence</span>
+          {% else %}
+          <span class="text-xs px-2 py-1 rounded-full border font-mono" style="color:#047857;background:#E6F4EA;border-color:#bbf7d0">🎓 Rule of 3 · TED · Carnegie</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Dimension score bars -->
+      {% set cq_bar_colors = ['#3b82f6', '#059669', '#f59e0b'] %}
+      {% set cq_dim_list = cq.dim_names if cq.dim_names else [] %}
+      {% for dn in cq_dim_list %}
+        {% set dc = cq.cq_scores.get(dn, 0) %}
+        {% set dcolor = cq_bar_colors[loop.index0] if loop.index0 < 3 else '#6366f1' %}
+        {% if dc >= 85 %}{% set dtag = 'Excellent' %}
+        {% elif dc >= 70 %}{% set dtag = 'Good' %}
+        {% elif dc >= 55 %}{% set dtag = 'Developing' %}
+        {% else %}{% set dtag = 'Needs Work' %}{% endif %}
+        <div class="mb-3 last:mb-0">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs font-semibold" style="color:{{ dcolor }}">{{ dn }}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-500">{{ dtag }}</span>
+              <span class="text-sm font-bold text-[#0F172A]">{{ dc }}<span class="text-xs font-normal text-slate-400">/100</span></span>
+            </div>
+          </div>
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div class="h-full rounded-full cq-dim-bar-anim"
+                 style="width:0%;background:{{ dcolor }};transition:width 1.2s cubic-bezier(.4,0,.2,1)"
+                 data-target="{{ dc }}%"></div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- CQ Feedback: two-column layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+      <!-- What I did good (CQ) -->
+      <div class="section-card p-5">
+        <div class="flex items-center gap-2 mb-4">
+          <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+          </svg>
+          <h3 class="text-sm font-semibold text-[#0F172A]">👍 CQ: What I did good</h3>
+        </div>
+        <div class="space-y-2.5">
+          {% for item in cq.what_i_did_good %}
+          <div class="cq-good-item">
+            <svg class="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-slate-600 text-sm leading-relaxed">
+              <span class="cq-tag">CQ</span>{{ item }}
+            </p>
+          </div>
+          {% else %}
+          <p class="text-slate-400 text-sm">No positive CQ items recorded for this session.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- CQ Coaching Points (areas for improvement) -->
+      <div class="section-card p-5">
+        <div class="flex items-center gap-2 mb-4">
+          <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          <h3 class="text-sm font-semibold text-[#0F172A]">🎯 CQ Coaching Points</h3>
+        </div>
+        <div class="space-y-3">
+          {% for item in cq.areas_for_improvement %}
+          {% set cq_issue = item.issue if item.issue is string else '' %}
+          {% set cq_dim   = item.dimension if item.dimension is defined and item.dimension else 'CQ' %}
+          <div class="cq-fix-item">
+            <div class="cq-fix-header">
+              <div class="flex items-start gap-2">
+                <span class="text-blue-500 text-sm flex-shrink-0 mt-0.5">🎯</span>
+                <p class="text-blue-900 text-sm font-semibold leading-snug">
+                  <span class="cq-tag">{{ cq_dim }}</span>{{ cq_issue }}
+                </p>
+              </div>
+            </div>
+            <div class="fix-body">
+              <div>
+                <p class="fix-label text-blue-400 mb-1">Example from your Q&amp;A</p>
+                <p class="text-slate-500 text-xs leading-relaxed italic">{{ item.example }}</p>
+              </div>
+              <div>
+                <p class="fix-label text-green-500 mb-1">👉 How to fix</p>
+                {% set cq_fix = item.how_to_fix if item.how_to_fix is string else '' %}
+                {% if 'Say this instead:' in cq_fix %}
+                  {% set cq_fix_parts = cq_fix.split('Say this instead:', 1) %}
+                  <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ cq_fix_parts[0] }}</p>
+                  <div class="say-instead">
+                    <p class="text-green-700 text-xs leading-relaxed font-medium">
+                      <span class="say-instead-arrow">→</span>Say this instead:{{ cq_fix_parts[1] }}
+                    </p>
+                  </div>
+                {% else %}
+                  <p class="text-slate-700 text-xs leading-relaxed">{{ cq_fix }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <p class="text-slate-400 text-sm">No coaching points recorded for this session.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Training Plan -->
   <div class="relative z-10 section-card p-6 mb-8">
     <div class="flex items-center gap-3 mb-5">
@@ -469,10 +646,15 @@
     }
   });
 
-  // ── Score bar animations ───────────────────────────────────────────────────
+  // ── PQ Score bar animations ────────────────────────────────────────────────
   setTimeout(() => {
     document.querySelectorAll('.score-bar[data-target]').forEach(b => { b.style.width = b.dataset.target; });
   }, 300);
+
+  // ── CQ dimension bar animations ────────────────────────────────────────────
+  setTimeout(() => {
+    document.querySelectorAll('.cq-dim-bar-anim[data-target]').forEach(b => { b.style.width = b.dataset.target; });
+  }, 600);
 
   // ── Pitch chart (rendered when Delivery modal opens) ───────────────────────
   let pitchChartInst = null;

@@ -680,6 +680,17 @@
           qa_chat_history:          qaChatHistory,
           slide_logic_tree:         slides,
           total_time_seconds:       timerSeconds,
+          scene: ({
+            'Thesis Defense':       'thesis_defense',
+            'MBA Case Pitch':       'case_pitch',
+            'Class Presentation':   'class_presentation',
+            'Academic Presentation':'thesis_defense',
+          })[scenarioType] || 'thesis_defense',
+          audience: ({
+            'Professor':  'professor',
+            'Classmates': 'classmate',
+            'VC':         'vc',
+          })[audienceRole] || 'professor',
         }),
       });
       clearTimeout(abortTimer);

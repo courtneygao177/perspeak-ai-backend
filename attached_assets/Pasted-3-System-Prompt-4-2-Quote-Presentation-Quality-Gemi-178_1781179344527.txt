@@ -1,0 +1,18 @@
+3. 【大模型 System Prompt 增强：4×2 矩阵点评与精准 Quote 约束】
+请更新最终报告生成的提示词配置文件。在 Presentation Quality 分析之后，命令 Gemini 1.5 Pro 针对 Communication Quality 部分输出专用的 What I did good 和 Areas for Improvement 扁平化 JSON 数组。
+强制大模型【必须且只能基于用户在对抗环节的真实口语转录文字进行精确引用（Quote）】，保持雅思 5.5 - 6.0 的地道简明英语：
+
+👍 What I did good (正面反馈规范句式)
+- "[Thesis Defense] Directness & Tact: When the professor challenged your sample size, you used a strong 'Yes-Response' by saying: '[插入用户交互原话]'. You acknowledged the concern gracefully before building your defense."
+- "[Case Pitch] Conclusion First: Excellent corporate delivery. Your very first sentence gave a clear stance: '[插入用户首句原话]', followed immediately by a solid logic pillar. This kept the investors engaged."
+- "[Class Presentation] Illustrative Support: Instead of giving a dry explanation, you immediately jumped into a specific example when you said: '[插入用户讲故事原话]', which made your answer highly memorable."
+
+⚠️ Areas for Improvement (反面反馈与手把手教学样例)
+- "[Thesis Defense] Question Dodging detected: When asked about methodology limitations, you dodged the question and gave background padding instead. You said: '[插入用户绕弯子的原话]'."
+  👉 How to fix: Address the flaw directly. Say this instead: "That is a critical point. While our controlled cohort has limitations, our statistical power analysis indicates..."
+- "[Case Pitch] Low Pathos & Monotone: Your response to the market competition question was purely filled with Logos (raw data). You spoke at a flat pace: '[插入用户无感情机械念稿的原话]'."
+  👉 How to fix: Inject a real customer success story to build an emotional connection. Say this instead: "To illustrate this, one of our beta users recently reported a 40% cost reduction by using..."
+- "[Class Presentation] Information Overload: Your answer was a bit unstructured and lacked the 'Rule of Three'. You listed too many random points when you said: '[插入用户散乱叙述的原话]'."
+  👉 How to fix: Structure your impromptu answer into three clear buckets. Say this instead: "To answer your question, there are three distinct pillars we need to look at: first..."
+
+请立刻执行代码重构与前后端通信的管道焊接，确保在不破坏现有演讲演练打分的前提下，完美上线这套具备常春藤、麦肯锡和卡耐基理论支撑的即兴沟通质检引擎！

@@ -655,6 +655,506 @@ def build_class_presentation_qa(audience, difficulty):
     return combined
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# COMMUNICATION QUALITY (CQ) ENGINE
+# Scene-targeted evaluation of Q&A and interrupt exchanges only.
+# Three scene branches: thesis_defense / case_pitch / class_presentation
+# Each branch has 3 weighted sub-dimensions totalling 100 pts.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _cq_heuristic_thesis_defense(qa_texts):
+    """Branch A: Thesis Defense — returns (directness, defensibility, tact) 0-100."""
+    all_text = " ".join(qa_texts).lower()
+
+    YES_RESP_RE = (
+        r'\b(that is (?:a )?(?:valid|fair|good|important)|you(?:\'?re| are) right|'
+        r'i (?:agree|see your point)|good point|fair point|that\'s a (?:valid|fair|good))\b'
+    )
+    DIRECT_OPEN_RE = (
+        r'^(?:yes|no|the answer is|our approach|we (?:believe|found|show|demonstrated|used)|'
+        r'i (?:believe|argue|found|conducted)|the (?:key|main|central|critical)|'
+        r'in short|to answer|our (?:study|research|data|method)|the (?:result|finding))'
+    )
+    BG_PADDING_RE = (
+        r'^(?:as (?:i mentioned|we discussed)|to (?:give|provide) (?:some )?context|'
+        r'in (?:our|the) (?:study|research|paper)|the (?:study|research|paper) (?:investigated|examined))'
+    )
+
+    directness = 55
+    for txt in qa_texts:
+        first = txt.strip()[:180].lower()
+        if re.search(DIRECT_OPEN_RE, first):
+            directness = min(100, directness + 15)
+        if re.search(BG_PADDING_RE, first):
+            directness = max(0, directness - 15)
+
+    DATA_RE = (
+        r'\b(?:\d+(?:\.\d+)?%|\d[\d,]*\s*(?:participants|cases|subjects|samples|years)|'
+        r'p\s*[<>=]\s*0\.\d+|statistically|significant(?:ly)?|evidence|empirical|'
+        r'validated|finding|result|literature|citation|coefficient|regression|n\s*=\s*\d+)\b'
+    )
+    SUBJ_RE = r'\b(?:very|really|quite|somewhat|rather|pretty|fairly|maybe|perhaps|probably|i feel|in my opinion)\b'
+    data_hits = len(re.findall(DATA_RE, all_text))
+    subj_hits = len(re.findall(SUBJ_RE, all_text))
+
+    if   data_hits >= 5: defensibility = 92
+    elif data_hits >= 3: defensibility = 78
+    elif data_hits >= 1: defensibility = 60
+    else:                defensibility = 40
+    if subj_hits > data_hits + 2:
+        defensibility = max(0, defensibility - 15)
+
+    tact_hits  = len(re.findall(YES_RESP_RE, all_text))
+    DIPLO_RE = (
+        r'\b(?:i (?:can see|understand) (?:your|why)|while (?:you|that|this) (?:raise|point|note)|'
+        r'building on (?:that|your)|that is (?:indeed|certainly) a|you raise a (?:valid|good|fair))\b'
+    )
+    diplo_hits = len(re.findall(DIPLO_RE, all_text))
+    if   tact_hits >= 2 or diplo_hits >= 2: tact = 92
+    elif tact_hits >= 1 or diplo_hits >= 1: tact = 74
+    else:                                   tact = 44
+
+    return directness, defensibility, tact
+
+
+def _cq_heuristic_case_pitch(qa_texts, total_qa_seconds=0):
+    """Branch B: MBA Case Pitch — returns (conclusion_first, persuasion_mix, command_presence)."""
+    all_text = " ".join(qa_texts).lower()
+
+    ANS_FIRST_RE = (
+        r'^(?:yes[,.!]|no[,.!]|we (?:are|can|do|will|have|plan)|'
+        r'the (?:answer|key|solution|bottom line) is|our (?:approach|strategy|model|product)|'
+        r'i (?:recommend|propose|believe)|absolutely|definitely|the market)'
+    )
+    LOGIC_RE = r'\b(?:because|the reason (?:is|being)|due to|driven by|which means|the rationale|specifically)\b'
+
+    con_scores = []
+    for txt in qa_texts:
+        first = txt.strip()[:200].lower().lstrip()
+        has_af = bool(re.search(ANS_FIRST_RE, first))
+        has_l  = bool(re.search(LOGIC_RE, first))
+        if   has_af and has_l: con_scores.append(95)
+        elif has_af:           con_scores.append(75)
+        elif has_l:            con_scores.append(60)
+        else:                  con_scores.append(40)
+    conclusion_first = int(sum(con_scores) / len(con_scores)) if con_scores else 50
+
+    LOGOS_RE = (
+        r'\b(?:\d+(?:\.\d+)?%|\$[\d,]+|[\d,]+\s*(?:users|customers|revenue|million|billion)|'
+        r'metric|kpi|roi|growth|retention|churn|arpu|ltv|cac)\b'
+    )
+    ETHOS_RE = (
+        r'\b(?:we(?:\'ve| have) (?:built|launched|deployed|partnered|validated)|our team|'
+        r'years of experience|track record|we (?:work with|serve|partner)|our (?:portfolio|clients))\b'
+    )
+    PATHOS_RE = (
+        r'\b(?:imagine|picture|story|one of our (?:users|customers)|a (?:user|customer|client) '
+        r'(?:told|said|shared)|real (?:example|case)|transform|empower|struggling|pain|challenge)\b'
+    )
+    logos  = len(re.findall(LOGOS_RE,  all_text))
+    ethos  = len(re.findall(ETHOS_RE,  all_text))
+    pathos = len(re.findall(PATHOS_RE, all_text))
+
+    if   logos > 0 and ethos > 0 and pathos > 0:  persuasion_mix = 90
+    elif logos > 0 and (ethos > 0 or pathos > 0): persuasion_mix = 74
+    elif logos > 3 and pathos == 0:               persuasion_mix = 52
+    elif (logos + ethos + pathos) == 0:           persuasion_mix = 38
+    else:                                          persuasion_mix = 62
+
+    HEDGE_RE   = r'\b(?:maybe|perhaps|possibly|i think it might|i\'m not sure but|i guess)\b'
+    hedge_hits = len(re.findall(HEDGE_RE, all_text))
+    total_qa_words = sum(len(t.split()) for t in qa_texts)
+    if total_qa_seconds > 30 and total_qa_words > 10:
+        qa_wpm = round(total_qa_words / (total_qa_seconds / 60))
+        if   160 <= qa_wpm <= 190:   command = 95
+        elif 140 <= qa_wpm <= 220:   command = 76
+        elif qa_wpm > 220:           command = 52
+        else:                        command = 60
+    else:
+        command = 72 - min(20, hedge_hits * 8)
+
+    return conclusion_first, persuasion_mix, max(0, command)
+
+
+def _cq_heuristic_class_presentation(qa_texts):
+    """Branch C: Class Presentation — returns (rule_of_three, conv_sense, illustrative_support)."""
+    all_text = " ".join(qa_texts).lower()
+
+    ORDINAL_RE    = r'\b(?:first(?:ly)?[,\s]|second(?:ly)?[,\s]|third(?:ly)?[,\s]|firstly|secondly|thirdly|number one|number two|number three)\b'
+    THREE_FRAME_RE = r'\b(?:three (?:things|points|key|reasons|aspects|ways|parts)|3 (?:things|points|key))\b'
+    ord_hits   = len(re.findall(ORDINAL_RE,    all_text))
+    frame_hits = len(re.findall(THREE_FRAME_RE, all_text))
+
+    if   frame_hits >= 1 and ord_hits >= 3: rule_of_three = 95
+    elif ord_hits >= 3:                     rule_of_three = 80
+    elif ord_hits >= 2:                     rule_of_three = 65
+    elif ord_hits >= 1:                     rule_of_three = 50
+    else:                                   rule_of_three = 35
+
+    ORAL_RE = (
+        r'\b(?:you know|think about|imagine|right\?|the thing is|what i mean is|'
+        r'for example|in other words|actually|let me explain|you see|it\'s like)\b'
+    )
+    SCRIPT_RE = r'\b(?:furthermore|nevertheless|in conclusion|to summarize|accordingly|thus|hence|moreover)\b'
+    oral_hits   = len(re.findall(ORAL_RE,   all_text))
+    script_hits = len(re.findall(SCRIPT_RE, all_text))
+
+    if   oral_hits >= 4 and script_hits <= 2: conv_sense = 90
+    elif oral_hits >= 2:                      conv_sense = 74
+    elif oral_hits >= 1:                      conv_sense = 60
+    elif script_hits >= 3:                    conv_sense = 38
+    else:                                     conv_sense = 50
+
+    EXAMPLE_RE = (
+        r'\b(?:for example|for instance|such as|like when|one (?:example|case|time|instance)|'
+        r'i (?:remember|recall|once saw)|when i (?:was|worked|studied|saw)|'
+        r'a (?:friend|colleague|classmate|professor|student) (?:told|said|shared))\b'
+    )
+    FIVE_W_RE = (
+        r'\b(?:in (?:china|the us|beijing|shanghai|london|new york|tokyo)|'
+        r'at (?:harvard|stanford|mit|oxford|cambridge|our university)|'
+        r'last (?:year|month|week|semester)|professor \w+)\b'
+    )
+    ex_hits     = len(re.findall(EXAMPLE_RE, all_text))
+    five_w_hits = len(re.findall(FIVE_W_RE,  all_text))
+
+    if   ex_hits >= 2 and five_w_hits >= 1: illustrative = 92
+    elif ex_hits >= 2:                      illustrative = 78
+    elif ex_hits >= 1:                      illustrative = 62
+    else:                                   illustrative = 38
+
+    return rule_of_three, conv_sense, illustrative
+
+
+def _cq_no_data_result(scene_slug):
+    """Return placeholder when no Q&A transcripts exist."""
+    _labels = {
+        "thesis_defense":    "Thesis Defense",
+        "case_pitch":        "Case Pitch",
+        "class_presentation":"Class Presentation",
+    }
+    return {
+        "has_data":              False,
+        "scene_slug":            scene_slug,
+        "scene_label":           _labels.get(scene_slug, "Communication"),
+        "cq_total":              0,
+        "cq_scores":             {},
+        "dim_names":             [],
+        "weights":               [],
+        "what_i_did_good":       [],
+        "areas_for_improvement": [],
+        "exchange_count":        0,
+    }
+
+
+def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names, exchange_count=0):
+    """Fallback mock when AI is unavailable or errors out."""
+    _labels = {
+        "thesis_defense":    "Thesis Defense",
+        "case_pitch":        "Case Pitch",
+        "class_presentation":"Class Presentation",
+    }
+    scene_label = _labels.get(scene_slug, "Communication")
+    return {
+        "has_data":     True,
+        "scene_slug":   scene_slug,
+        "scene_label":  scene_label,
+        "cq_total":     cq_total,
+        "cq_scores":    heuristic_scores,
+        "dim_names":    dim_names,
+        "weights":      [],
+        "what_i_did_good": [
+            f"[{scene_label}] {dim_names[0]}: Your Q&A responses showed engagement with the examiner's questions.",
+            f"[{scene_label}] {dim_names[1]}: You attempted to address all questions in the Q&A session.",
+            f"[{scene_label}] {dim_names[2]}: You completed the communication exchange successfully.",
+        ],
+        "areas_for_improvement": [
+            {"dimension": dim_names[0], "issue": f"[{scene_label}] {dim_names[0]}: Enable AI mode for specific quote-based feedback.", "example": "AI evaluation is needed for personalized analysis.", "how_to_fix": "Practice structured responses and review your Q&A exchanges."},
+            {"dimension": dim_names[1], "issue": f"[{scene_label}] {dim_names[1]}: This dimension needs targeted practice.", "example": "AI evaluation is needed for personalized analysis.", "how_to_fix": "Focus on evidence-based, balanced communication in your next session."},
+            {"dimension": dim_names[2], "issue": f"[{scene_label}] {dim_names[2]}: Continue developing this communication skill.", "example": "AI evaluation is needed for personalized analysis.", "how_to_fix": "Practice natural dialogue flow and structured responses in Q&A."},
+        ],
+        "exchange_count": exchange_count,
+    }
+
+
+def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
+                                          scene_slug=None, total_qa_seconds=0):
+    """
+    Communication Quality (CQ) evaluation engine.
+    Evaluates ONLY Q&A + interrupt exchanges — NOT the presentation narration.
+    Returns a CQ result dict with 3 scene-specific dimension scores + Gemini feedback.
+    """
+    audience   = config.get("audience",   "Professor")
+    difficulty = config.get("difficulty", "Medium")
+    scenario   = config.get("scenario",   "Academic Presentation")
+
+    if not scene_slug:
+        _slug_map = {
+            "Thesis Defense":       "thesis_defense",
+            "MBA Case Pitch":       "case_pitch",
+            "Class Presentation":   "class_presentation",
+            "Academic Presentation":"thesis_defense",
+        }
+        scene_slug = _slug_map.get(scenario, "thesis_defense")
+
+    _labels = {
+        "thesis_defense":    "Thesis Defense",
+        "case_pitch":        "Case Pitch",
+        "class_presentation":"Class Presentation",
+    }
+    scene_label = _labels.get(scene_slug, "Communication")
+
+    # ── Collect Q&A exchange transcripts ──────────────────────────────────────
+    comm_transcripts = []
+    if fe_qa_history:
+        ai_qs   = [h for h in fe_qa_history if h.get("role") == "ai"]
+        user_as = [h for h in fe_qa_history if h.get("role") == "user"]
+        for i, ua in enumerate(user_as):
+            ai_q = ai_qs[i]["text"] if i < len(ai_qs) else ""
+            comm_transcripts.append({
+                "question": ai_q,
+                "answer":   ua.get("text", ""),
+                "type":     ua.get("type", "qa_answer"),
+            })
+    else:
+        for a in qa_answers:
+            if a.get("type") in ("qa_answer", "academic_qa"):
+                comm_transcripts.append({
+                    "question": a.get("question", ""),
+                    "answer":   a.get("text", ""),
+                    "type":     a.get("type", ""),
+                })
+
+    if not comm_transcripts or all(not t["answer"].strip() for t in comm_transcripts):
+        app.logger.info("[CQ] No Q&A transcript data — returning no_data placeholder.")
+        return _cq_no_data_result(scene_slug)
+
+    qa_texts       = [t["answer"].strip() for t in comm_transcripts if t["answer"].strip()]
+    exchange_count = len(comm_transcripts)
+
+    # ── Python heuristic pre-scoring ──────────────────────────────────────────
+    if scene_slug == "thesis_defense":
+        s1, s2, s3 = _cq_heuristic_thesis_defense(qa_texts)
+        dim_names   = ["Directness", "Defensibility", "Tact"]
+        weights     = [0.40, 0.40, 0.20]
+    elif scene_slug == "case_pitch":
+        s1, s2, s3 = _cq_heuristic_case_pitch(qa_texts, total_qa_seconds)
+        dim_names   = ["Conclusion First", "Persuasion Mix", "Command Presence"]
+        weights     = [0.40, 0.30, 0.30]
+    else:  # class_presentation
+        s1, s2, s3 = _cq_heuristic_class_presentation(qa_texts)
+        dim_names   = ["Rule of Three", "Conversational Sense", "Illustrative Support"]
+        weights     = [0.40, 0.30, 0.30]
+
+    heuristic_scores      = {dim_names[0]: int(s1), dim_names[1]: int(s2), dim_names[2]: int(s3)}
+    cq_total_heuristic    = int(round(s1 * weights[0] + s2 * weights[1] + s3 * weights[2]))
+
+    if not AI_ENABLED:
+        return _cq_mock_result(scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count)
+
+    # ── Format exchanges for prompt ───────────────────────────────────────────
+    exchanges_text = "\n\n".join(
+        f"Q{i+1} [{t.get('type','qa')}]: {t['question']}\nA{i+1}: {t['answer']}"
+        for i, t in enumerate(comm_transcripts) if t["answer"].strip()
+    ) or "(No Q&A answers recorded)"
+
+    # ── Scene-specific rubric + feedback template strings ─────────────────────
+    if scene_slug == "thesis_defense":
+        rubric_text = (
+            "RUBRIC — THESIS DEFENSE (0-100 each)\n\n"
+            f"DIM 1 — {dim_names[0]} (weight 40%)\n"
+            "90-100: First sentence directly addresses the challenge. Strong verbs (We found / The data shows). No dodging.\n"
+            "70-89:  Mostly direct but 1 filler sentence before the real answer.\n"
+            "50-69:  Opens with 2+ background sentences before addressing the question.\n"
+            "0-49:   Consistently avoids question — background padding instead of stance.\n"
+            "PENALTY: 2 consecutive background sentences = Question Dodging (−15 pts).\n\n"
+            f"DIM 2 — {dim_names[1]} (weight 40%)\n"
+            "90-100: Objective evidence — numbers, percentages, p-values, literature citations.\n"
+            "70-89:  Mostly evidence-based, some unsupported assertions.\n"
+            "50-69:  Primarily subjective language (I think / very / quite).\n"
+            "0-49:   All subjective adjectives, no quantitative defense.\n\n"
+            f"DIM 3 — {dim_names[2]} (weight 20%)\n"
+            "90-100: Carnegie Yes-Response before every rebuttal (That is a valid concern...).\n"
+            "70-89:  Acknowledgment in some responses.\n"
+            "50-69:  Neutral — neither diplomatic nor combative.\n"
+            "0-49:   Directly contradicts without any acknowledgment.\n\n"
+            f"HEURISTIC ANCHORS (adjust ±15 based on actual text):\n"
+            f"- {dim_names[0]}: {s1}/100\n"
+            f"- {dim_names[1]}: {s2}/100\n"
+            f"- {dim_names[2]}: {s3}/100"
+        )
+        good_templates = (
+            "what_i_did_good — EXACTLY 3 strings, one per dimension:\n"
+            f'1. "[Thesis Defense] {dim_names[0]} & {dim_names[2]}: When the examiner challenged [topic], you used a strong Yes-Response: \'[EXACT QUOTE from A1/A2/A3]\'. You acknowledged the concern gracefully before building your defense."\n'
+            f'2. "[Thesis Defense] {dim_names[1]}: You backed your claim with hard evidence: \'[EXACT QUOTE with data/stats/citation]\'. This showed scientific rigor."\n'
+            f'3. "[Thesis Defense] {dim_names[2]}: You bridged tension by saying: \'[EXACT QUOTE showing consensus-building]\'. Carnegie Yes-Response technique at its best."\n\n'
+            "areas_for_improvement — EXACTLY 3 objects:\n"
+            f'1. dimension="{dim_names[0]}", issue="[Thesis Defense] Question Dodging: When asked about [topic], you gave background padding instead of a direct stance. You said: \'[EXACT dodgy opening words]\'.", '
+            f'how_to_fix="Address the flaw directly. Say this instead: \'That is a critical point. While [limitation], our [evidence] indicates [direct answer]...\'"\n'
+            f'2. dimension="{dim_names[1]}", issue="[Thesis Defense] Low Persuasiveness: Your response relied on subjective language with no evidence. You said: \'[EXACT subjective quote]\'.", '
+            f'how_to_fix="Inject a hard fact. Say this instead: \'Our data shows [number/%/p-value] which indicates [conclusion]...\'"\n'
+            f'3. dimension="{dim_names[2]}", issue="[Thesis Defense] Blunt Rebuttal: You responded without acknowledging the concern. You said: \'[EXACT blunt opener]\'.", '
+            f'how_to_fix="Open with a Yes-Response. Say this instead: \'That is a valid concern. However, our [evidence] shows [answer]...\'"\n'
+        )
+
+    elif scene_slug == "case_pitch":
+        rubric_text = (
+            "RUBRIC — MBA CASE PITCH / VENTURE PITCH (0-100 each)\n\n"
+            f"DIM 1 — {dim_names[0]} (weight 40%)\n"
+            "McKinsey Pyramid Principle: Answer → Reason → Evidence.\n"
+            "90-100: Starts with a clear stance (Yes/No/We believe). Second sentence uses a logic pillar (Because / The reason is).\n"
+            "70-89:  Usually answers first, occasionally buries the lede.\n"
+            "50-69:  Leads with context before the answer.\n"
+            "0-49:   Builds to the conclusion — VC loses interest.\n"
+            "PENALTY: First sentence is context with no directional stance → −15 pts.\n\n"
+            f"DIM 2 — {dim_names[1]} (weight 30%)\n"
+            "Aristotle: Ethos (credibility) + Logos (data/metrics) + Pathos (customer story/pain).\n"
+            "90-100: All three present.\n70-89: Two of three.\n50-69: Only one — e.g., all data, no story.\n0-49: No persuasion elements.\n\n"
+            f"DIM 3 — {dim_names[2]} (weight 30%)\n"
+            "90-100: Measured, confident responses. No excessive hedging (maybe/perhaps/I think it might).\n"
+            "70-89:  Mostly authoritative, small hedges.\n50-69: Frequent hedges, hesitant language.\n0-49: Rambling or incoherent under challenge.\n\n"
+            f"HEURISTIC ANCHORS:\n"
+            f"- {dim_names[0]}: {s1}/100\n"
+            f"- {dim_names[1]}: {s2}/100\n"
+            f"- {dim_names[2]}: {s3}/100"
+        )
+        good_templates = (
+            "what_i_did_good — EXACTLY 3 strings:\n"
+            f'1. "[Case Pitch] {dim_names[0]}: Your first sentence gave a clear stance: \'[EXACT first sentence from A1/A2]\', followed by a solid logic pillar. This kept investors engaged."\n'
+            f'2. "[Case Pitch] {dim_names[1]}: You balanced data and story. You cited \'[EXACT logos quote]\' then humanized it with \'[EXACT pathos quote]\'. Aristotle\'s triangle in action."\n'
+            f'3. "[Case Pitch] {dim_names[2]}: When challenged, you held your ground: \'[EXACT confident quote]\'. No hedging, no panic — exactly what VCs respect."\n\n'
+            "areas_for_improvement — EXACTLY 3 objects:\n"
+            f'1. dimension="{dim_names[0]}", issue="[Case Pitch] No Pyramid Structure: When asked about [topic], you gave context before your stance. You said: \'[EXACT bottom-up opening]\'.", '
+            f'how_to_fix="Lead with your stance. Say this instead: \'Yes, we can [answer]. The reason is [logic pillar]. Here\'s the evidence: [data]\'"\n'
+            f'2. dimension="{dim_names[1]}", issue="[Case Pitch] Low Pathos: Your response was purely Logos — raw data with no human story. You said: \'[EXACT data-only quote]\'.", '
+            f'how_to_fix="Inject a customer story. Say this instead: \'To illustrate, one of our beta users recently [specific outcome with 5-W detail]...\'"\n'
+            f'3. dimension="{dim_names[2]}", issue="[Case Pitch] Hedging Under Pressure: When challenged, your language showed uncertainty. You said: \'[EXACT hedging quote with maybe/perhaps]\'.", '
+            f'how_to_fix="Replace hedges with confident assertions. Say this instead: \'[Same idea restated without hedges and with a decisive tone]\'"\n'
+        )
+
+    else:  # class_presentation
+        rubric_text = (
+            "RUBRIC — CLASS PRESENTATION Q&A (0-100 each)\n\n"
+            f"DIM 1 — {dim_names[0]} (weight 40%)\n"
+            "90-100: Explicitly structures into 3 named buckets (there are three things: first...second...third).\n"
+            "70-89:  Uses sequential markers (First / Then / Finally) without declaring the 3-point frame.\n"
+            "50-69:  One or two ordinal markers, otherwise unstructured.\n"
+            "0-49:   Stream of consciousness. No discernible structure.\n\n"
+            f"DIM 2 — {dim_names[1]} (weight 30%)\n"
+            "90-100: Natural conversation, not recited script. Uses oral markers (You know / Think about it / The thing is).\n"
+            "70-89:  Some conversational elements.\n50-69: Mixed natural and scripted.\n0-49: Reads like a paper. Formal academic language only.\n\n"
+            f"DIM 3 — {dim_names[2]} (weight 30%)\n"
+            "Carnegie: Jump immediately into a 5-W example (Who, What, When, Where, Why/Outcome).\n"
+            "90-100: Concrete example with specific details (name, place, year, outcome).\n"
+            "70-89:  Examples provided but lack 5-W specificity.\n50-69: Generic ('a company might...'). 0-49: No examples — pure abstract concept.\n\n"
+            f"HEURISTIC ANCHORS:\n"
+            f"- {dim_names[0]}: {s1}/100\n"
+            f"- {dim_names[1]}: {s2}/100\n"
+            f"- {dim_names[2]}: {s3}/100"
+        )
+        good_templates = (
+            "what_i_did_good — EXACTLY 3 strings:\n"
+            f'1. "[Class Presentation] {dim_names[0]}: Instead of listing random points, you organized your answer into clear buckets: \'[EXACT ordinal structure quote from A1/A2/A3]\'. This made your answer memorable."\n'
+            f'2. "[Class Presentation] {dim_names[1]}: You avoided robotic script-reading and engaged naturally: \'[EXACT oral language quote]\'. This dialogue style built audience connection."\n'
+            f'3. "[Class Presentation] {dim_names[2]}: Instead of a dry explanation, you jumped into a specific example: \'[EXACT example quote with 5-W detail]\'. This made your answer vivid and unforgettable."\n\n'
+            "areas_for_improvement — EXACTLY 3 objects:\n"
+            f'1. dimension="{dim_names[0]}", issue="[Class Presentation] Information Overload: Your answer was unstructured. You listed random points when you said: \'[EXACT scattered answer quote]\'.", '
+            f'how_to_fix="Structure into three buckets. Say this instead: \'To answer your question, there are three key things: first, [point 1]; second, [point 2]; and third, [point 3].\'"\n'
+            f'2. dimension="{dim_names[1]}", issue="[Class Presentation] Mechanical Recitation: Your response sounded like reading from a paper. You said: \'[EXACT scripted/formal quote]\' — no natural markers.", '
+            f'how_to_fix="Inject oral dialogue markers. Say this instead: \'[Same idea with You know / Think about it / The thing is as opener]\'"\n'
+            f'3. dimension="{dim_names[2]}", issue="[Class Presentation] No Specific Example: You gave a conceptual explanation with no real-world example. You said: \'[EXACT abstract quote]\'.", '
+            f'how_to_fix="Jump into a 5-W example. Say this instead: \'Let me give you a concrete example: [who] did [what] in [when/where], and the result was [outcome].\'"\n'
+        )
+
+    # ── Compose Gemini prompt ─────────────────────────────────────────────────
+    w0p = int(weights[0] * 100)
+    w1p = int(weights[1] * 100)
+    w2p = int(weights[2] * 100)
+
+    cq_prompt = (
+        f"You are an expert Communication Quality (CQ) coach for {scene_label} scenarios. "
+        f"Evaluate ONLY the Q&A exchange transcripts below — NOT the presentation narration.\n\n"
+        f"Audience: {audience} | Difficulty: {difficulty} | Scene: {scene_label}\n\n"
+        "══════════════════════════════════════════════\n"
+        f"{rubric_text}\n\n"
+        "══════════════════════════════════════════════\n"
+        "Q&A EXCHANGE TRANSCRIPTS (evaluate ONLY these)\n"
+        "══════════════════════════════════════════════\n"
+        f"{exchanges_text}\n\n"
+        "══════════════════════════════════════════════\n"
+        "OUTPUT RULES\n"
+        "══════════════════════════════════════════════\n"
+        "RULE 1: IELTS 5.5-6.0 vocabulary. Short, clear sentences for non-native speakers.\n"
+        "RULE 2 (MOST IMPORTANT): Every item MUST quote EXACT words from A1/A2/A3 above. NEVER invent quotes.\n"
+        "RULE 3: EXACTLY 3 items each in what_i_did_good and areas_for_improvement.\n"
+        f"RULE 4 — TEMPLATES:\n{good_templates}\n"
+        "RULE 5: Use heuristic anchors as starting points. Adjust ±15 max based on actual text.\n\n"
+        "Return ONLY valid JSON. No markdown fences. No text outside JSON.\n\n"
+        "{\n"
+        f'  "cq_scores": {{"{dim_names[0]}": <int 0-100>, "{dim_names[1]}": <int 0-100>, "{dim_names[2]}": <int 0-100>}},\n'
+        f'  "cq_total": <int 0-100, weighted {dim_names[0]}x{w0p}% + {dim_names[1]}x{w1p}% + {dim_names[2]}x{w2p}%>,\n'
+        '  "what_i_did_good": [\n'
+        f'    "[{scene_label}] {dim_names[0]}: ...",\n'
+        f'    "[{scene_label}] {dim_names[1]}: ...",\n'
+        f'    "[{scene_label}] {dim_names[2]}: ..."\n'
+        '  ],\n'
+        '  "areas_for_improvement": [\n'
+        f'    {{"dimension": "{dim_names[0]}", "issue": "...", "example": "You said: \'...\'", "how_to_fix": "Say this instead: \'...\'"}},\n'
+        f'    {{"dimension": "{dim_names[1]}", "issue": "...", "example": "You said: \'...\'", "how_to_fix": "Say this instead: \'...\'"}},\n'
+        f'    {{"dimension": "{dim_names[2]}", "issue": "...", "example": "You said: \'...\'", "how_to_fix": "Say this instead: \'...\'"}}\n'
+        '  ]\n'
+        '}'
+    )
+
+    app.logger.info(
+        f"[CQ EVAL] scene={scene_slug} | qa_exchanges={exchange_count} | "
+        f"qa_words={sum(len(t.split()) for t in qa_texts)} | anchors={heuristic_scores}"
+    )
+
+    try:
+        response = _ai_client.chat.completions.create(
+            model=EVAL_MODEL,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": cq_prompt}],
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$",          "", raw)
+        result = json.loads(raw)
+
+        # Normalize scores
+        raw_cq = result.get("cq_scores", {})
+        result["cq_scores"] = {k: int(min(100, max(0, float(v)))) for k, v in raw_cq.items()}
+        if not result["cq_scores"]:
+            result["cq_scores"] = heuristic_scores
+
+        # Recompute CQ total from normalised scores
+        vals     = [result["cq_scores"].get(d, 60) for d in dim_names]
+        ai_total = result.get("cq_total", 0)
+        result["cq_total"] = (
+            int(ai_total) if 0 < ai_total <= 100
+            else int(round(sum(v * w for v, w in zip(vals, weights))))
+        )
+
+        if not result.get("what_i_did_good"):
+            result["what_i_did_good"] = [f"[{scene_label}] Communication recorded."]
+        if not result.get("areas_for_improvement"):
+            result["areas_for_improvement"] = []
+
+        result["has_data"]       = True
+        result["scene_slug"]     = scene_slug
+        result["scene_label"]    = scene_label
+        result["dim_names"]      = dim_names
+        result["weights"]        = weights
+        result["exchange_count"] = exchange_count
+        return result
+
+    except Exception as e:
+        app.logger.error(f"[CQ EVAL ERROR] {type(e).__name__}: {str(e)[:300]}")
+        traceback.print_exc()
+        return _cq_mock_result(scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count)
+
+
 # ─────────────────────────────────────────────
 def _generate_pitch_data(delivery_score, wpm=0):
     """Return 20 simulated pitch values (Hz) for the Delivery chart.
@@ -1996,6 +2496,7 @@ def api_finish_presentation():
     fe_transcripts     = req_data.get("presentation_transcripts", [])   # [{page,text,words}]
     fe_qa_history      = req_data.get("qa_chat_history", [])            # [{role,text,type}]
     total_time_seconds = int(req_data.get("total_time_seconds", 0) or 0)
+    scene_slug         = req_data.get("scene",    None)                  # 'thesis_defense' | 'case_pitch' | 'class_presentation'
 
     # Merge frontend transcripts into session answers (fill gaps from voice/type)
     if fe_transcripts:
@@ -2035,7 +2536,7 @@ def api_finish_presentation():
         )
         session["qa_bank"] = qa_bank
 
-    # Step 8: 4-Pillar evaluation (with real transcript metrics)
+    # Step 8: 4-Pillar Presentation Quality evaluation
     pillar_eval = run_pillar_evaluation(
         slides, answers, config, challenge_seed,
         fe_qa_history=fe_qa_history,
@@ -2044,17 +2545,32 @@ def api_finish_presentation():
 
     challenge_type = challenge_seed.get("challenge_type", "General")
 
+    # Step 8b: Communication Quality (CQ) evaluation — Q&A exchanges only
+    cq_eval = run_communication_quality_evaluation(
+        qa_answers=answers,
+        config=config,
+        fe_qa_history=fe_qa_history,
+        scene_slug=scene_slug,
+        total_qa_seconds=total_time_seconds,
+    )
+    app.logger.info(
+        f"[CQ] scene={cq_eval.get('scene_slug')} | "
+        f"has_data={cq_eval.get('has_data')} | "
+        f"cq_total={cq_eval.get('cq_total')}"
+    )
+
     # Step 9: Training plan
     training_plan = generate_training_plan(pillar_eval, config, challenge_type)
 
     evaluation = {
-        "pillar":         pillar_eval,
-        "training_plan":  training_plan,
-        "scenario":       scenario,
-        "audience":       config.get("audience",   "Professor"),
-        "difficulty":     config.get("difficulty", "Medium"),
-        "challenge_type": challenge_type,
-        "ai_powered":     AI_ENABLED,
+        "pillar":                pillar_eval,
+        "communication_quality": cq_eval,
+        "training_plan":         training_plan,
+        "scenario":              scenario,
+        "audience":              config.get("audience",   "Professor"),
+        "difficulty":            config.get("difficulty", "Medium"),
+        "challenge_type":        challenge_type,
+        "ai_powered":            AI_ENABLED,
     }
 
     # ── Persist large blobs to disk; store only UUID key in cookie ────────────
