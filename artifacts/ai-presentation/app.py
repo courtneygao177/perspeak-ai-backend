@@ -983,33 +983,165 @@ def _cq_no_data_result(scene_slug):
     }
 
 
-def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names, exchange_count=0):
-    """Fallback mock when AI is unavailable or errors out."""
+def _repair_truncated_json(raw):
+    """
+    Attempt to close a Gemini response truncated mid-JSON.
+    Returns parsed dict or None.
+    """
+    chunk = raw.strip()
+    # Walk character by character tracking string/depth state
+    in_string   = False
+    escape_next = False
+    depth_brace   = 0
+    depth_bracket = 0
+    last_safe_pos = 0          # position of last safely-closed top-level value
+
+    for i, c in enumerate(chunk):
+        if escape_next:
+            escape_next = False
+            continue
+        if c == "\\" and in_string:
+            escape_next = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            continue
+        if not in_string:
+            if   c == '{': depth_brace   += 1
+            elif c == '}': depth_brace   -= 1
+            elif c == '[': depth_bracket += 1
+            elif c == ']': depth_bracket -= 1
+            if depth_brace == 1 and depth_bracket == 0:
+                last_safe_pos = i
+
+    # If we're mid-string, truncate to last safe position
+    if in_string and last_safe_pos > 0:
+        chunk = chunk[:last_safe_pos + 1]
+        # recount after truncation
+        depth_brace   = chunk.count('{') - chunk.count('}')
+        depth_bracket = chunk.count('[') - chunk.count(']')
+
+    # Strip trailing commas before we add closing tokens
+    chunk = re.sub(r',\s*$', '', chunk.rstrip())
+
+    # Add missing closing tokens
+    chunk += ']' * max(0, depth_bracket) + '}' * max(0, depth_brace)
+
+    try:
+        return json.loads(chunk)
+    except Exception:
+        return None
+
+
+def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
+                    exchange_count=0, ai_scores=None):
+    """
+    Score-aware, scene-specific heuristic fallback.
+    Used when Gemini is unavailable or returns corrupted JSON.
+    Generates coaching text calibrated to the Python heuristic anchor scores —
+    NOT generic placeholder strings.
+    """
     _labels = {
         "thesis_defense":    "Thesis Defense",
         "case_pitch":        "Case Pitch",
         "class_presentation":"Class Presentation",
     }
     scene_label = _labels.get(scene_slug, "Communication")
+
+    # Use AI-recovered scores when available (partial JSON repair), else heuristic
+    scores_to_use = ai_scores if ai_scores else heuristic_scores
+    scores        = [scores_to_use.get(d, 60) for d in dim_names]
+
+    # ── Scene coaching tables (dim, high_praise, low_issue, how_to_fix) ───────
+    COACHING = {
+        "thesis_defense": [
+            ("Directness",
+             "You opened with a clear directional stance, addressing the examiner's challenge without unnecessary preamble — a key viva skill.",
+             "Your response built too much background before stating your position. In a viva, your stance should appear in sentence 1 or 2.",
+             "Lead immediately with your claim. Say this instead: 'My research demonstrates [X]. The evidence for this is [specific data].'"),
+            ("Defensibility",
+             "You grounded your answers in concrete evidence — citing data, statistics, or prior literature — which significantly strengthened your defense.",
+             "Your answers relied on general reasoning without hard evidence. Academic examiners expect specific data to back every claim.",
+             "Anchor each answer in a number. Say this instead: 'Our n=[X] sample showed p<0.05 significance, confirming [conclusion].'"),
+            ("Tact",
+             "You handled challenges diplomatically — acknowledging the examiner's concern before building your rebuttal. Carnegie's Yes-Response at its best.",
+             "You moved straight to rebuttal without first finding common ground. Carnegie's Yes-Response builds rapport before you defend.",
+             "Open with agreement. Say this instead: 'That is a valid concern. I can see why you raise this — however, our data shows [answer].'"),
+        ],
+        "case_pitch": [
+            ("Conclusion First",
+             "You led with a clear verdict before the supporting argument — exactly the McKinsey Pyramid Principle that VCs expect.",
+             "You built context before your conclusion. VCs lose attention within 10 seconds — your stance must come in sentence 1.",
+             "Lead with your answer. Say this instead: 'Yes, [direct verdict]. The reason is [one key driver]. Here is the evidence: [metric].'"),
+            ("Persuasion Mix",
+             "Your response balanced credibility (Ethos), data (Logos), and a customer story (Pathos) — Aristotle's full rhetorical triangle.",
+             "Your response leaned too heavily on data (Logos) without a customer story (Pathos) or credibility signal (Ethos).",
+             "Add a human story. Say this instead: 'One of our beta customers saw a [X%] improvement in [outcome] after [timeframe].'"),
+            ("Command Presence",
+             "You maintained confident, authoritative language throughout the challenge — no hedging, no approval-seeking.",
+             "Your language showed uncertainty under pressure — words like 'maybe', 'I think', 'perhaps'. VCs read hedges as lack of conviction.",
+             "Replace hedges with assertions. Say this instead: '[The answer] is [X]. We know this because [data]. There is no ambiguity.'"),
+        ],
+        "class_presentation": [
+            ("Rule of Three",
+             "You organized your Q&A response into three clear buckets, making your answer easy to follow and memorable for the audience.",
+             "Your answer listed points without a three-part frame. The Rule of Three helps audiences retain your core message beyond the session.",
+             "Structure into three. Say this instead: 'There are three key things: first, [X]; second, [Y]; and third, [Z].'"),
+            ("Conversational Sense",
+             "Your Q&A responses felt like natural expanded conversation rather than scripted recitation — oral connectors and natural pacing throughout.",
+             "Your responses sounded formal or scripted. TED speakers speak like conversationalists, not academic presenters.",
+             "Add dialogue markers. Say this instead: 'Think about it this way — [your core point]. The key insight is [idea].'"),
+            ("Illustrative Support",
+             "You backed your points with a specific real-world example including concrete who/when/where details — bringing the idea vividly to life.",
+             "You gave conceptual explanations without a 5-W specific example. Carnegie teaches that 'tell me a story' always beats abstract reasoning.",
+             "Jump into a 5-W example. Say this instead: 'Let me give you a real case: in [year], [who] at [place] did [what], with result [outcome].'"),
+        ],
+    }
+
+    coaching = COACHING.get(scene_slug, COACHING["thesis_defense"])
+    # Pad if dim_names is shorter than coaching table
+    while len(dim_names) < len(coaching):
+        dim_names.append(coaching[len(dim_names)][0])
+
+    what_i_did_good = []
+    areas_for_improvement = []
+
+    for i, (dim, high_praise, low_issue, fix_phrase) in enumerate(coaching):
+        sc  = scores[i] if i < len(scores) else 60
+        dim_label = dim_names[i] if i < len(dim_names) else dim
+
+        if sc >= 70:
+            what_i_did_good.append(
+                f"[{scene_label}] {dim_label} ({sc}/100): {high_praise}"
+            )
+            areas_for_improvement.append({
+                "dimension": dim_label,
+                "issue":     f"[{scene_label}] {dim_label}: Good foundation at {sc}/100. Continue refining to push above 85.",
+                "example":   f"Heuristic score: {sc}/100.",
+                "how_to_fix": "Keep applying the same technique. Focus on even sharper phrasing in your next session.",
+            })
+        else:
+            what_i_did_good.append(
+                f"[{scene_label}] {dim_label} ({sc}/100): You attempted this dimension. With focused practice, your score can improve significantly."
+            )
+            areas_for_improvement.append({
+                "dimension": dim_label,
+                "issue":     f"[{scene_label}] {low_issue}",
+                "example":   f"Heuristic score: {sc}/100. Run a full AI-evaluated session to get verbatim quote feedback.",
+                "how_to_fix": fix_phrase,
+            })
+
     return {
-        "has_data":     True,
-        "scene_slug":   scene_slug,
-        "scene_label":  scene_label,
-        "cq_total":     cq_total,
-        "cq_scores":    heuristic_scores,
-        "dim_names":    dim_names,
-        "weights":      [],
-        "what_i_did_good": [
-            f"[{scene_label}] {dim_names[0]}: Your Q&A responses showed engagement with the examiner's questions.",
-            f"[{scene_label}] {dim_names[1]}: You attempted to address all questions in the Q&A session.",
-            f"[{scene_label}] {dim_names[2]}: You completed the communication exchange successfully.",
-        ],
-        "areas_for_improvement": [
-            {"dimension": dim_names[0], "issue": f"[{scene_label}] {dim_names[0]}: Enable AI mode for specific quote-based feedback.", "example": "AI evaluation is needed for personalized analysis.", "how_to_fix": "Practice structured responses and review your Q&A exchanges."},
-            {"dimension": dim_names[1], "issue": f"[{scene_label}] {dim_names[1]}: This dimension needs targeted practice.", "example": "AI evaluation is needed for personalized analysis.", "how_to_fix": "Focus on evidence-based, balanced communication in your next session."},
-            {"dimension": dim_names[2], "issue": f"[{scene_label}] {dim_names[2]}: Continue developing this communication skill.", "example": "AI evaluation is needed for personalized analysis.", "how_to_fix": "Practice natural dialogue flow and structured responses in Q&A."},
-        ],
-        "exchange_count": exchange_count,
+        "has_data":             True,
+        "scene_slug":           scene_slug,
+        "scene_label":          scene_label,
+        "cq_total":             cq_total,
+        "cq_scores":            scores_to_use,
+        "dim_names":            dim_names,
+        "weights":              [],
+        "what_i_did_good":      what_i_did_good,
+        "areas_for_improvement": areas_for_improvement,
+        "exchange_count":       exchange_count,
     }
 
 
@@ -1041,25 +1173,50 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     scene_label = _labels.get(scene_slug, "Communication")
 
     # ── Collect Q&A exchange transcripts ──────────────────────────────────────
-    comm_transcripts = []
+    # Build from frontend history (interrupt + academic Q&A captured in JS)
+    fe_transcripts = []
     if fe_qa_history:
         ai_qs   = [h for h in fe_qa_history if h.get("role") == "ai"]
         user_as = [h for h in fe_qa_history if h.get("role") == "user"]
         for i, ua in enumerate(user_as):
             ai_q = ai_qs[i]["text"] if i < len(ai_qs) else ""
-            comm_transcripts.append({
+            fe_transcripts.append({
                 "question": ai_q,
                 "answer":   ua.get("text", ""),
                 "type":     ua.get("type", "qa_answer"),
             })
+
+    # Build from session answers (server-side Q&A records from submit-answer /
+    # submit-academic-qa routes — may have richer text than the frontend capture)
+    session_transcripts = []
+    for a in qa_answers:
+        if a.get("type") in ("qa_answer", "academic_qa"):
+            session_transcripts.append({
+                "question": a.get("question", ""),
+                "answer":   a.get("text", ""),
+                "type":     a.get("type", ""),
+            })
+
+    # Use whichever source has more substantive text content
+    fe_words   = sum(len(t["answer"].split()) for t in fe_transcripts)
+    sess_words = sum(len(t["answer"].split()) for t in session_transcripts)
+    app.logger.info(
+        f"[CQ SRC] fe_exchanges={len(fe_transcripts)} fe_words={fe_words} | "
+        f"sess_exchanges={len(session_transcripts)} sess_words={sess_words}"
+    )
+
+    if sess_words > fe_words:
+        comm_transcripts = [t for t in session_transcripts if t["answer"].strip()]
     else:
-        for a in qa_answers:
-            if a.get("type") in ("qa_answer", "academic_qa"):
-                comm_transcripts.append({
-                    "question": a.get("question", ""),
-                    "answer":   a.get("text", ""),
-                    "type":     a.get("type", ""),
-                })
+        comm_transcripts = [t for t in fe_transcripts if t["answer"].strip()]
+
+    # Merge any session entries the frontend didn't capture
+    fe_answers_set = {t["answer"].strip() for t in fe_transcripts}
+    for t in session_transcripts:
+        ans = t["answer"].strip()
+        if ans and ans not in fe_answers_set:
+            comm_transcripts.append(t)
+            fe_answers_set.add(ans)
 
     if not comm_transcripts or all(not t["answer"].strip() for t in comm_transcripts):
         app.logger.info("[CQ] No Q&A transcript data — returning no_data placeholder.")
@@ -1293,6 +1450,48 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         result["weights"]        = weights
         result["exchange_count"] = exchange_count
         return result
+
+    except json.JSONDecodeError as e:
+        app.logger.error(f"[CQ EVAL ERROR] JSONDecodeError: {str(e)[:200]} — attempting JSON repair")
+        # ── JSON repair: Gemini truncated the response mid-string ─────────────
+        try:
+            repaired = _repair_truncated_json(raw)
+            if repaired and isinstance(repaired, dict):
+                app.logger.info("[CQ EVAL] JSON repair succeeded — using recovered partial result")
+                # Normalise whatever scores were recovered
+                raw_cq = repaired.get("cq_scores", {})
+                repaired["cq_scores"] = {
+                    k: int(min(100, max(0, float(v)))) for k, v in raw_cq.items()
+                } if raw_cq else heuristic_scores
+
+                # If good/fix text arrays were truncated away, use score-aware fallback text
+                ai_scores_recovered = repaired["cq_scores"] if repaired["cq_scores"] else None
+                if not repaired.get("what_i_did_good") or not repaired.get("areas_for_improvement"):
+                    fallback = _cq_mock_result(
+                        scene_slug, heuristic_scores, cq_total_heuristic,
+                        dim_names, exchange_count, ai_scores=ai_scores_recovered
+                    )
+                    repaired.setdefault("what_i_did_good",      fallback["what_i_did_good"])
+                    repaired.setdefault("areas_for_improvement", fallback["areas_for_improvement"])
+
+                vals     = [repaired["cq_scores"].get(d, 60) for d in dim_names]
+                ai_total = repaired.get("cq_total", 0)
+                repaired["cq_total"] = (
+                    int(ai_total) if 0 < int(ai_total) <= 100
+                    else int(round(sum(v * w for v, w in zip(vals, weights))))
+                )
+                repaired["has_data"]       = True
+                repaired["scene_slug"]     = scene_slug
+                repaired["scene_label"]    = scene_label
+                repaired["dim_names"]      = dim_names
+                repaired["weights"]        = weights
+                repaired["exchange_count"] = exchange_count
+                return repaired
+        except Exception as repair_err:
+            app.logger.error(f"[CQ EVAL] JSON repair also failed: {repair_err}")
+
+        # All repair attempts exhausted — use score-aware heuristic fallback
+        return _cq_mock_result(scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count)
 
     except Exception as e:
         app.logger.error(f"[CQ EVAL ERROR] {type(e).__name__}: {str(e)[:300]}")
