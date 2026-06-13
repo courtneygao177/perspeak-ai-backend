@@ -1286,10 +1286,10 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
 
     if not scene_slug:
         _slug_map = {
-            "Thesis Defense":       "thesis_defense",
-            "MBA Case Pitch":       "case_pitch",
-            "Class Presentation":   "class_presentation",
-            "Academic Presentation":"thesis_defense",
+            "Thesis Defense":       "thesis_defense",       # THESIS_DEFENSE_CHALLENGE_POOL → Directness/Defensibility/Tact
+            "MBA Case Pitch":       "case_pitch",           # CASE_PITCH_CHALLENGE_POOL → Conclusion First/Persuasion Mix/Command Presence
+            "Class Presentation":   "class_presentation",   # TED_QA_MATRIX (classmate track) → Rule of Three/Conversational/Illustrative
+            "Academic Presentation":"class_presentation",   # TED_QA_MATRIX (professor track) → same TED dimensions, NOT thesis rubric
         }
         scene_slug = _slug_map.get(scenario, "thesis_defense")
 
