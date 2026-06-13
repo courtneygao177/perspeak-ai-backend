@@ -245,29 +245,31 @@ MOCK_QA_BANK = [
 # No random.choice — track is decided by the user-selected audience.
 # ─────────────────────────────────────────────
 TED_QA_MATRIX = {
+    # ── Dimension 1: Twitter Test / Message Map ────────────────────────────────
     "twitter_headline": {
-        "logic": "Tests ability to summarise the core idea in ≤140 characters",
+        "logic": "Tests ability to summarise the core idea in ≤140 characters (Message Map / Twitter Test)",
         "classmate": (
-            "You shared a lot of cool details, but honestly, it's a bit too much to remember. "
+            "You shared a lot of cool details. "
             "If you had to tweet your main point in less than 140 characters right now, what would it be?"
         ),
         "professor": (
             "Your presentation covered various facts, but I want to test your clarity. "
-            "Can you summarise the absolute core message of your research in just one or two simple sentences?"
+            "Can you summarize the absolute core message of your research in just one or two simple sentences?"
         ),
     },
+    # ── Dimension 2: New Knowledge Feeling ────────────────────────────────────
     "novelty_challenge": {
-        "logic": "Tests whether the talk delivers a fresh perspective instead of clichés",
+        "logic": "Tests whether the talk delivers a fresh perspective — new knowledge feeling over Google-level facts",
         "classmate": (
             "To be fair, most of this information can be easily found on Google. "
-            "What is the most surprising or unique thing you shared today that we probably didn't know before?"
+            "What is the most surprising or unexpected insight your project brings to the table?"
         ),
         "professor": (
-            "An effective presentation must deliver original value. "
-            "Apart from standard textbooks and public data, what is the most distinctive or unexpected insight "
-            "your project brings to the table?"
+            "To be fair, most of this information can be easily found on Google. "
+            "What is the most surprising or unexpected insight your project brings to the table?"
         ),
     },
+    # ── Dimension 3: Rule of Three ─────────────────────────────────────────────
     "rule_of_three": {
         "logic": "Tests whether speaker can distil the talk to three memorable chunks",
         "classmate": (
@@ -277,6 +279,42 @@ TED_QA_MATRIX = {
         "professor": (
             "Human working memory is limited, so focus is essential. "
             "If I am grading you based on your three most important arguments, how would you define them right now?"
+        ),
+    },
+    # ── Dimension 4: 5-W Detail Excavation ────────────────────────────────────
+    "five_w_detail": {
+        "logic": "Tests 5-W specificity — WHEN/WHO/WHERE on case studies (Carnegie vivid-example principle)",
+        "classmate": (
+            "About the specific case study you mentioned, could you pinpoint exactly WHEN this happened "
+            "and WHO was involved?"
+        ),
+        "professor": (
+            "About the specific case study you mentioned, could you pinpoint exactly WHEN this happened "
+            "and WHO was involved? Vague examples weaken academic arguments considerably."
+        ),
+    },
+    # ── Dimension 5: Audience Benefit Connection ───────────────────────────────
+    "audience_benefit": {
+        "logic": "Tests whether the speaker connects the topic to the audience's operational benefit",
+        "classmate": (
+            "As an audience, how does this topic relate to us? "
+            "What operational benefits can our classmates get from your proposal?"
+        ),
+        "professor": (
+            "You covered the technical aspects well. But from the audience's perspective, "
+            "what is the tangible, practical benefit of this research to the broader community?"
+        ),
+    },
+    # ── Dimension 6: Consensus Game ────────────────────────────────────────────
+    "consensus_game": {
+        "logic": "Tests diplomatic persuasion — finding common ground before making a case (Carnegie consensus-building)",
+        "classmate": (
+            "I have reservations about your stance. "
+            "Before you convince me, where do you think we can find a common ground?"
+        ),
+        "professor": (
+            "I have reservations about the conclusions you have drawn. "
+            "Before you attempt to convince me further, where do you believe our positions actually agree?"
         ),
     },
 }
@@ -293,6 +331,97 @@ CLASS_PRES_QA_POOL = [
      "category": "Class Presentation", "difficulty": "Medium", "challenge_type": "Clarity"},
     {"id": 14, "question": "If you had one more minute, what extra detail would you add and where?",
      "category": "Class Presentation", "difficulty": "Hard", "challenge_type": "Depth"},
+]
+
+# ─────────────────────────────────────────────
+# THESIS DEFENSE: SCENE-SPECIFIC CHALLENGE POOL
+# Persona locked: Professor (rigorous, high-pressure, academic).
+# Used as fallback for generate_followup_question when AI is off,
+# and as a reference bank for the CQ evaluation engine.
+# ─────────────────────────────────────────────
+THESIS_DEFENSE_CHALLENGE_POOL = [
+    {
+        "id": 201,
+        "question": (
+            "How exactly do you justify your chosen methodology over alternative frameworks, "
+            "and what is your specific contribution to knowledge?"
+        ),
+        "category": "Thesis Defense", "difficulty": "Hard",
+        "challenge_type": "Methodology Weakness", "questioner": "Professor",
+    },
+    {
+        "id": 202,
+        "question": (
+            "Wait, that theoretical model is way too abstract. "
+            "Can you explain the core logic to me without using any academic jargon, "
+            "perhaps using a real-world analogy?"
+        ),
+        "category": "Thesis Defense", "difficulty": "Hard",
+        "challenge_type": "Clarity", "questioner": "Professor",
+    },
+    {
+        "id": 203,
+        "question": (
+            "In hindsight, if you were given a $500,000 grant to do this research all over again, "
+            "what different decisions would you make?"
+        ),
+        "category": "Thesis Defense", "difficulty": "Medium",
+        "challenge_type": "Research Design", "questioner": "Professor",
+    },
+    {
+        "id": 204,
+        "question": (
+            "On the slide where you stated that X leads to Y — "
+            "how can you prove this causal relationship is solid and not just a correlation?"
+        ),
+        "category": "Thesis Defense", "difficulty": "Hard",
+        "challenge_type": "Causality Issue", "questioner": "Professor",
+    },
+]
+
+# ─────────────────────────────────────────────
+# MBA CASE PITCH: SCENE-SPECIFIC CHALLENGE POOL
+# Persona locked: VC / Investor (cold, results-oriented, capital-efficient).
+# Used as fallback for generate_followup_question when AI is off,
+# and as a reference bank for the CQ evaluation engine.
+# ─────────────────────────────────────────────
+CASE_PITCH_CHALLENGE_POOL = [
+    {
+        "id": 301,
+        "question": (
+            "Sorry to interrupt, but imagine we only have 30 seconds left in the elevator. "
+            "Tell me exactly what the top three key drivers of your business model are."
+        ),
+        "category": "Case Pitch", "difficulty": "Hard",
+        "challenge_type": "Clarity", "questioner": "VC",
+    },
+    {
+        "id": 302,
+        "question": (
+            "According to the 80/20 rule, you are spending too much time on minor details. "
+            "What is the minimum necessary facts supporting your core argument?"
+        ),
+        "category": "Case Pitch", "difficulty": "Hard",
+        "challenge_type": "Structure", "questioner": "VC",
+    },
+    {
+        "id": 303,
+        "question": (
+            "I don't care about your idealistic revenue projections. "
+            "Explain the exact parameter settings of your discount rate right now."
+        ),
+        "category": "Case Pitch", "difficulty": "Hard",
+        "challenge_type": "Financial Feasibility", "questioner": "VC",
+    },
+    {
+        "id": 304,
+        "question": (
+            "We have seen dozens of similar startup teams this week. "
+            "Why exactly should we invest in YOU? What makes your team irreplaceable?"
+        ),
+        "category": "Case Pitch", "difficulty": "Hard",
+        "challenge_type": "Team Competence", "questioner": "VC",
+    },
 ]
 
 
@@ -566,8 +695,15 @@ def generate_followup_question(
     """
     if not AI_ENABLED:
         used = [h["content"] for h in chat_history if h["role"] == "assistant"]
-        available = [q for q in MOCK_FOLLOWUP_POOL if q not in used]
-        return random.choice(available) if available else MOCK_FOLLOWUP_POOL[0]
+        # Scene-specific fallback pools for persona fidelity
+        if audience == "VC":
+            pool = [q["question"] for q in CASE_PITCH_CHALLENGE_POOL]
+        elif audience == "Professor":
+            pool = [q["question"] for q in THESIS_DEFENSE_CHALLENGE_POOL]
+        else:
+            pool = list(MOCK_FOLLOWUP_POOL)
+        available = [q for q in pool if q not in used]
+        return random.choice(available) if available else pool[0]
 
     current_slide = next((s for s in slides if s["page"] == current_page), slides[0])
     persona = AUDIENCE_PERSONA.get(audience, AUDIENCE_PERSONA["Professor"])
@@ -984,17 +1120,20 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
             f"- {dim_names[2]}: {s3}/100"
         )
         good_templates = (
-            "what_i_did_good — EXACTLY 3 strings, one per dimension:\n"
-            f'1. "[Thesis Defense] {dim_names[0]} & {dim_names[2]}: When the examiner challenged [topic], you used a strong Yes-Response: \'[EXACT QUOTE from A1/A2/A3]\'. You acknowledged the concern gracefully before building your defense."\n'
-            f'2. "[Thesis Defense] {dim_names[1]}: You backed your claim with hard evidence: \'[EXACT QUOTE with data/stats/citation]\'. This showed scientific rigor."\n'
-            f'3. "[Thesis Defense] {dim_names[2]}: You bridged tension by saying: \'[EXACT QUOTE showing consensus-building]\'. Carnegie Yes-Response technique at its best."\n\n'
-            "areas_for_improvement — EXACTLY 3 objects:\n"
-            f'1. dimension="{dim_names[0]}", issue="[Thesis Defense] Question Dodging: When asked about [topic], you gave background padding instead of a direct stance. You said: \'[EXACT dodgy opening words]\'.", '
-            f'how_to_fix="Address the flaw directly. Say this instead: \'That is a critical point. While [limitation], our [evidence] indicates [direct answer]...\'"\n'
-            f'2. dimension="{dim_names[1]}", issue="[Thesis Defense] Low Persuasiveness: Your response relied on subjective language with no evidence. You said: \'[EXACT subjective quote]\'.", '
-            f'how_to_fix="Inject a hard fact. Say this instead: \'Our data shows [number/%/p-value] which indicates [conclusion]...\'"\n'
-            f'3. dimension="{dim_names[2]}", issue="[Thesis Defense] Blunt Rebuttal: You responded without acknowledging the concern. You said: \'[EXACT blunt opener]\'.", '
-            f'how_to_fix="Open with a Yes-Response. Say this instead: \'That is a valid concern. However, our [evidence] shows [answer]...\'"\n'
+            "what_i_did_good — EXACTLY 3 strings. Insert EXACT words from A1/A2/A3 in every [bracket]:\n"
+            f'1. "[Thesis Defense] Academic Voice & Directness: You used the first person and active voice efficiently, saying: \'[EXACT first-person quote like I found / My research shows / I argue from A1/A2/A3]\'. This projected an independent researcher image."\n'
+            f'2. "[Thesis Defense] Defensibility: You backed your claim with hard evidence when you said: \'[EXACT quote containing data/p-values/citation/n=X from A1/A2/A3]\'. This showed scientific rigor and withstood the examiner\'s scrutiny."\n'
+            f'3. "[Thesis Defense] Directness & Tact — Yes-Response: When challenged, you used a strong Yes-Response by saying: \'[EXACT Carnegie acknowledgment from A1/A2/A3, e.g. That is a valid concern / You raise an important point]\'. You built consensus before defending."\n\n'
+            "areas_for_improvement — EXACTLY 3 objects with keys: dimension, issue, example, how_to_fix:\n"
+            f'1. dimension="{dim_names[0]}", issue="[Thesis Defense] Question Dodging: When asked about methodology limitations, you gave background padding instead of a direct stance.", '
+            f'example="You said: \'[EXACT dodgy opening words from A1/A2/A3 that avoid a direct answer — copy verbatim]\'", '
+            f'how_to_fix="Address the flaw directly. Say this instead: \'That is a critical point. While our cohort has limitations, our statistical power analysis indicates...\'"\n'
+            f'2. dimension="{dim_names[1]}", issue="[Thesis Defense] Low Persuasiveness: Your response relied on subjective language with no hard evidence.", '
+            f'example="You said: \'[EXACT quote using very / I think / quite / somewhat instead of data from A1/A2/A3 — copy verbatim]\'", '
+            f'how_to_fix="Inject one hard fact. Say this instead: \'Our data shows [specific number/%, p-value] which indicates [direct conclusion]...\'"\n'
+            f'3. dimension="{dim_names[2]}", issue="[Thesis Defense] Blunt Rebuttal: You responded to the challenge without acknowledging the examiner\'s concern first.", '
+            f'example="You said: \'[EXACT blunt opener from A1/A2/A3 that jumps straight to rebuttal — copy verbatim]\'", '
+            f'how_to_fix="Open with a Carnegie Yes-Response. Say this instead: \'That is a critical point. I see why you raise this. However, our [evidence] demonstrates...\'"\n'
         )
 
     elif scene_slug == "case_pitch":
@@ -1019,17 +1158,20 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
             f"- {dim_names[2]}: {s3}/100"
         )
         good_templates = (
-            "what_i_did_good — EXACTLY 3 strings:\n"
-            f'1. "[Case Pitch] {dim_names[0]}: Your first sentence gave a clear stance: \'[EXACT first sentence from A1/A2]\', followed by a solid logic pillar. This kept investors engaged."\n'
-            f'2. "[Case Pitch] {dim_names[1]}: You balanced data and story. You cited \'[EXACT logos quote]\' then humanized it with \'[EXACT pathos quote]\'. Aristotle\'s triangle in action."\n'
-            f'3. "[Case Pitch] {dim_names[2]}: When challenged, you held your ground: \'[EXACT confident quote]\'. No hedging, no panic — exactly what VCs respect."\n\n'
-            "areas_for_improvement — EXACTLY 3 objects:\n"
-            f'1. dimension="{dim_names[0]}", issue="[Case Pitch] No Pyramid Structure: When asked about [topic], you gave context before your stance. You said: \'[EXACT bottom-up opening]\'.", '
-            f'how_to_fix="Lead with your stance. Say this instead: \'Yes, we can [answer]. The reason is [logic pillar]. Here\'s the evidence: [data]\'"\n'
-            f'2. dimension="{dim_names[1]}", issue="[Case Pitch] Low Pathos: Your response was purely Logos — raw data with no human story. You said: \'[EXACT data-only quote]\'.", '
-            f'how_to_fix="Inject a customer story. Say this instead: \'To illustrate, one of our beta users recently [specific outcome with 5-W detail]...\'"\n'
-            f'3. dimension="{dim_names[2]}", issue="[Case Pitch] Hedging Under Pressure: When challenged, your language showed uncertainty. You said: \'[EXACT hedging quote with maybe/perhaps]\'.", '
-            f'how_to_fix="Replace hedges with confident assertions. Say this instead: \'[Same idea restated without hedges and with a decisive tone]\'"\n'
+            "what_i_did_good — EXACTLY 3 strings. Insert EXACT words from A1/A2/A3 in every [bracket]:\n"
+            f'1. "[Case Pitch] Conclusion First & Prize Frame: You gave a clear stance and flipped the power dynamics by saying: \'[EXACT first sentence showing directional stance or prize-frame positioning from A1/A2]\'. Excellent corporate delivery."\n'
+            f'2. "[Case Pitch] Persuasion Mix — Ethos + Logos + Pathos: You balanced data and human story. You cited \'[EXACT logos/data quote from A1/A2/A3]\' and humanized it with \'[EXACT pathos/customer-story quote from A1/A2/A3]\'. Aristotle\'s rhetorical triangle in action."\n'
+            f'3. "[Case Pitch] Command Presence: When challenged, you held your ground without hedging. You said: \'[EXACT confident authoritative quote from A1/A2/A3]\'. No maybe, no I think — exactly what VCs respect."\n\n'
+            "areas_for_improvement — EXACTLY 3 objects with keys: dimension, issue, example, how_to_fix:\n"
+            f'1. dimension="{dim_names[0]}", issue="[Case Pitch] No Pyramid Structure: When asked about [topic], you built up to the conclusion instead of leading with your stance.", '
+            f'example="You said: \'[EXACT bottom-up opening that buries the answer at the end from A1/A2/A3 — copy verbatim]\'", '
+            f'how_to_fix="Lead with your stance. Say this instead: \'Yes, [direct answer]. The reason is [one logic pillar]. Here is the evidence: [data point].\'"\n'
+            f'2. dimension="{dim_names[1]}", issue="[Case Pitch] Low Pathos: Your response was purely Logos — raw data with no human story or customer pain point.", '
+            f'example="You said: \'[EXACT data-only quote without any customer story or emotional hook from A1/A2/A3 — copy verbatim]\'", '
+            f'how_to_fix="Inject a real customer success story. Say this instead: \'To illustrate this, one of our beta users recently reported a 40% cost reduction by...\'"\n'
+            f'3. dimension="{dim_names[2]}", issue="[Case Pitch] Hedging Under Pressure: When challenged, your language showed uncertainty or approval-seeking.", '
+            f'example="You said: \'[EXACT hedging quote with maybe/I think/what do you think/is that okay from A1/A2/A3 — copy verbatim]\'", '
+            f'how_to_fix="Replace hedges with confident assertions. Say this instead: \'[Same idea restated with decisive command-presence language — no questions, no qualifiers].\'"\n'
         )
 
     else:  # class_presentation
@@ -1053,17 +1195,20 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
             f"- {dim_names[2]}: {s3}/100"
         )
         good_templates = (
-            "what_i_did_good — EXACTLY 3 strings:\n"
-            f'1. "[Class Presentation] {dim_names[0]}: Instead of listing random points, you organized your answer into clear buckets: \'[EXACT ordinal structure quote from A1/A2/A3]\'. This made your answer memorable."\n'
-            f'2. "[Class Presentation] {dim_names[1]}: You avoided robotic script-reading and engaged naturally: \'[EXACT oral language quote]\'. This dialogue style built audience connection."\n'
-            f'3. "[Class Presentation] {dim_names[2]}: Instead of a dry explanation, you jumped into a specific example: \'[EXACT example quote with 5-W detail]\'. This made your answer vivid and unforgettable."\n\n'
-            "areas_for_improvement — EXACTLY 3 objects:\n"
-            f'1. dimension="{dim_names[0]}", issue="[Class Presentation] Information Overload: Your answer was unstructured. You listed random points when you said: \'[EXACT scattered answer quote]\'.", '
-            f'how_to_fix="Structure into three buckets. Say this instead: \'To answer your question, there are three key things: first, [point 1]; second, [point 2]; and third, [point 3].\'"\n'
-            f'2. dimension="{dim_names[1]}", issue="[Class Presentation] Mechanical Recitation: Your response sounded like reading from a paper. You said: \'[EXACT scripted/formal quote]\' — no natural markers.", '
-            f'how_to_fix="Inject oral dialogue markers. Say this instead: \'[Same idea with You know / Think about it / The thing is as opener]\'"\n'
-            f'3. dimension="{dim_names[2]}", issue="[Class Presentation] No Specific Example: You gave a conceptual explanation with no real-world example. You said: \'[EXACT abstract quote]\'.", '
-            f'how_to_fix="Jump into a 5-W example. Say this instead: \'Let me give you a concrete example: [who] did [what] in [when/where], and the result was [outcome].\'"\n'
+            "what_i_did_good — EXACTLY 3 strings. Insert EXACT words from A1/A2/A3 in every [bracket]:\n"
+            f'1. "[Class Presentation] Rule of Three — Structure: You perfectly limited your core takeaways to three points in your opening, saying: \'[EXACT quote showing explicit 3-point framing from A1/A2/A3 — copy verbatim]\'. This kept your audience focused and prevented information overload."\n'
+            f'2. "[Class Presentation] Conversational Sense — No Script Reading: Instead of reading from a paper, you spoke naturally and said: \'[EXACT oral-marker quote like You know / Think about it / The thing is from A1/A2/A3 — copy verbatim]\'. This gave your answer a TED-style conversational feel."\n'
+            f'3. "[Class Presentation] Illustrative Support — 5-W Example: Instead of giving a dry explanation, you immediately jumped into a specific example when you said: \'[EXACT example quote with 5-W who/when/where detail from A1/A2/A3 — copy verbatim]\'. This made your answer vivid and memorable."\n\n'
+            "areas_for_improvement — EXACTLY 3 objects with keys: dimension, issue, example, how_to_fix:\n"
+            f'1. dimension="{dim_names[0]}", issue="[Class Presentation] Information Overload: Your answer was unstructured — no Rule of Three framing used.", '
+            f'example="You said: \'[EXACT scattered quote without any structure from A1/A2/A3 — copy verbatim]\'", '
+            f'how_to_fix="Structure into three clear buckets. Say this instead: \'To answer your question, there are three key things: first, [point 1]; second, [point 2]; and third, [point 3].\'"\n'
+            f'2. dimension="{dim_names[1]}", issue="[Class Presentation] Script Reading: Your tone sounded like reading from a paper rather than having a conversation.", '
+            f'example="You literally read: \'[EXACT mechanical quote with no natural oral connectors from A1/A2/A3 — copy verbatim]\'", '
+            f'how_to_fix="Speak like a conversation. Say this instead: \'[Same idea rewritten with You know / Think about it / The thing is at the start].\'"\n'
+            f'3. dimension="{dim_names[2]}", issue="[Class Presentation] No Specific Example: You gave a conceptual explanation with no real-world 5-W example.", '
+            f'example="You said: \'[EXACT abstract explanation quote with no specific details from A1/A2/A3 — copy verbatim]\'", '
+            f'how_to_fix="Jump into a 5-W example immediately. Say this instead: \'Let me give you a concrete example: [who] did [what] in [when/where], and the result was [outcome].\'"\n'
         )
 
     # ── Compose Gemini prompt ─────────────────────────────────────────────────

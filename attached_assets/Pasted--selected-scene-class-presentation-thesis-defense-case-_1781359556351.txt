@@ -1,0 +1,23 @@
+【核心铁律】：系统必须严格依据用户在第一步中选择的场景（selected_scene = 'class_presentation' / 'thesis_defense' / 'case_pitch'），激活完全不同的、相互隔离的评价规则、打分机制与问题库。禁止跨场景混杂 Prompt，严禁输出任何 generic placeholder 车轱辘话，必须 100% 动态绑定用户演练的真实音频转录文本（Transcripts）。
+
+请严格按照以下三套独立场景沙盒进行全栈逻辑焊接：
+
+==================================================
+沙盒场景一：class_presentation (课堂演讲场景)
+==================================================
+1. 【Q&A 设问库增量追加】：
+   - 必须读取前端传参 `selected_audience` ('professor' / 'classmate')，彻底取消随机化，锁定以下《Talk Like TED》与卡耐基准则设问：
+   * [Twitter式标题追问] -> if professor: "Your presentation covered various facts, but I want to test your clarity. Can you summarize the absolute core message of your research in just one or two simple sentences?" / if classmate: "You shared a lot of cool details. If you had to tweet your main point in less than 140 characters right now, what would it be?"
+   * [新知感挑战] -> "To be fair, most of this information can be easily found on Google. What is the most surprising or unexpected insight your project brings to the table?"
+   * [5-W细节挖掘] -> "About the specific case study you mentioned, could you pinpoint exactly WHEN this happened and WHO was involved?"
+   * [听众利益关联] -> "As an audience, how does this topic relate to us? What operational benefits can our classmates get from your proposal?"
+   * [共识博弈] -> "I have reservations about your stance. Before you convince me, where do you think we can find a common ground?"
+
+2. 【Presentation Quality 专属规则 (基于《Talk Like TED》&卡耐基)】：
+   - [Structure 25%]：检查全篇 Transcripts 开头或前 3 页内是否明确提出并围绕 3 个核心要点展开（三的法则）。检测是否有 140 字内的 Twitter 式核心主题（消息映射）。
+   - [Fluency 25%]：分析语句连贯性，区分是“扩大的谈话”还是“机械背稿”。100% 复制 PPT 字面且缺乏口语连接词（"Let's dive into"）则扣分。
+   - [Relevance 25%]：图片优势效应（PSE）。单页 PPT 包含大量 Bullet Points 且用户只是在机械朗读，触发 PSE 惩罚，该页得分不超过 70 分。
+   - [Delivery 25%]：TED 黄金对话语速校准为 160 - 190 WPM。分析关键数据前后是否有 1.5-2 秒的“刻意停顿”以创造 Jaw-Dropping Moment。
+
+3. 【Communication Quality 专属规则 (基于卡耐基即兴表达)】：
+   - [无雷达图，扁平化审计]：权重划分为 Rule of Three 三的法则 (40%)、Conversational Sense 谈话感 (30%)、Illustrative Support 实例支撑 (30%，检查是否立即切入包含 5-W 细节的具体个人实例)。

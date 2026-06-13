@@ -41,13 +41,17 @@
   /* CQ section */
   .cq-dim-bar { background:linear-gradient(90deg,#3b82f6,#60a5fa); border-radius:9999px;
                 transition:width 1.2s cubic-bezier(.4,0,.2,1); }
-  .cq-fix-header { padding:.75rem 1rem; background:#eff6ff; border-bottom:1px solid #bfdbfe; }
-  .cq-fix-item   { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.75rem; overflow:hidden; }
+  .cq-fix-header { padding:.75rem 1rem; background:#fffbeb; border-bottom:1px solid #fde68a; }
+  .cq-fix-item   { background:#fafafa; border:1px solid #e2e8f0; border-radius:.75rem; overflow:hidden; }
   .cq-good-item  { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem;
                    background:#f0fdf6; border:1px solid #bbf7d0; border-radius:.625rem; }
   .cq-tag { display:inline-block; font-size:.6rem; font-weight:700; letter-spacing:.06em;
             text-transform:uppercase; padding:.15rem .45rem; border-radius:.25rem;
             margin-right:.35rem; background:#dbeafe; color:#1d4ed8; }
+  .cq-quote-box { background:#fffbeb; border:1px solid #fde68a; border-left:3px solid #f59e0b;
+                  border-radius:.375rem; padding:.5rem .75rem; }
+  .cq-fix-panel { background:#f0fdf4; border:1px solid #bbf7d0; border-left:3px solid #22c55e;
+                  border-radius:.375rem; padding:.5rem .75rem; }
 </style>
 {% endblock %}
 
@@ -453,28 +457,35 @@
           {% for item in cq.areas_for_improvement %}
           {% set cq_issue = item.issue if item.issue is string else '' %}
           {% set cq_dim   = item.dimension if item.dimension is defined and item.dimension else 'CQ' %}
+          {% set cq_fix   = item.how_to_fix if item.how_to_fix is string else '' %}
+          {% set cq_example = item.example if item.example is defined and item.example is string else '' %}
           <div class="cq-fix-item">
+            <!-- ⚠️ Issue header — amber tone -->
             <div class="cq-fix-header">
               <div class="flex items-start gap-2">
-                <span class="text-blue-500 text-sm flex-shrink-0 mt-0.5">🎯</span>
-                <p class="text-blue-900 text-sm font-semibold leading-snug">
-                  <span class="cq-tag">{{ cq_dim }}</span>{{ cq_issue }}
+                <span class="text-amber-500 text-sm flex-shrink-0 mt-0.5">⚠️</span>
+                <p class="text-amber-900 text-sm font-semibold leading-snug">
+                  <span class="cq-tag" style="background:#fef3c7;color:#92400e">{{ cq_dim }}</span>{{ cq_issue }}
                 </p>
               </div>
             </div>
-            <div class="fix-body">
-              <div>
-                <p class="fix-label text-blue-400 mb-1">Example from your Q&amp;A</p>
-                <p class="text-slate-500 text-xs leading-relaxed italic">{{ item.example }}</p>
+            <!-- Body: yellow quote box + green fix panel -->
+            <div class="px-4 pb-4 pt-3 space-y-2">
+              <!-- ⚠️ What you said (amber quote box) -->
+              {% if cq_example %}
+              <div class="cq-quote-box">
+                <p class="text-xs text-amber-700 font-semibold mb-1">⚠️ What you said</p>
+                <p class="text-xs text-amber-900 italic leading-relaxed">{{ cq_example }}</p>
               </div>
-              <div>
-                <p class="fix-label text-green-500 mb-1">👉 How to fix</p>
-                {% set cq_fix = item.how_to_fix if item.how_to_fix is string else '' %}
+              {% endif %}
+              <!-- 👉 How to fix (green coaching panel) -->
+              <div class="cq-fix-panel">
+                <p class="text-xs text-green-700 font-semibold mb-1">👉 How to fix</p>
                 {% if 'Say this instead:' in cq_fix %}
                   {% set cq_fix_parts = cq_fix.split('Say this instead:', 1) %}
                   <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ cq_fix_parts[0] }}</p>
                   <div class="say-instead">
-                    <p class="text-green-700 text-xs leading-relaxed font-medium">
+                    <p class="text-green-800 text-xs leading-relaxed font-medium">
                       <span class="say-instead-arrow">→</span>Say this instead:{{ cq_fix_parts[1] }}
                     </p>
                   </div>
