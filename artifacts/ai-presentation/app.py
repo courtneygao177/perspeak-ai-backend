@@ -1034,7 +1034,8 @@ def _repair_truncated_json(raw):
 
 
 def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
-                    exchange_count=0, ai_scores=None):
+                    exchange_count=0, ai_scores=None,
+                    good_override=None, fix_override=None):
     """
     Score-aware, scene-specific heuristic fallback.
     Used when Gemini is unavailable or returns corrupted JSON.
@@ -1139,10 +1140,137 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
         "cq_scores":            scores_to_use,
         "dim_names":            dim_names,
         "weights":              [],
-        "what_i_did_good":      what_i_did_good,
-        "areas_for_improvement": areas_for_improvement,
+        "what_i_did_good":      good_override  if good_override  else what_i_did_good,
+        "areas_for_improvement": fix_override  if fix_override   else areas_for_improvement,
         "exchange_count":       exchange_count,
     }
+
+
+def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, scores):
+    """
+    Build CQ coaching cards that include the user's ACTUAL words in the
+    'What you said' example field. Used when Gemini text generation fails or
+    is truncated.
+
+    Pattern-matches the real qa_texts against rubric criteria to produce
+    specific (non-generic) feedback rather than filler placeholders.
+    """
+    all_text   = " ".join(qa_texts).strip()
+    text_lower = all_text.lower()
+
+    # Build the verbatim user quote for the 'example' box
+    if all_text:
+        user_quote = f'You said: "{all_text[:180]}{"…" if len(all_text) > 180 else ""}"'
+    else:
+        user_quote = "No Q&A response was recorded for this session."
+
+    # ── Pattern flags from actual user words ─────────────────────────────────
+    has_first_person = any(p in text_lower for p in
+        ["i found", "my research", "i argue", "i believe", "we found",
+         "our study", "i show", "i demonstrate", "my analysis"])
+    has_numbers      = bool(re.search(
+        r'\d+\.?\d*\s*(%|percent|p\s*<|n\s*=|participants|samples)', text_lower))
+    has_yes_resp     = any(p in text_lower for p in
+        ["valid concern", "good point", "you raise", "that's true",
+         "i understand", "i see your", "fair point", "that is a"])
+    has_hedges       = any(p in text_lower for p in
+        ["maybe", "perhaps", "kind of", "sort of", "might be",
+         "i think", "i guess", "not sure"])
+    has_structure    = any(p in text_lower for p in
+        ["first", "second", "third", "firstly", "secondly", "thirdly",
+         "one,", "two,", "three,"])
+    has_example      = any(p in text_lower for p in
+        ["for example", "for instance", "such as", "like when",
+         "in 20", "in 19", "specifically"])
+
+    # ── Scene-specific coaching tables ────────────────────────────────────────
+    COACHING = {
+        "thesis_defense": [
+            (dim_names[0],
+             has_first_person or scores.get(dim_names[0], 60) >= 65,
+             "You used active voice and first-person stance, signalling academic confidence to the examiner.",
+             "Your response built context before stating your position. In a viva, place your stance in sentence 1 or 2.",
+             "Lead immediately with your claim. Say this instead: 'My research demonstrates [X]. The evidence is [specific data].'"),
+            (dim_names[1],
+             has_numbers or scores.get(dim_names[1], 60) >= 65,
+             "You grounded your answers in evidence — data, citations, or quantitative reasoning that held up under scrutiny.",
+             "Your answers relied on general reasoning without hard evidence. Examiners need a number or citation per claim.",
+             "Anchor every answer in a number. Say this instead: 'Our n=[X] sample showed [result], confirmed by [citation].'"),
+            (dim_names[2],
+             has_yes_resp or scores.get(dim_names[2], 60) >= 65,
+             "You showed diplomatic tact — acknowledging the examiner's concern before building your rebuttal.",
+             "You moved to rebuttal without first finding common ground. Carnegie's Yes-Response builds trust before you defend.",
+             "Open with agreement. Say this instead: 'That is a valid concern. Our data also shows [answer].'"),
+        ],
+        "case_pitch": [
+            (dim_names[0],
+             not has_hedges and scores.get(dim_names[0], 60) >= 65,
+             "You led with a clear verdict before the supporting argument — the McKinsey Pyramid structure VCs expect.",
+             "You built context before your conclusion. VCs lose attention in 10 seconds — your stance must come first.",
+             "Lead with your answer. Say this instead: 'Yes, [direct verdict]. The reason: [one key driver].'"),
+            (dim_names[1],
+             (has_numbers or has_example) and scores.get(dim_names[1], 60) >= 65,
+             "Your response mixed credibility, data, and story — Aristotle's full rhetorical triangle applied perfectly.",
+             "Your response leaned on logic without a customer story or credibility signal.",
+             "Add a human story. Say this instead: 'One customer saw [X%] improvement after [timeframe].'"),
+            (dim_names[2],
+             not has_hedges and scores.get(dim_names[2], 60) >= 65,
+             "You held confident, authoritative language throughout — no hedging, no approval-seeking.",
+             "Uncertain language (maybe, I think, perhaps) appeared under pressure. VCs read hedges as lack of conviction.",
+             "Replace hedges with assertions. Say this instead: 'This is [X]. We know because [data].'"),
+        ],
+        "class_presentation": [
+            (dim_names[0],
+             has_structure and scores.get(dim_names[0], 60) >= 65,
+             "You organized your response into three clear buckets — easy to follow and memorable for the audience.",
+             "Your answer listed points without a three-part frame. The Rule of Three improves audience retention.",
+             "Structure into three. Say this instead: 'There are three things: first [X]; second [Y]; third [Z].'"),
+            (dim_names[1],
+             scores.get(dim_names[1], 60) >= 65,
+             "Your responses felt like natural conversation rather than scripted recitation.",
+             "Your responses sounded formal or scripted. TED speakers use expanded conversation, not academic prose.",
+             "Add dialogue markers. Say this instead: 'Think about it this way — [core point]. The key is [insight].'"),
+            (dim_names[2],
+             has_example and scores.get(dim_names[2], 60) >= 65,
+             "You backed points with a specific real-world example including concrete who/when/where details.",
+             "You gave conceptual explanations without a 5-W specific example. Stories always beat abstract reasoning.",
+             "Jump into a 5-W example. Say this instead: 'In [year], [who] at [place] did [what], result: [outcome].'"),
+        ],
+    }
+
+    coaching   = COACHING.get(scene_slug, COACHING["thesis_defense"])
+    score_list = [scores.get(d, 60) for d in dim_names]
+
+    what_i_did_good      = []
+    areas_for_improvement = []
+
+    for i, (dim, is_strong, good_msg, bad_msg, fix) in enumerate(coaching):
+        sc        = score_list[i] if i < len(score_list) else 60
+        dim_label = dim_names[i] if i < len(dim_names) else dim
+
+        if is_strong:
+            what_i_did_good.append(f"[{scene_label}] {dim_label} ({sc}/100): {good_msg}")
+        else:
+            what_i_did_good.append(
+                f"[{scene_label}] {dim_label} ({sc}/100): "
+                "You attempted this dimension. Focused practice will improve your score."
+            )
+
+        areas_for_improvement.append({
+            "dimension": dim_label,
+            "issue": (
+                f"[{scene_label}] {bad_msg}"
+                if sc < 70 else
+                f"[{scene_label}] {dim_label}: Good foundation ({sc}/100). Keep refining."
+            ),
+            "example":    user_quote,   # ← always the user's actual words
+            "how_to_fix": (
+                fix if sc < 70
+                else "Continue applying the same technique. Aim for consistency above 80."
+            ),
+        })
+
+    return what_i_did_good, areas_for_improvement
 
 
 def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
@@ -1170,7 +1298,10 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "case_pitch":        "Case Pitch",
         "class_presentation":"Class Presentation",
     }
-    scene_label = _labels.get(scene_slug, "Communication")
+    # Preserve the user's original scenario name as the display label so that
+    # "Academic Presentation" is NOT relabelled to "Thesis Defense" in the report,
+    # even though both share the same internal rubric slug.
+    scene_label = scenario if scenario else _labels.get(scene_slug, "Communication")
 
     # ── Collect Q&A exchange transcripts ──────────────────────────────────────
     # Build from frontend history (interrupt + academic Q&A captured in JS)
@@ -1464,15 +1595,17 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                     k: int(min(100, max(0, float(v)))) for k, v in raw_cq.items()
                 } if raw_cq else heuristic_scores
 
-                # If good/fix text arrays were truncated away, use score-aware fallback text
+                # If coaching text arrays were truncated away, generate them locally
+                # with the user's ACTUAL qa_texts injected as verbatim quotes.
                 ai_scores_recovered = repaired["cq_scores"] if repaired["cq_scores"] else None
                 if not repaired.get("what_i_did_good") or not repaired.get("areas_for_improvement"):
-                    fallback = _cq_mock_result(
-                        scene_slug, heuristic_scores, cq_total_heuristic,
-                        dim_names, exchange_count, ai_scores=ai_scores_recovered
+                    good_items, fix_items = _build_cq_coaching_cards(
+                        qa_texts,
+                        scene_slug, scene_label, dim_names,
+                        ai_scores_recovered or heuristic_scores,
                     )
-                    repaired.setdefault("what_i_did_good",      fallback["what_i_did_good"])
-                    repaired.setdefault("areas_for_improvement", fallback["areas_for_improvement"])
+                    repaired.setdefault("what_i_did_good",       good_items)
+                    repaired.setdefault("areas_for_improvement",  fix_items)
 
                 vals     = [repaired["cq_scores"].get(d, 60) for d in dim_names]
                 ai_total = repaired.get("cq_total", 0)
@@ -1490,13 +1623,25 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         except Exception as repair_err:
             app.logger.error(f"[CQ EVAL] JSON repair also failed: {repair_err}")
 
-        # All repair attempts exhausted — use score-aware heuristic fallback
-        return _cq_mock_result(scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count)
+        # All repair attempts exhausted — build coaching cards with actual user words
+        good_items, fix_items = _build_cq_coaching_cards(
+            qa_texts, scene_slug, scene_label, dim_names, heuristic_scores
+        )
+        return _cq_mock_result(
+            scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
+            good_override=good_items, fix_override=fix_items,
+        )
 
     except Exception as e:
         app.logger.error(f"[CQ EVAL ERROR] {type(e).__name__}: {str(e)[:300]}")
         traceback.print_exc()
-        return _cq_mock_result(scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count)
+        good_items, fix_items = _build_cq_coaching_cards(
+            qa_texts, scene_slug, scene_label, dim_names, heuristic_scores
+        )
+        return _cq_mock_result(
+            scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
+            good_override=good_items, fix_override=fix_items,
+        )
 
 
 # ─────────────────────────────────────────────
