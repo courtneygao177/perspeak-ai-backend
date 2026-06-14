@@ -1203,6 +1203,102 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
     }
 
 
+def _extract_dimension_quote(qa_texts, dim_slug, max_chars=165):
+    """
+    Extract the 1-2 most relevant sentences from qa_texts for ONE specific CQ dimension.
+
+    Prevents the "same 180-char blob for all 3 cards" bug by scoring each sentence
+    individually against dimension-specific linguistic signals.
+
+    dim_slug values:
+      thesis_defense:     "directness" | "defensibility" | "tact"
+      case_pitch:         "conclusion_first" | "persuasion_mix" | "command_presence"
+      class_presentation: "rule_of_three" | "conversational_sense" | "illustrative_support"
+    """
+    def _sentences(text):
+        parts = re.split(r'(?<=[.!?])\s+', text.strip())
+        return [p.strip() for p in parts if len(p.strip()) > 8]
+
+    # Dimension → positive-signal patterns (high match = more relevant for this dim)
+    _signals = {
+        "rule_of_three": [
+            r'\b(first(?:ly)?|second(?:ly)?|third(?:ly)?)\b',
+            r'\bthere are (three|3)\b',
+            r'\b(one[,\s]|two[,\s]|three[,\s])\b',
+        ],
+        "conversational_sense": [
+            r'\b(you know|think about it|the thing is|imagine|basically|i mean|right\?)\b',
+        ],
+        "illustrative_support": [
+            r'\b(for example|for instance|such as|specifically|like when)\b',
+            r'\bin (20\d\d|19\d\d)\b',
+            r'\b(result was|outcome|who was|at the time)\b',
+        ],
+        "directness": [
+            r'\b(i found|my research|i argue|i believe|i show|i demonstrate|we found|our study|our data)\b',
+            r'^(yes[,\s]|no[,\s])',
+        ],
+        "defensibility": [
+            r'\d+\.?\d*\s*(%|percent)',
+            r'\b(p\s*[<>=]\s*0\.\d+|n\s*=\s*\d+|participants|sample size|citation|reference)\b',
+        ],
+        "tact": [
+            r'\b(valid concern|good point|you raise|that\'s true|i understand|fair point|that is a valid|i agree|i see your point)\b',
+        ],
+        "persuasion_mix": [
+            r'\d+\.?\d*\s*(%|percent|growth|revenue)',
+            r'\b(user|customer|client|story|told us|experienced|felt|reported|bought)\b',
+        ],
+        "command_presence": [
+            r'\b(maybe|perhaps|kind of|sort of|might be|i think|i guess|not sure|possibly)\b',
+        ],
+        # conclusion_first: first sentence of any answer is always the most relevant signal
+        "conclusion_first": None,
+    }
+
+    # conclusion_first: first sentence wins by definition
+    if dim_slug == "conclusion_first":
+        for answer in qa_texts:
+            sents = _sentences(answer)
+            if sents:
+                s = sents[0]
+                return f'You said: "{s[:max_chars]}{"…" if len(s) > max_chars else ""}"'
+        fallback = " ".join(qa_texts).strip()
+        return f'You said: "{fallback[:max_chars]}{"…" if len(fallback) > max_chars else ""}"'
+
+    patterns = _signals.get(dim_slug, [])
+    best_sent  = None
+    best_score = -1
+
+    for answer in qa_texts:
+        for sent in _sentences(answer):
+            score = 0
+            sent_l = sent.lower()
+            for pat in (patterns or []):
+                score += len(re.findall(pat, sent_l, re.IGNORECASE))
+            # Slight preference for medium-length sentences (signal-rich, not too short)
+            wc = len(sent.split())
+            if 6 <= wc <= 45:
+                score += 0.3
+            if score > best_score:
+                best_score = score
+                best_sent  = sent
+
+    if best_sent:
+        q = best_sent[:max_chars] + ("…" if len(best_sent) > max_chars else "")
+        return f'You said: "{q}"'
+
+    # Fallback: first sentence of first non-empty answer
+    for answer in qa_texts:
+        sents = _sentences(answer)
+        if sents:
+            s = sents[0]
+            return f'You said: "{s[:max_chars]}{"…" if len(s) > max_chars else ""}"'
+
+    all_text = " ".join(qa_texts).strip()
+    return f'You said: "{all_text[:max_chars]}{"…" if len(all_text) > max_chars else ""}"'
+
+
 def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, scores):
     """
     Build CQ coaching cards that include the user's ACTUAL words in the
@@ -1214,12 +1310,7 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
     """
     all_text   = " ".join(qa_texts).strip()
     text_lower = all_text.lower()
-
-    # Build the verbatim user quote for the 'example' box
-    if all_text:
-        user_quote = f'You said: "{all_text[:180]}{"…" if len(all_text) > 180 else ""}"'
-    else:
-        user_quote = "No Q&A response was recorded for this session."
+    # user_quote is now extracted per-dimension in the loop via _extract_dimension_quote()
 
     # ── Pattern flags from actual user words ─────────────────────────────────
     has_first_person = any(p in text_lower for p in
@@ -1298,12 +1389,28 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
     coaching   = COACHING.get(scene_slug, COACHING["thesis_defense"])
     score_list = [scores.get(d, 60) for d in dim_names]
 
+    # Map each coaching card index → its dimension slug for targeted quote extraction
+    _dim_slug_map = {
+        "thesis_defense":    ["directness",       "defensibility",    "tact"],
+        "case_pitch":        ["conclusion_first",  "persuasion_mix",   "command_presence"],
+        "class_presentation":["rule_of_three",     "conversational_sense", "illustrative_support"],
+    }
+    dim_slugs = _dim_slug_map.get(scene_slug, ["directness", "defensibility", "tact"])
+
     what_i_did_good      = []
     areas_for_improvement = []
 
     for i, (dim, is_strong, good_msg, bad_msg, fix) in enumerate(coaching):
-        sc        = score_list[i] if i < len(score_list) else 60
-        dim_label = dim_names[i] if i < len(dim_names) else dim
+        sc         = score_list[i] if i < len(score_list) else 60
+        dim_label  = dim_names[i]  if i < len(dim_names)  else dim
+        dim_slug_i = dim_slugs[i]  if i < len(dim_slugs)  else "directness"
+
+        # Per-dimension targeted quote — extracts the 1-2 sentences most
+        # relevant to THIS specific dimension, not the same blob for all 3 cards
+        if qa_texts:
+            per_dim_quote = _extract_dimension_quote(qa_texts, dim_slug_i)
+        else:
+            per_dim_quote = "No Q&A response was recorded for this session."
 
         if is_strong:
             what_i_did_good.append(f"[{scene_label}] {dim_label} ({sc}/100): {good_msg}")
@@ -1320,7 +1427,7 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
                 if sc < 70 else
                 f"[{scene_label}] {dim_label}: Good foundation ({sc}/100). Keep refining."
             ),
-            "example":    user_quote,   # ← always the user's actual words
+            "example":    per_dim_quote,   # ← targeted quote for THIS dimension only
             "how_to_fix": (
                 fix if sc < 70
                 else "Continue applying the same technique. Aim for consistency above 80."
@@ -1434,8 +1541,16 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count)
 
     # ── Format exchanges for prompt ───────────────────────────────────────────
+    # Sentences within each answer are labelled [1] [2] [3]… so the LLM can
+    # pinpoint the exact sentence relevant to each dimension without repeating
+    # the full answer blob across all three example fields.
+    def _label_sentences(text):
+        parts = re.split(r'(?<=[.!?])\s+', text.strip())
+        labeled = [f"[{j+1}] {p.strip()}" for j, p in enumerate(parts) if p.strip()]
+        return " ".join(labeled) if labeled else text
+
     exchanges_text = "\n\n".join(
-        f"Q{i+1} [{t.get('type','qa')}]: {t['question']}\nA{i+1}: {t['answer']}"
+        f"Q{i+1} [{t.get('type','qa')}]: {t['question']}\nA{i+1}: {_label_sentences(t['answer'])}"
         for i, t in enumerate(comm_transcripts) if t["answer"].strip()
     ) or "(No Q&A answers recorded)"
 
@@ -1556,6 +1671,27 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
             f'how_to_fix="Jump into a 5-W example immediately. Say this instead: \'Let me give you a concrete example: [who] did [what] in [when/where], and the result was [outcome].\'"\n'
         )
 
+    # ── Per-dimension signal labels used in RULE 6 ───────────────────────────
+    # Tell the LLM exactly what linguistic signal to look for per dimension,
+    # so each example field targets a different type of evidence.
+    _quote_signal_labels = {
+        "thesis_defense": [
+            "direct stance marker — does the FIRST sentence lead with a claim or dodge with context?",
+            "hard evidence — a number, percentage, p-value, n=X, or literature citation",
+            "tact signal — an acknowledgment phrase (valid concern / fair point) OR a blunt rebuttal opener",
+        ],
+        "case_pitch": [
+            "verdict-first opening — does sentence [1] of any answer lead with Yes/No/We believe?",
+            "persuasion signal — a data metric (% / revenue / users) OR a customer story / emotional hook",
+            "confidence signal — a hedge word (maybe/perhaps/I think/I guess) OR an assertive statement",
+        ],
+        "class_presentation": [
+            "list structure — first / second / third ordinal markers, or total absence of any structure",
+            "oral tone — natural connector (you know / think about it / the thing is) OR scripted/formal phrasing",
+            "concrete example — for example / specifically / in [year] / 5-W who+when+where detail, or total abstraction",
+        ],
+    }
+
     # ── Compose Gemini prompt ─────────────────────────────────────────────────
     w0p = int(weights[0] * 100)
     w1p = int(weights[1] * 100)
@@ -1578,7 +1714,15 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "RULE 2 (MOST IMPORTANT): Every item MUST quote EXACT words from A1/A2/A3 above. NEVER invent quotes.\n"
         "RULE 3: EXACTLY 3 items each in what_i_did_good and areas_for_improvement.\n"
         f"RULE 4 — TEMPLATES:\n{good_templates}\n"
-        "RULE 5: Use heuristic anchors as starting points. Adjust ±15 max based on actual text.\n\n"
+        "RULE 5: Use heuristic anchors as starting points. Adjust ±15 max based on actual text.\n"
+        f"RULE 6 (QUOTE ISOLATION — MANDATORY): Each dimension's \"example\" field MUST use a DIFFERENT sentence fragment.\n"
+        "  Answers are pre-labelled [1] [2] [3]… — use these labels to pick the single most relevant sentence per dimension.\n"
+        "  Do NOT include the [n] labels in your JSON output — copy only the raw sentence text.\n"
+        "  Do NOT paste the same sentence into two different example fields.\n"
+        f"  ▸ {dim_names[0]} example → find the sentence that best reveals [{_quote_signal_labels[scene_slug][0]}]\n"
+        f"  ▸ {dim_names[1]} example → find the sentence that best reveals [{_quote_signal_labels[scene_slug][1]}]\n"
+        f"  ▸ {dim_names[2]} example → find the sentence that best reveals [{_quote_signal_labels[scene_slug][2]}]\n"
+        "  If a dimension's signal is completely absent, quote the nearest relevant fragment and note the absence.\n\n"
         "Return ONLY valid JSON. No markdown fences. No text outside JSON.\n\n"
         "{\n"
         f'  "cq_scores": {{"{dim_names[0]}": <int 0-100>, "{dim_names[1]}": <int 0-100>, "{dim_names[2]}": <int 0-100>}},\n'
