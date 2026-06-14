@@ -353,7 +353,7 @@
   let slides      = {{ slides | tojson }};
   let hasFile     = {{ 'true' if has_file else 'false' }};
   const audienceRole = {{ config.audience | tojson }};   // 'Professor' | 'Classmates' | 'VC'
-  const scenarioType = {{ config.scenario | tojson }};   // 'Class Presentation' | 'Academic Presentation' | …
+  const scenarioType = {{ config.scenario | tojson }};   // 'Class Presentation' | 'Thesis Defense' | 'MBA Case Pitch'
 
   // ── Real data pipeline accumulators ─────────────────────────────────────────
   // These are sent to /x/finish-presentation so Gemini sees actual user speech
@@ -484,7 +484,8 @@
     const avatarWrap = document.getElementById('acqAvatarWrap');
     const labelEl    = document.getElementById('acqQuestionerLabel');
     const subtitleEl = document.getElementById('acqSubtitle');
-    const isClassPres = scenarioType === 'Class Presentation';
+    // backward compat: old sessions may have stored 'Academic Presentation' (renamed to 'Class Presentation')
+    const isClassPres = scenarioType === 'Class Presentation' || scenarioType === 'Academic Presentation';
 
     if (isClassPres && audienceRole === 'Professor') {
       avatarWrap.textContent = '👨‍🏫';
@@ -684,7 +685,7 @@
             'Thesis Defense':       'thesis_defense',
             'MBA Case Pitch':       'case_pitch',
             'Class Presentation':   'class_presentation',
-            'Academic Presentation':'class_presentation',  // TED_QA_MATRIX → same rubric as Class Presentation
+            'Academic Presentation':'class_presentation',  // backward compat: old sessions
           })[scenarioType] || 'class_presentation',
           audience: ({
             'Professor':  'professor',

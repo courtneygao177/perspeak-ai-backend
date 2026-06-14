@@ -605,7 +605,7 @@ def build_master_engine(slides, audience, scenario, difficulty):
     """
     The Master Engine: Claude reads slides + config and returns:
     - challenge_seed (for interruptable scenarios)
-    - static_qa_bank (for Academic Presentation)
+    - static_qa_bank (for Class Presentation)
     Uses the full challenge classification dictionary in the system prompt.
     Falls back to mock data on error.
     """
@@ -621,11 +621,14 @@ def build_master_engine(slides, audience, scenario, difficulty):
         challenge_dict_name = "Academic"
 
     # Build scenario-specific instructions
-    if scenario == "Academic Presentation":
+    if scenario in ("Class Presentation", "Academic Presentation"):
         task_instruction = (
-            "This is an ACADEMIC PRESENTATION (no mid-session interruptions). "
-            "Generate exactly 3 deep, academically rigorous questions that challenge the presentation's "
-            "weakest points. Each question must explicitly name which challenge type it targets. "
+            "This is a CLASS PRESENTATION (no mid-session interruptions). "
+            "The presenter is a university or international student giving a general topic presentation "
+            "to classmates or a professor — NOT a research thesis defense. "
+            "Generate exactly 3 questions a real classmate or professor might ask in a seminar setting: "
+            "focus on clarity of explanation, quality of examples, and relevance to the audience. "
+            "Each question must name which challenge type it targets. "
             "Return them as 'static_qa_bank' in the JSON.\n"
             "Set 'challenge_seed' to null."
         )
@@ -1446,14 +1449,14 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     """
     audience   = config.get("audience",   "Professor")
     difficulty = config.get("difficulty", "Medium")
-    scenario   = config.get("scenario",   "Academic Presentation")
+    scenario   = config.get("scenario",   "Class Presentation")
 
     if not scene_slug:
         _slug_map = {
             "Thesis Defense":       "thesis_defense",       # THESIS_DEFENSE_CHALLENGE_POOL → Directness/Defensibility/Tact
             "MBA Case Pitch":       "case_pitch",           # CASE_PITCH_CHALLENGE_POOL → Conclusion First/Persuasion Mix/Command Presence
-            "Class Presentation":   "class_presentation",   # TED_QA_MATRIX (classmate track) → Rule of Three/Conversational/Illustrative
-            "Academic Presentation":"class_presentation",   # TED_QA_MATRIX (professor track) → same TED dimensions, NOT thesis rubric
+            "Class Presentation":   "class_presentation",   # TED_QA_MATRIX → Rule of Three/Conversational/Illustrative
+            "Academic Presentation":"class_presentation",   # backward compat: old sessions stored this name
         }
         scene_slug = _slug_map.get(scenario, "thesis_defense")
 
@@ -1877,7 +1880,7 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
     Falls back to _mock_pillar_evaluation on error or when AI is off.
     """
     audience       = config.get("audience",   "Professor")
-    scenario       = config.get("scenario",   "Academic Presentation")
+    scenario       = config.get("scenario",   "Class Presentation")
     difficulty     = config.get("difficulty", "Medium")
     challenge_type = (challenge_seed or {}).get("challenge_type", "Unknown")
 
@@ -2466,7 +2469,7 @@ def generate_training_plan(pillar_eval, config, challenge_type):
     """Generate a personalized training plan based on 4-pillar scores."""
     difficulty = config.get("difficulty", "Medium")
     audience   = config.get("audience",   "Professor")
-    scenario   = config.get("scenario",   "Academic Presentation")
+    scenario   = config.get("scenario",   "Class Presentation")
 
     scores = pillar_eval.get("scores", {})
     weakest = min(scores, key=scores.get) if scores else "structure"
@@ -2872,7 +2875,7 @@ def api_start_session():
     """
     data = request.get_json() or {}
     audience   = data.get("audience",   "Professor")
-    scenario   = data.get("scenario",   "Academic Presentation")
+    scenario   = data.get("scenario",   "Class Presentation")
     difficulty = data.get("difficulty", "Medium")
 
     # ── Step 2: Vision analysis — re-read file from disk (images never stored in cookie) ──
@@ -2938,9 +2941,8 @@ def api_start_session():
         "persona":   AUDIENCE_PERSONA.get(audience, AUDIENCE_PERSONA["Professor"]),
     }
     session["challenge_seed"] = challenge_seed
-    if scenario == "Academic Presentation":
-        session["qa_bank"] = static_qa_bank
-    elif scenario == "Class Presentation":
+    if scenario in ("Class Presentation", "Academic Presentation"):
+        # Both names map to the same TED_QA_MATRIX bank; "Academic Presentation" kept for backward compat
         session["qa_bank"] = build_class_presentation_qa(audience, difficulty)
     else:
         session["qa_bank"] = []
@@ -2981,7 +2983,7 @@ def api_check_slide():
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
     slides = _load_slides(session)
 
-    scenario = config.get("scenario", "Academic Presentation")
+    scenario = config.get("scenario", "Class Presentation")
     trigger_page = (challenge_seed or {}).get("trigger_page", 2)
     current_page = state["current_page"]
 
@@ -3123,7 +3125,7 @@ def api_submit_answer():
 @app.route("/x/submit-academic-qa", methods=["POST"])
 def api_submit_academic_qa():
     """
-    Step Academic-7: Handle post-presentation Q&A for Academic Presentation scenario.
+    Step 7: Handle post-presentation Q&A for Class Presentation scenario.
     Cycles through qa_bank questions (count = 1/2/3 based on Easy/Medium/Hard).
     Returns ACADEMIC_QA_NEXT (more questions) or ACADEMIC_QA_DONE (all answered).
     """
@@ -3179,7 +3181,7 @@ def api_finish_presentation():
     answers        = list(session.get("answers", []))
     slides         = _load_slides(session)
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
-    scenario       = config.get("scenario", "Academic Presentation")
+    scenario       = config.get("scenario", "Class Presentation")
 
     # ── Read real performance data sent by the frontend ────────────────────────
     req_data           = request.get_json(silent=True) or {}
@@ -3221,7 +3223,7 @@ def api_finish_presentation():
         _, qa_bank = build_master_engine(
             slides,
             config.get("audience", "Professor"),
-            "Academic Presentation",
+            "Class Presentation",
             config.get("difficulty", "Medium"),
         )
         session["qa_bank"] = qa_bank
