@@ -250,11 +250,15 @@ TED_QA_MATRIX = {
         "logic": "Tests ability to summarise the core idea in ≤140 characters (Message Map / Twitter Test)",
         "classmate": (
             "You shared a lot of cool details. "
-            "If you had to tweet your main point in less than 140 characters right now, what would it be?"
+            "If you had to tweet your main point in less than 140 characters right now, what would it be? "
+            "Don't expand on details — give me one punchy, social-media-style sentence. "
+            "(引导：Twitter化核心提炼。不要展开细节，用一句像社交媒体文案一样短小精悍的话总结)"
         ),
         "professor": (
-            "Your presentation covered various facts, but I want to test your clarity. "
-            "Can you summarize the absolute core message of your research in just one or two simple sentences?"
+            "Your presentation covered various facts, but I want to test your message clarity. "
+            "Can you compress the absolute core argument of your research into one single tweet-length sentence — "
+            "no technical terms, just the essence? "
+            "(引导：结论先行。不要背完整段落，用社交媒体标题的方式告诉我你的核心发现是什么)"
         ),
     },
     # ── Dimension 2: New Knowledge Feeling ────────────────────────────────────
@@ -285,12 +289,15 @@ TED_QA_MATRIX = {
     "five_w_detail": {
         "logic": "Tests 5-W specificity — WHEN/WHO/WHERE on case studies (Carnegie vivid-example principle)",
         "classmate": (
-            "About the specific case study you mentioned, could you pinpoint exactly WHEN this happened "
-            "and WHO was involved?"
+            "About the specific case study you mentioned, don't just give us abstract theories. "
+            "Can you pinpoint the concrete details — specifically WHO was involved and WHEN this happened? "
+            "(引导：Illustrative Support。不要讲空话，讲讲具体的时间、人物和发生的事情)"
         ),
         "professor": (
-            "About the specific case study you mentioned, could you pinpoint exactly WHEN this happened "
-            "and WHO was involved? Vague examples weaken academic arguments considerably."
+            "About the specific case study you mentioned, don't just give us abstract theories. "
+            "Can you pinpoint the concrete details — specifically WHO was involved and WHEN this happened? "
+            "Vague examples weaken academic arguments considerably. "
+            "(引导：Illustrative Support。不要讲空话，给我具体的时间、人物和可验证的事实)"
         ),
     },
     # ── Dimension 5: Audience Benefit Connection ───────────────────────────────
@@ -298,11 +305,15 @@ TED_QA_MATRIX = {
         "logic": "Tests whether the speaker connects the topic to the audience's operational benefit",
         "classmate": (
             "As an audience, how does this topic relate to us? "
-            "What operational benefits can our classmates get from your proposal?"
+            "To keep it structurally clear for the class, could you summarize your core operational benefits "
+            "in exactly THREE distinct points? "
+            "(引导：Rule of Three。不要长篇大论，强制用【第一、第二、第三】的结构来数数回答)"
         ),
         "professor": (
             "You covered the technical aspects well. But from the audience's perspective, "
-            "what is the tangible, practical benefit of this research to the broader community?"
+            "what is the tangible, practical benefit of this research — "
+            "and can you give me exactly three concrete takeaways the broader community can act on? "
+            "(引导：Rule of Three + 受众利益。不要只讲学术价值，给我三个普通人能理解的实际影响)"
         ),
     },
     # ── Dimension 6: Consensus Game ────────────────────────────────────────────
@@ -354,7 +365,8 @@ THESIS_DEFENSE_CHALLENGE_POOL = [
         "question": (
             "Wait, that theoretical model is way too abstract. "
             "Can you explain the core logic to me without using any academic jargon, "
-            "perhaps using a real-world analogy?"
+            "perhaps using a real-world analogy to show your conversational readiness? "
+            "(引导：Conversational Sense。别背书，用喝咖啡聊天时的大白话或者打比方来解释)"
         ),
         "category": "Thesis Defense", "difficulty": "Hard",
         "challenge_type": "Clarity", "questioner": "Professor",
@@ -371,11 +383,24 @@ THESIS_DEFENSE_CHALLENGE_POOL = [
     {
         "id": 204,
         "question": (
-            "On the slide where you stated that X leads to Y — "
-            "how can you prove this causal relationship is solid and not just a correlation?"
+            "On page 125, you stated that X leads to Y. "
+            "Please give me a direct, straight-to-the-point response: "
+            "is this causal relationship solid, or is it just a correlation? Give your clear stance first. "
+            "(引导：Directness 结论先行。不要绕弯子，第一句立刻说【是】或【不是】，然后再解释为什么)"
         ),
         "category": "Thesis Defense", "difficulty": "Hard",
         "challenge_type": "Causality Issue", "questioner": "Professor",
+    },
+    {
+        "id": 205,
+        "question": (
+            "Your sample size seems heavily limited. "
+            "Before you aggressively defend it, can you find a common ground with my concern "
+            "and then explain your validation steps? "
+            "(引导：Tact 学术外交手腕。不要一被质疑就急着反驳，先高情商地承认对方提得对，然后再解释)"
+        ),
+        "category": "Thesis Defense", "difficulty": "Hard",
+        "challenge_type": "Methodology Weakness", "questioner": "Professor",
     },
 ]
 
@@ -390,7 +415,8 @@ CASE_PITCH_CHALLENGE_POOL = [
         "id": 301,
         "question": (
             "Sorry to interrupt, but imagine we only have 30 seconds left in the elevator. "
-            "Tell me exactly what the top three key drivers of your business model are."
+            "Give me your conclusion first: what are the top three key drivers of your business model? "
+            "(引导：Conclusion First + Rule of Three。先说结论，然后立刻用三个数字或者业务驱动力来撑住它)"
         ),
         "category": "Case Pitch", "difficulty": "Hard",
         "challenge_type": "Clarity", "questioner": "VC",
@@ -417,7 +443,9 @@ CASE_PITCH_CHALLENGE_POOL = [
         "id": 304,
         "question": (
             "We have seen dozens of similar startup teams this week. "
-            "Why exactly should we invest in YOU? What makes your team irreplaceable?"
+            "Why exactly should we invest in YOU? "
+            "Inject some passion and tell us a 10-second real user story that proves you are irreplaceable. "
+            "(引导：The Persuasion Mix / Pathos。别干巴巴地念财务数据，讲一个10秒钟的真实用户故事来打动我)"
         ),
         "category": "Case Pitch", "difficulty": "Hard",
         "challenge_type": "Team Competence", "questioner": "VC",
@@ -714,6 +742,34 @@ def generate_followup_question(
         for h in chat_history
     )
 
+    # Scene-aware scaffolding instructions: every AI follow-up must embed an explicit coaching hint
+    _scaffolding_hint = {
+        "VC": (
+            "SCAFFOLDING RULE: Your question MUST end with a parenthetical coaching hint in Chinese "
+            "that tells the presenter exactly how to structure their answer. "
+            "Examples: (引导：结论先行，再用三个数字撑住它) / "
+            "(引导：别念数据，用一个10秒真实用户故事打动我) / "
+            "(引导：先说是还是不是，然后再给理由)"
+        ),
+        "Professor": (
+            "SCAFFOLDING RULE: Your question MUST end with a parenthetical coaching hint in Chinese "
+            "that tells the presenter exactly how to answer. "
+            "Examples: (引导：直接说结论，第一句先给立场) / "
+            "(引导：别用术语，用大白话或打比方来解释) / "
+            "(引导：先高情商地承认对方有道理，再解释你的做法)"
+        ),
+        "Classmates": (
+            "SCAFFOLDING RULE: Your question MUST end with a parenthetical coaching hint in Chinese "
+            "that tells the presenter how to frame their answer. "
+            "Examples: (引导：用第一、第二、第三的结构来数数回答) / "
+            "(引导：讲一个具体的时间和人物，不要讲空话) / "
+            "(引导：一句话总结，像发朋友圈那样短小精悍)"
+        ),
+    }.get(audience, (
+        "SCAFFOLDING RULE: Your question MUST end with a parenthetical coaching hint in Chinese "
+        "that tells the presenter how to structure their answer."
+    ))
+
     prompt = f"""You are a {audience} examiner running a high-stakes presentation challenge.
 
 YOUR PERSONA: {persona}
@@ -735,8 +791,9 @@ TASK: Generate your NEXT follow-up question. You must:
 2. Press harder on the same "{challenge_type}" vulnerability — do not change topic
 3. Stay strictly in character as the {audience} persona
 4. Be {difficulty} in intensity
+5. {_scaffolding_hint}
 
-Return ONLY the question text. No preamble, no labels, no markdown."""
+Return ONLY the question text with the coaching hint appended. No preamble, no labels, no markdown."""
 
     try:
         response = _ai_client.chat.completions.create(

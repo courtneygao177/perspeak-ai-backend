@@ -1,0 +1,17 @@
+模块一：【前置引导】—— 将评价标准融入 Q&A 设问（QA Engine 升级）
+==================================================
+修改 qa_engine.py。AI 在进行 Q&A 提问或中途打断时，必须在问题中加入“显式引导”或“压力提示”，给用户搭建符合评价标准的脚手架。禁止提出宽泛无引导的问题。
+
+1. class_presentation (课堂演讲) 设问重构：
+   * [Twitter式标题追问] -> "You shared a lot of cool details. If you had to tweet your main point in less than 140 characters right now, what would it be?" (引导：Twitter化核心提炼)
+   * [听众利益与3点映射] -> "As an audience, how does this topic relate to us? To keep it structurally clear for the class, could you summarize your core operational benefits in exactly THREE distinct points?" (引导：Rule of Three)
+   * [5-W细节挖掘] -> "About the specific case study you mentioned, don't just give us abstract theories. Can you pinpoint the concrete details—specifically WHO was involved and WHEN this happened?" (引导：Illustrative Support)
+
+2. thesis_defense (论文答辩) 设问重构：
+   * [学术边际与大白话测试] -> "Wait, that theoretical model is way too abstract. Can you explain the core logic to me without using any academic jargon, perhaps using a real-world analogy to show your conversational readiness?" (引导：Conversational Sense)
+   * [因果抗辩与核心立论] -> "On page 125, you stated that X leads to Y. Please give me a direct, straight-to-the-point response: is this causal relationship solid, or is it just a correlation? Give your clear stance first." (引导：Directness 结论先行)
+   * [方法论局限与外交手腕] -> "Your sample size seems heavily limited. Before you aggressively defend it, can you find a common ground with my concern and then explain your validation steps?" (引导：Tact 学术外交手腕)
+
+3. case_pitch (案例路演) 设问重构：
+   * [麦肯锡电梯测试打断] -> "Sorry to interrupt, but imagine we only have 30 seconds left in the elevator. Give me your conclusion first: what are the top three key drivers of your business model?" (引导：Conclusion First + Rule of Three)
+   * [反向资格与多巴胺驱动] -> "We have seen dozens of similar startup teams this week. Why exactly should we invest in YOU? Inject some passion and tell us a 10-second real user story that proves you are irreplaceable." (引导：The Persuasion Mix / Pathos)
