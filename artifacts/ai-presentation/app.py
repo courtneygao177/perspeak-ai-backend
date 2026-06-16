@@ -2338,6 +2338,49 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         f"A_anchor: {_label_sentences(anchor_text)}"
     ) if anchor_text else "(No anchor answer recorded)"
 
+    # Pre-compute strings containing quotes/backslashes (Python 3.11 f-string restriction)
+    _scene_example_map = {
+        "class_presentation": (
+            "CLASS PRES example — Say this instead: "
+            '"Think about it this way — when a taxi driver navigates the city, '
+            "they are not just driving, they are scanning live patterns. "
+            'That is exactly how our framework operates." '
+            "(weave user domain into conversational analogy)"
+        ),
+        "thesis_defense": (
+            "THESIS example — Say this instead: "
+            '"That is a critical challenge on sample size. To address this directly: '
+            "while the cohort is small, our post-hoc power analysis gives 0.85, "
+            'confirming the validity of this correlation." '
+            "(concede first, then hard academic counter)"
+        ),
+        "case_pitch": (
+            "PITCH example — Say this instead: "
+            '"Yes, this model is highly replicable — our unit economics rely on a '
+            "40 percent organic referral rate, driven by two key operational factors: "
+            'first..." '
+            "(MECE conclusion-first, McKinsey style)"
+        ),
+    }
+    _scene_example   = _scene_example_map.get(scene_slug, "")
+    _anchor_pass_ln  = (
+        f"    If passed: [ANCHOR PASS][Metric: {anchor_type}] {anchor_type} "
+        "(N/100): high praise. You said: exact A_anchor sentence."
+    )
+    _anchor_fail_ln  = (
+        f"    If not passed: [Metric: {anchor_type}] {anchor_type} "
+        "(N/100): You attempted this. Follow the scaffold hint more closely next time."
+    )
+    _good_item3_tmpl = (
+        f'    "[Metric: {anchor_type}] {anchor_type} (N/100): anchor feedback. '
+        'You said: exact A_anchor sentence"'
+    )
+    _fix_anchor_tmpl = (
+        f'{{"dimension": "{anchor_type}", "issue": "...", '
+        '"example": "You said: exact A_anchor sentence", '
+        '"how_to_fix": "Say this instead: dynamic rewrite using A_anchor domain content"}}'
+    )
+
     cq_dual_prompt = (
         "You are a Communication Quality (CQ) coach evaluating two types of Q&A exchanges.\n\n"
         "══════════════════════════════════════════════\n"
@@ -2370,29 +2413,35 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "══════════════════════════════════════════════\n"
         "OUTPUT RULES\n"
         "══════════════════════════════════════════════\n"
+        "RULE 0 (JSON SAFETY): Return ONLY valid JSON. Use DOUBLE QUOTES for ALL strings. NEVER single quotes.\n"
         "RULE 1: IELTS 5.5-6.0 vocabulary. Short sentences.\n"
-        "RULE 2 (CRITICAL): Every example MUST quote EXACT words from A1/A_anchor. NEVER invent quotes.\n"
-        "RULE 3: what_i_did_good = EXACTLY 3 items:\n"
-        "  Items 1-2: praise for universal dims A (with EXACT A1 quote).\n"
-        "  Item 3: anchor — if passed: prefix 【ANCHOR PASS】+ high praise; if failed: note attempt.\n"
-        "RULE 4: areas_for_improvement = 1-3 items. If anchor_passed=false, the LAST item MUST be the\n"
-        "  anchor item. Its how_to_fix MUST contain 'Say this instead:' followed by a DYNAMIC 2-sentence\n"
-        "  rewrite using the user's ACTUAL domain content from A_anchor (NOT generic placeholder text).\n"
-        "RULE 5 (QUOTE ISOLATION): each example field uses a DIFFERENT sentence from the transcripts.\n\n"
-        "Return ONLY valid JSON. No markdown:\n"
+        "RULE 2 (CRITICAL): Every example MUST quote EXACT words from the labelled transcripts. NEVER invent.\n"
+        "  - FREE dims (Directness/Resonance/Evidence): quote ONLY from A1 sentences. NOT from A_anchor.\n"
+        "  - ANCHOR dim: quote ONLY from A_anchor sentences. NOT from A1.\n"
+        "RULE 3: what_i_did_good = EXACTLY 3 strings:\n"
+        "  Item 1: [Metric: 普适标准] Directness & Logic (N/100): brief praise. You said: exact sentence [1] or [2] from A1.\n"
+        "  Item 2: [Metric: 普适标准] Conversational Resonance (N/100): brief praise. You said: exact different sentence from A1.\n"
+        f"  Item 3 (anchor):\n{_anchor_pass_ln}\n{_anchor_fail_ln}\n"
+        "RULE 4: areas_for_improvement = 1-3 objects. QUOTE ISOLATION — each example uses a DIFFERENT sentence:\n"
+        "  - Universal dim items quote ONLY from A1. Anchor dim items quote ONLY from A_anchor.\n"
+        "  - If anchor_passed=false, include anchor item LAST. Its how_to_fix MUST begin with Say this instead:\n"
+        "    followed by a DYNAMIC 2-3 sentence rewrite using the user ACTUAL vocabulary and domain content\n"
+        "    from A_anchor (their topic, claims, specific words). NEVER write generic placeholder sentences.\n"
+        f"    {_scene_example}\n"
+        "Return ONLY valid JSON. No markdown. No text outside JSON. Double quotes only:\n"
         "{\n"
         '  "universal_scores": {"Directness & Logic": int, "Conversational Resonance": int, "Evidence & Substantiation": int},\n'
         '  "universal_total": int,\n'
         '  "anchor_passed": bool,\n'
         '  "anchor_score": int,\n'
         '  "what_i_did_good": [\n'
-        '    "[Universal] Directness & Logic (N/100): praise + EXACT A1 quote",\n'
-        '    "[Universal] Conversational Resonance (N/100): praise + EXACT A1 quote",\n'
-        f'    "[{scene_label}] {anchor_type} (N/100): anchor result + EXACT A_anchor quote"\n'
+        '    "[Metric: \u666e\u9002\u6807\u51c6] Directness & Logic (N/100): praise. You said: exact A1 sentence.",\n'
+        '    "[Metric: \u666e\u9002\u6807\u51c6] Conversational Resonance (N/100): praise. You said: exact different A1 sentence.",\n'
+        f'    {_good_item3_tmpl}\n'
         '  ],\n'
         '  "areas_for_improvement": [\n'
-        '    {"dimension": "Evidence & Substantiation", "issue": "...", "example": "You said: \'EXACT A1\'", "how_to_fix": "..."},\n'
-        f'    {{"dimension": "{anchor_type}", "issue": "...", "example": "You said: \'EXACT A_anchor\'", "how_to_fix": "Say this instead: \'dynamic 2-sentence rewrite using A_anchor domain content\'"}}\n'
+        '    {"dimension": "Evidence & Substantiation", "issue": "...", "example": "You said: exact A1 sentence.", "how_to_fix": "..."},\n'
+        f'    {_fix_anchor_tmpl}\n'
         '  ]\n'
         '}'
     )
@@ -2407,7 +2456,16 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         raw = response.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$",          "", raw)
-        result = json.loads(raw)
+        # Pre-process: fix single-quoted string values (Gemini outputs Python-style strings)
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError:
+            _fixed = re.sub(
+                r"(?<=[:\[,])\s*'([^'\n]{0,400})'",
+                lambda m: ' "' + m.group(1).replace('"', '\\"') + '"',
+                raw
+            )
+            result = json.loads(_fixed)   # re-raise if still invalid → caught below
 
         u_scores = result.get("universal_scores", universal_heuristic)
         u_scores = {k: int(min(100, max(0, float(v)))) for k, v in u_scores.items()} if u_scores else dict(universal_heuristic)
@@ -2452,12 +2510,23 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
                 u_sc[f"Anchor — {anchor_type}"] = a_s
                 u_t  = int(repaired.get("universal_total", universal_total_h))
                 comb = int(round(u_t * 0.75 + a_s * 0.25)) if 0 < u_t <= 100 else int(round(universal_total_h * 0.75 + a_s * 0.25))
+                good = repaired.get("what_i_did_good") or []
+                fix  = repaired.get("areas_for_improvement") or []
+                # Coaching arrays may be truncated — fill from mock fallback
+                if not good or not fix:
+                    _fb = _build_dual_track_mock_result(
+                        universal_heuristic, a_p, a_s,
+                        anchor_type, anchor_text, scene_slug, scene_label,
+                        universal_total_h, exchange_count, free_texts, target_dim
+                    )
+                    good = good or _fb["what_i_did_good"]
+                    fix  = fix  or _fb["areas_for_improvement"]
                 return {
                     "has_data": True, "scene_slug": scene_slug, "scene_label": scene_label,
                     "cq_total": comb, "cq_scores": u_sc,
                     "dim_names": _DIM_NAMES_BASE + [f"Anchor — {anchor_type}"],
-                    "weights": [], "what_i_did_good": repaired.get("what_i_did_good", []),
-                    "areas_for_improvement": repaired.get("areas_for_improvement", []),
+                    "weights": [], "what_i_did_good": good,
+                    "areas_for_improvement": fix,
                     "exchange_count": exchange_count, "dual_track": True,
                     "anchor_passed": a_p, "anchor_score": a_s,
                 }

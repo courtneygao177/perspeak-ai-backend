@@ -1,0 +1,56 @@
+我们现在要对系统的 Q&A / 打断逻辑（qa_engine.py）以及报告评估引擎（report_generator.py）进行核心逻辑升级。
+
+【重构核心目标】：
+
+建立一套适用于所有即时提问的【普适性沟通评价标准】。
+引入一套【动态双轨制问题生成机制】：根据用户选择的 Pressure Level（提问数量 >= 2 时），确保其中有且仅有一个问题是“标准特征锚点题”（带有大白话前置引导，并触发对应的特殊维度审计）；其余问题则由 AI 结合上下文完全自由即时生成，并仅采用普适性标准审计。
+请严格执行以下模块的代码重构：
+
+==================================================
+模块一：定义【Communication Quality 普适性评价标准】
+无论用户选择哪个场景，对于那些 AI 结合 PPT 自由即时生成的问题，后端重构后的 report_generator.py 将不再使用生硬的特定术语（如 Rule of Three），而是统一采用以下 3 个具备高度普适性的沟通维度进行扁平化审计（总分 100）：
+
+【Directness & Logic (正面回应度与逻辑链 - 40%)】
+审计核心：用户在听到问题后的前两句话内，是否给出了针对该问题的实质性核心定性立场（是/否/核心结论），而不是通过复述问题或大段堆砌背景来绕弯子（Question Dodging）。
+【Conversational Resonance (谈话感与听众共鸣 - 30%)】
+审计核心：口语流利度与自发性。评估用户是像在“生硬地对镜背稿”，还是在和提问者进行动态的“信息博弈”。检查是否包含口语过渡词或将听众带入语境的互动表达。
+【Evidence & Substantiation (论据支撑力 - 30%)】
+审计核心：用户在给出结论后，是否在 30 秒内迅速调用了至少一个事实、数据、具体案例、研究成果或类比来撑住论点，严禁通篇只有主观情感形容词。
+==================================================
+模块二：重构 qa_engine.py ——【动态双轨制问题注入】
+后端必须捕获前端在第一步传入的参数 pressure_level (easy/medium/hard)。
+【提问策略路由逻辑】：
+IF pressure_level 要求的提问数量（Question Count） >= 2 时：
+【问题 1（即时自由题）】：AI 结合用户上传的 PPT 文本与当前的 selected_scene，完全自由发挥、即时生成一个高相关性的专业互动问题（不带任何强制引导语）。
+【问题 2（标准锚点题）】：后端必须从该场景对应的“前置引导设问库”中，强制锚定并触发一个带有【大白话脚手架引导】的特征问题。
+【三大场景的标准锚点题与专属引导语库示例】：
+【Class Presentation 场景】：
+[Twitter式标题追问] -> "You shared a lot of cool details. If you had to tweet your main point in less than 140 characters right now, what would it be?" (引导：Twitter化核心提炼。不要展开细节，用一句像社交媒体文案一样短小精悍的话总结）)
+[听众利益与3点映射] -> "As an audience, how does this topic relate to us? To keep it structurally clear for the class, could you summarize your core operational benefits in exactly THREE distinct points?" (引导：Rule of Three。不要长篇大论，强制用“第一、第二、第三”的结构来数数回答)
+[5-W细节挖掘] -> "About the specific case study you mentioned, don't just give us abstract theories. Can you pinpoint the concrete details—specifically WHO was involved and WHEN this happened?" (引导：Illustrative Support。不要讲空话，讲讲具体的时间、人物和发生的事情)
+【Thesis Defense 场景】：
+[学术边际与大白话测试] -> "Wait, that theoretical model is way too abstract. Can you explain the core logic to me without using any academic jargon, perhaps using a real-world analogy to show your conversational readiness?" (引导：Conversational Sense。别背书，用喝咖啡聊天时的大白话或者打比方来解释)
+[因果抗辩与核心立论] -> "On page 125, you stated that X leads to Y. Please give me a direct, straight-to-the-point response: is this causal relationship solid, or is it just a correlation? Give your clear stance first." (引导：Directness 结论先行。不要绕弯子，第一句立刻说‘是’或‘不是’，然后再解释为什么)
+[方法论局限与外交手腕] -> "Your sample size seems heavily limited. Before you aggressively defend it, can you find a common ground with my concern and then explain your validation steps?" (引导：Tact 学术外交手腕。不要一被质疑就急着反驳，先高情商地承认对方提得对，然后再解释)
+【Case Pitch 场景】：
+[麦肯锡电梯测试打断] -> "Sorry to interrupt, but imagine we only have 30 seconds left in the elevator. Give me your conclusion first: what are the top three key drivers of your business model?" (引导：Conclusion First + Rule of Three。先说结论，然后立刻用三个数字或者业务驱动力来撑住它)
+[反向资格与多巴胺驱动] -> "We have seen dozens of similar startup teams this week. Why exactly should we invest in YOU? Inject some passion and tell us a 10-second real user story that proves you are irreplaceable." (引导：The Persuasion Mix / Pathos。别干巴巴地念财务数据，讲一个10秒钟的真实用户故事来打动我)
+==================================================
+模块三：重构 report_generator.py ——【精准截取与动态 Say this instead】
+==================================================
+【防止原话重复 Bug】：当 LLM 提取 user_quote 时，必须通过问题 ID 或关键词锚定，精准且严格地截取用户针对【这一个特定问题】回答时的最核心那 1-2 句话。严禁将全场录音打包扔给每个反馈卡片。
+【分流审计逻辑】：
+对于【问题 1（即时自由题）】的反馈：三个卡片对应的 Metric 标签显示为“普适标准”（Directness / Conversational Resonance / Evidence），并引用用户实际回答在what_i_did_good 里给予表扬。
+对于【问题 2（标准锚点题）】的反馈：
+如果用户顺着你的大白话引导，成功做到了（例如在 Pitch 中成功先说结论并数了 1、2、3），在 what_i_did_good 里给予高分高亮表扬。
+
+如果用户在有引导的情况下依然没做到，在 areas_for_improvement 中触发警告，并且它的 how_to_fix 中的【Say this instead】必须基于用户当时的真实答辩内容（Domain Context），为用户动态重写出一段完美的、可以直接上台的高情商/高杀伤力答辩原话：
+
+[Class Presentation 动态重写示例]：
+👉 Say this instead: "Think about it this way—when a taxi driver navigates the city, they aren't just driving; they are scanning live patterns. That’s exactly how our framework operates." (融入用户的实例进行对话式比喻)
+
+[Thesis Defense 动态重写示例]：
+👉 Say this instead: "That is a critical challenge regarding our sample size. To address this directly: while the cohort is small, our post-hoc statistical power analysis indicates a value of 0.85, confirming the validity of this correlation." (融入学术硬核抗辩)
+
+[Case Pitch 动态重写示例]：
+👉 Say this instead: "Yes, this business model is highly replicable, primarily because our unit economics rely on a 40% organic referral rate, driven by two key operational factors: first..." (融入麦肯锡结论先行)

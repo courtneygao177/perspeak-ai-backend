@@ -52,6 +52,17 @@
                   border-radius:.375rem; padding:.5rem .75rem; }
   .cq-fix-panel { background:#f0fdf4; border:1px solid #bbf7d0; border-left:3px solid #22c55e;
                   border-radius:.375rem; padding:.5rem .75rem; }
+  /* Clickable CQ dimension rows */
+  .cq-dim-row { cursor:pointer; border-radius:.5rem; padding:.375rem .5rem; margin:.25rem -.5rem;
+                transition:background .15s; }
+  .cq-dim-row:hover { background:rgba(15,23,42,0.04); }
+  .cq-dim-chevron { transition:transform .2s; }
+  .cq-dim-row.expanded .cq-dim-chevron { transform:rotate(180deg); }
+  .cq-dim-detail { animation:fadeSlideIn .2s ease; }
+  @keyframes fadeSlideIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+  .cq-metric-tag { display:inline-block; font-size:.6rem; font-weight:700; letter-spacing:.05em;
+                   padding:.15rem .45rem; border-radius:.25rem; margin-right:.35rem;
+                   background:#ede9fe; color:#6d28d9; }
 </style>
 {% endblock %}
 
@@ -391,28 +402,46 @@
         </div>
       </div>
 
-      <!-- Dimension score bars -->
+      <!-- Dimension score bars (clickable — shows detail card) -->
       {% set cq_bar_colors = ['#3b82f6', '#059669', '#f59e0b'] %}
       {% set cq_dim_list = cq.dim_names if cq.dim_names else [] %}
       {% for dn in cq_dim_list %}
         {% set dc = cq.cq_scores.get(dn, 0) %}
         {% set dcolor = cq_bar_colors[loop.index0] if loop.index0 < 3 else '#6366f1' %}
+        {% set didx = loop.index0 %}
         {% if dc >= 85 %}{% set dtag = 'Excellent' %}
         {% elif dc >= 70 %}{% set dtag = 'Good' %}
         {% elif dc >= 55 %}{% set dtag = 'Developing' %}
         {% else %}{% set dtag = 'Needs Work' %}{% endif %}
-        <div class="mb-3 last:mb-0">
+        <div class="cq-dim-row mb-1 last:mb-0"
+             data-dim-name="{{ dn }}"
+             data-dim-score="{{ dc }}"
+             data-dim-tag="{{ dtag }}"
+             data-dim-color="{{ dcolor }}"
+             onclick="toggleCqDimCard(this)">
           <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs font-semibold" style="color:{{ dcolor }}">{{ dn }}</span>
+            <span class="text-xs font-semibold flex items-center gap-1" style="color:{{ dcolor }}">
+              {{ dn }}
+              <svg class="cq-dim-chevron w-3 h-3 text-slate-400 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </span>
             <div class="flex items-center gap-2">
               <span class="text-xs text-slate-500">{{ dtag }}</span>
               <span class="text-sm font-bold text-[#0F172A]">{{ dc }}<span class="text-xs font-normal text-slate-400">/100</span></span>
             </div>
           </div>
-          <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div class="h-2 bg-slate-100 rounded-full overflow-hidden mb-1">
             <div class="h-full rounded-full cq-dim-bar-anim"
                  style="width:0%;background:{{ dcolor }};transition:width 1.2s cubic-bezier(.4,0,.2,1)"
                  data-target="{{ dc }}%"></div>
+          </div>
+          <!-- Expandable detail card -->
+          <div class="cq-dim-detail hidden rounded-lg border p-3 mt-2 text-xs leading-relaxed"
+               style="background:color-mix(in srgb,{{ dcolor }} 6%,white);border-color:color-mix(in srgb,{{ dcolor }} 30%,#e2e8f0)">
+            <p class="font-semibold mb-1" style="color:{{ dcolor }}" data-dim-detail-title></p>
+            <p class="text-slate-500 mb-2" data-dim-detail-body></p>
+            <p class="text-slate-700 font-medium" data-dim-detail-reason></p>
           </div>
         </div>
       {% endfor %}
@@ -445,13 +474,13 @@
         </div>
       </div>
 
-      <!-- CQ Coaching Points (areas for improvement) -->
+      <!-- CQ Areas for Improvement -->
       <div class="section-card p-5">
         <div class="flex items-center gap-2 mb-4">
-          <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          <svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
-          <h3 class="text-sm font-semibold text-[#0F172A]">🎯 CQ Coaching Points</h3>
+          <h3 class="text-sm font-semibold text-[#0F172A]">⚠️ CQ Areas for Improvement</h3>
         </div>
         <div class="space-y-3">
           {% for item in cq.areas_for_improvement %}
@@ -496,7 +525,7 @@
             </div>
           </div>
           {% else %}
-          <p class="text-slate-400 text-sm">No coaching points recorded for this session.</p>
+          <p class="text-slate-400 text-sm">No areas for improvement recorded for this session.</p>
           {% endfor %}
         </div>
       </div>
@@ -712,6 +741,82 @@
         }
       }
     });
+  }
+
+  // ── CQ Dimension card toggle ───────────────────────────────────────────────
+  const CQ_DIM_INFO = {
+    "Directness & Logic": {
+      title: "Directness & Logic (普适标准 · 40%)",
+      body: "审计核心：听到问题后前两句话内，是否给出针对该问题的实质性核心定性立场（是/否/核心结论），而不是通过复述问题或堆砌背景来绕弯子（Question Dodging）。"
+    },
+    "Conversational Resonance": {
+      title: "Conversational Resonance (普适标准 · 30%)",
+      body: "审计核心：是否像在和提问者进行动态的信息博弈，而非生硬地对镜背稿。检查是否包含口语过渡词（you know / think about it / the thing is）或将听众带入语境的互动表达。"
+    },
+    "Evidence & Substantiation": {
+      title: "Evidence & Substantiation (普适标准 · 30%)",
+      body: "审计核心：在给出结论后，是否在30秒内迅速调用了至少一个事实、数据、具体案例、研究成果或类比来撑住论点。严禁通篇只有主观情感形容词。"
+    }
+  };
+
+  // Build score-reason index from what_i_did_good + areas_for_improvement
+  const CQ_DATA = {{ cq | tojson }} || {};
+  const _dimReason = {};
+  (CQ_DATA.what_i_did_good || []).forEach(s => {
+    const m = s.match(/\[Metric:\s*([^\]]+)\]/);
+    if (m) _dimReason[m[1].trim()] = { type: 'good', text: s };
+    // Also match [Universal] prefix
+    const u = s.match(/\[Universal\]\s*([\w &]+)\s*\(/);
+    if (u) _dimReason[u[1].trim()] = { type: 'good', text: s };
+  });
+  (CQ_DATA.areas_for_improvement || []).forEach(obj => {
+    const dim = (obj.dimension || '').trim();
+    if (dim && !_dimReason[dim]) _dimReason[dim] = { type: 'fix', text: (obj.issue || '') + (obj.example ? ' ' + obj.example : '') };
+  });
+
+  function toggleCqDimCard(row) {
+    const detail   = row.querySelector('.cq-dim-detail');
+    const chevron  = row.querySelector('.cq-dim-chevron');
+    const isOpen   = !detail.classList.contains('hidden');
+
+    // Close all open cards first
+    document.querySelectorAll('.cq-dim-row.expanded').forEach(r => {
+      r.classList.remove('expanded');
+      r.querySelector('.cq-dim-detail').classList.add('hidden');
+    });
+
+    if (!isOpen) {
+      row.classList.add('expanded');
+      detail.classList.remove('hidden');
+
+      const dimName = row.dataset.dimName || '';
+      const score   = parseInt(row.dataset.dimScore) || 0;
+      const tag     = row.dataset.dimTag || '';
+      const color   = row.dataset.dimColor || '#3b82f6';
+
+      // Find dim info — match by exact name or "Anchor —" prefix
+      let info = CQ_DIM_INFO[dimName];
+      if (!info && dimName.startsWith('Anchor')) {
+        const anchorType = dimName.replace(/^Anchor\s*—\s*/, '');
+        info = {
+          title: `Anchor — ${anchorType} (场景锚点题 · 25%)`,
+          body: `审计核心：在有大白话引导提示的情况下，用户是否能跟随「${anchorType}」的结构要求作答。锚点题专门检测在有明确技术指引时，能否将技巧转化为实际表达。`
+        };
+      }
+      if (!info) info = { title: dimName, body: '该维度综合评估你的沟通质量表现。' };
+
+      detail.querySelector('[data-dim-detail-title]').textContent = info.title;
+      detail.querySelector('[data-dim-detail-body]').textContent  = info.body;
+
+      // Score reason
+      const reasonEl = detail.querySelector('[data-dim-detail-reason]');
+      const rd = _dimReason[dimName] || _dimReason[dimName.replace(/^Anchor\s*—\s*/, '')];
+      if (rd) {
+        reasonEl.textContent = (rd.type === 'good' ? '✅ ' : '⚠️ ') + rd.text.replace(/\[Metric:[^\]]*\]\s*/g, '').replace(/\[Universal\]\s*/g, '');
+      } else {
+        reasonEl.textContent = `得分：${score}/100 (${tag})`;
+      }
+    }
   }
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
