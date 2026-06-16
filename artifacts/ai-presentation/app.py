@@ -345,6 +345,140 @@ CLASS_PRES_QA_POOL = [
 ]
 
 # ─────────────────────────────────────────────
+# ANCHOR QUESTION POOL — Dual-Track Q&A System
+# ─────────────────────────────────────────────
+# When pressure_level (difficulty) >= Medium (≥2 questions), Q2 is always
+# drawn from this pool. It carries a 大白话 scaffold hint embedded in the
+# question text and triggers scene-specific dimension scoring in the CQ engine.
+# Exactly ONE anchor per session ("有且仅有一个标准锚点题").
+ANCHOR_QUESTION_POOL = {
+    "class_presentation": [
+        {
+            "id": "anchor_cp_twitter",
+            "anchor_type": "Twitter Headline",
+            "question": (
+                "You shared a lot of cool details. "
+                "If you had to tweet your main point in less than 140 characters right now, what would it be? "
+                "(引导：Twitter化核心提炼。不要展开细节，用一句像社交媒体文案一样短小精悍的话总结)"
+            ),
+            "question_type": "anchor",
+            "category": "Class Presentation — Anchor",
+            "challenge_type": "Twitter Headline",
+            "target_dim": "rule_of_three",
+            "scaffold_signal": "Twitter condensation: does the user produce ONE short punchy sentence vs. expanding into details?",
+        },
+        {
+            "id": "anchor_cp_rule3",
+            "anchor_type": "Audience Benefit",
+            "question": (
+                "As an audience, how does this topic relate to us? "
+                "To keep it structurally clear for the class, could you summarize your core operational benefits "
+                "in exactly THREE distinct points? "
+                "(引导：Rule of Three。不要长篇大论，强制用【第一、第二、第三】的结构来数数回答)"
+            ),
+            "question_type": "anchor",
+            "category": "Class Presentation — Anchor",
+            "challenge_type": "Audience Benefit",
+            "target_dim": "rule_of_three",
+            "scaffold_signal": "Rule of Three: does the user explicitly enumerate first / second / third?",
+        },
+        {
+            "id": "anchor_cp_5w",
+            "anchor_type": "5-W Detail",
+            "question": (
+                "About the specific case study you mentioned, don't just give us abstract theories. "
+                "Can you pinpoint the concrete details — specifically WHO was involved and WHEN this happened? "
+                "(引导：Illustrative Support。不要讲空话，讲讲具体的时间、人物和发生的事情)"
+            ),
+            "question_type": "anchor",
+            "category": "Class Presentation — Anchor",
+            "challenge_type": "5-W Detail",
+            "target_dim": "illustrative_support",
+            "scaffold_signal": "5-W specificity: does the user name a specific WHO and WHEN with concrete detail?",
+        },
+    ],
+    "thesis_defense": [
+        {
+            "id": "anchor_td_convsense",
+            "anchor_type": "Conversational Readiness",
+            "question": (
+                "Wait, that theoretical model is way too abstract. "
+                "Can you explain the core logic to me without using any academic jargon, "
+                "perhaps using a real-world analogy to show your conversational readiness? "
+                "(引导：Conversational Sense。别背书，用喝咖啡聊天时的大白话或者打比方来解释)"
+            ),
+            "question_type": "anchor",
+            "category": "Thesis Defense — Anchor",
+            "challenge_type": "Conversational Readiness",
+            "target_dim": "tact",
+            "scaffold_signal": "Plain-language analogy: does the user drop academic jargon and use an everyday comparison or metaphor?",
+        },
+        {
+            "id": "anchor_td_directness",
+            "anchor_type": "Directness",
+            "question": (
+                "You stated a key causal relationship in your research. "
+                "Please give me a direct, straight-to-the-point response: "
+                "is this causal relationship solid, or is it just a correlation? "
+                "Give your clear stance first. "
+                "(引导：Directness 结论先行。不要绕弯子，第一句立刻说【是】或【不是】，然后再解释为什么)"
+            ),
+            "question_type": "anchor",
+            "category": "Thesis Defense — Anchor",
+            "challenge_type": "Directness",
+            "target_dim": "directness",
+            "scaffold_signal": "Directness: does sentence 1 begin with Yes/No/My finding is/I argue/The causal link is?",
+        },
+        {
+            "id": "anchor_td_tact",
+            "anchor_type": "Tact",
+            "question": (
+                "Your sample size seems heavily limited. "
+                "Before you aggressively defend it, can you find a common ground with my concern "
+                "and then explain your validation steps? "
+                "(引导：Tact 学术外交手腕。不要一被质疑就急着反驳，先高情商地承认对方提得对，然后再解释)"
+            ),
+            "question_type": "anchor",
+            "category": "Thesis Defense — Anchor",
+            "challenge_type": "Tact",
+            "target_dim": "tact",
+            "scaffold_signal": "Tact: does the user open with a Carnegie acknowledgment phrase before defending?",
+        },
+    ],
+    "case_pitch": [
+        {
+            "id": "anchor_cp_elevator",
+            "anchor_type": "Elevator Test",
+            "question": (
+                "Sorry to interrupt, but imagine we only have 30 seconds left in the elevator. "
+                "Give me your conclusion first: what are the top three key drivers of your business model? "
+                "(引导：Conclusion First + Rule of Three。先说结论，然后立刻用三个数字或者业务驱动力来撑住它)"
+            ),
+            "question_type": "anchor",
+            "category": "MBA Case Pitch — Anchor",
+            "challenge_type": "Elevator Test",
+            "target_dim": "conclusion_first",
+            "scaffold_signal": "Conclusion first + Rule of Three: does user state a verdict in sentence 1, then enumerate 3 drivers?",
+        },
+        {
+            "id": "anchor_cp_pathos",
+            "anchor_type": "Pathos Story",
+            "question": (
+                "We have seen dozens of similar startup teams this week. "
+                "Why exactly should we invest in YOU? "
+                "Inject some passion and tell us a 10-second real user story that proves you are irreplaceable. "
+                "(引导：Persuasion Mix / Pathos。别干巴巴地念财务数据，讲一个10秒钟的真实用户故事来打动我)"
+            ),
+            "question_type": "anchor",
+            "category": "MBA Case Pitch — Anchor",
+            "challenge_type": "Pathos Story",
+            "target_dim": "persuasion_mix",
+            "scaffold_signal": "Pathos story: does the user tell a specific user/customer story with emotional stakes?",
+        },
+    ],
+}
+
+# ─────────────────────────────────────────────
 # THESIS DEFENSE: SCENE-SPECIFIC CHALLENGE POOL
 # Persona locked: Professor (rigorous, high-pressure, academic).
 # Used as fallback for generate_followup_question when AI is off,
@@ -851,12 +985,213 @@ def build_class_presentation_qa(audience, difficulty):
     return combined
 
 
+# ─────────────────────────────────────────────
+# DUAL-TRACK Q&A BUILDER
+# ─────────────────────────────────────────────
+def generate_free_qa_question(slides, audience, scene_slug):
+    """
+    Generate a single context-aware free question using AI + slide content.
+    No scaffold hint — purely contextual. Returns a question dict with question_type='free'.
+    """
+    SCENE_PERSONA = {
+        "class_presentation": f"a curious {audience.lower()} in a university classroom",
+        "thesis_defense":      "a thesis committee examiner probing the research",
+        "case_pitch":          "a VC investor challenging the business pitch",
+    }
+    persona    = SCENE_PERSONA.get(scene_slug, f"a {audience.lower()}")
+    slide_text = "\n".join(
+        f"Slide {s['page']}: {s.get('title','')} — {s.get('content','')[:200]}"
+        for s in (slides or [])[:5]
+    )
+    _fallbacks = {
+        "class_presentation": "What do you think is the most surprising insight from your presentation, and why does it matter to your audience?",
+        "thesis_defense":     "How does your methodology address the most significant limitation you identified in your literature review?",
+        "case_pitch":         "What is the single biggest risk to your business model right now, and what is your specific mitigation plan?",
+    }
+    fallback_q = _fallbacks.get(scene_slug, "Can you walk us through the most important takeaway from your presentation?")
+
+    if not AI_ENABLED or not slides:
+        return {
+            "id": "free_q_fallback", "question": fallback_q,
+            "question_type": "free", "category": f"{scene_slug.replace('_',' ').title()} — AI Free Question",
+            "difficulty": "Medium", "challenge_type": "Contextual",
+        }
+    prompt = (
+        f"You are {persona}.\n\n"
+        f"Presentation content:\n{slide_text}\n\n"
+        "Generate ONE sharp, context-specific question that:\n"
+        "- Directly references something specific from the slides above\n"
+        "- Is appropriate for the setting\n"
+        "- Has NO scaffolding hints, guidance notes, or Chinese text\n"
+        "- Is 1-2 sentences maximum\n\n"
+        "Return ONLY the question text — no labels, no explanations."
+    )
+    try:
+        resp = _ai_client.chat.completions.create(
+            model=VISION_MODEL, max_tokens=120,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        q_text = resp.choices[0].message.content.strip().strip('"')
+        return {
+            "id": "free_q_ai", "question": q_text,
+            "question_type": "free", "category": f"{scene_slug.replace('_',' ').title()} — AI Free Question",
+            "difficulty": "Medium", "challenge_type": "Contextual",
+        }
+    except Exception as e:
+        app.logger.error(f"[FREE QA] AI generation failed: {e}")
+        return {
+            "id": "free_q_fallback", "question": fallback_q,
+            "question_type": "free", "category": f"{scene_slug.replace('_',' ').title()} — AI Free Question",
+            "difficulty": "Medium", "challenge_type": "Contextual",
+        }
+
+
+def build_dual_track_qa(slides, audience, scene_slug, difficulty):
+    """
+    Build the dual-track Q&A bank for post-session Q&A.
+
+    Track structure by difficulty / question count:
+      Easy  (1 q): Q1 — AI free question only
+      Medium (2 q): Q1 — AI free  +  Q2 — anchor (scaffolded, randomly selected)
+      Hard  (3 q): Q1 — AI free  +  Q2 — anchor  +  Q3 — baseline fallback free
+
+    Exactly ONE anchor per session ("有且仅有一个标准锚点题").
+    """
+    qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
+
+    q1 = generate_free_qa_question(slides, audience, scene_slug)
+    result = [q1]
+
+    if qa_count >= 2:
+        anchor_pool = ANCHOR_QUESTION_POOL.get(scene_slug, [])
+        if anchor_pool:
+            q2 = dict(random.choice(anchor_pool))
+            q2["questioner"] = audience
+            result.append(q2)
+        else:
+            track = "professor" if audience.lower() == "professor" else "classmate"
+            fallback_dims = list(TED_QA_MATRIX.values())
+            if fallback_dims:
+                dim_data = fallback_dims[0]
+                result.append({
+                    "id": "anchor_fallback", "question": dim_data[track],
+                    "question_type": "anchor", "category": "Anchor Fallback",
+                    "challenge_type": "Structural", "target_dim": "rule_of_three",
+                    "scaffold_signal": "structured enumeration",
+                    "anchor_type": "Structural", "questioner": audience,
+                })
+
+    if qa_count >= 3:
+        baseline_pool = [q for q in CLASS_PRES_QA_POOL if q.get("difficulty") != "Easy"]
+        if baseline_pool:
+            q3 = dict(random.choice(baseline_pool))
+            q3["question_type"] = "free"
+            q3["questioner"]    = audience
+            result.append(q3)
+
+    return result
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # COMMUNICATION QUALITY (CQ) ENGINE
 # Scene-targeted evaluation of Q&A and interrupt exchanges only.
 # Three scene branches: thesis_defense / case_pitch / class_presentation
 # Each branch has 3 weighted sub-dimensions totalling 100 pts.
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def _cq_heuristic_universal(qa_texts):
+    """
+    Universal heuristic for FREE questions (no scene anchor).
+    Returns (directness_logic, conversational_resonance, evidence_substantiation) 0-100.
+    Dims match Module 1: Directness & Logic (40%) / Conv Resonance (30%) / Evidence (30%).
+    """
+    all_text = " ".join(qa_texts).lower()
+
+    # Dim 1: Directness & Logic
+    DIRECT_OPEN = (
+        r'^(?:yes[,\s]|no[,\s]|the (?:key|main|core|answer|point|issue)|'
+        r'i (?:believe|argue|think|found|see)|we (?:found|show|believe)|'
+        r'in short[,\s]|to answer[,\s]|my (?:view|point|answer|stance))'
+    )
+    DODGE_OPEN = (
+        r'^(?:as (?:i|we) mentioned|to give (?:some )?context|'
+        r'that\'?s (?:a )?(?:great|good|interesting)|thank you for|'
+        r'so[,\s](?:as|before|first[,\s])|first[,\s](?:let me|i want to))'
+    )
+    directness = 55
+    for txt in qa_texts:
+        first = txt.strip()[:200].lower()
+        if re.search(DIRECT_OPEN, first, re.MULTILINE):
+            directness = min(100, directness + 18)
+        if re.search(DODGE_OPEN, first, re.MULTILINE):
+            directness = max(0, directness - 12)
+    directness = max(0, min(100, directness))
+
+    # Dim 2: Conversational Resonance
+    ORAL_RE = (
+        r'\b(?:you know|think about (?:it|this)|the thing is|basically|'
+        r'i mean|right\?|imagine|let me (?:explain|tell you)|'
+        r'what i\'m saying is|it\'s like|here\'s the (?:thing|deal)|'
+        r'actually|you see)\b'
+    )
+    SCRIPT_RE = r'\b(?:furthermore|nevertheless|in conclusion|to summarize|accordingly|thus|hence|moreover)\b'
+    oral_hits   = len(re.findall(ORAL_RE,   all_text))
+    script_hits = len(re.findall(SCRIPT_RE, all_text))
+    if   oral_hits >= 4 and script_hits == 0: conv_resonance = 92
+    elif oral_hits >= 3 and script_hits <= 1: conv_resonance = 80
+    elif oral_hits >= 2:                       conv_resonance = 70
+    elif oral_hits >= 1:                       conv_resonance = 57
+    elif script_hits >= 3:                     conv_resonance = 35
+    else:                                      conv_resonance = 50
+
+    # Dim 3: Evidence & Substantiation
+    EVIDENCE_RE = (
+        r'\b(?:for example|for instance|such as|specifically|'
+        r'research (?:shows?|found|indicates?)|studies? (?:show|found)|'
+        r'data (?:shows?|suggests?)|according to|'
+        r'\d+[\.,]?\d*\s*(?:%|percent|million|billion|users?|customers?)|'
+        r'in (?:20\d\d|19\d\d)|'
+        r'a (?:friend|colleague|client|customer|student|professor) (?:told|said|shared|mentioned|found))\b'
+    )
+    ev_hits = len(re.findall(EVIDENCE_RE, all_text))
+    if   ev_hits >= 3: evidence = 90
+    elif ev_hits >= 2: evidence = 75
+    elif ev_hits >= 1: evidence = 58
+    else:              evidence = 35
+
+    return directness, conv_resonance, evidence
+
+
+def _check_anchor_compliance(anchor_text, target_dim):
+    """
+    Heuristic: did the user follow the anchor question's scaffold hint?
+    Returns (passed: bool, score: int 0-100).
+    """
+    if not anchor_text:
+        return False, 20
+    text_l = anchor_text.lower()
+    _checks = {
+        "rule_of_three":        (r'\b(first(?:ly)?[,\s]|second(?:ly)?[,\s]|third(?:ly)?[,\s]|there are (?:three|3)|number (?:one|two|three))\b', 2),
+        "illustrative_support": (r'\b(who|when|where|for example|specifically|in (?:20\d\d|19\d\d)|a (?:person|student|teacher|professor|company|friend)|result was)\b', 2),
+        "directness":           (r'^(?:yes[,\s]|no[,\s]|the answer is|i believe|i argue|my finding|it is|the key|the main|to answer)', 1),
+        "tact":                 (r'\b(valid concern|good point|you(?:\'?re| are) right|i understand|fair point|that\'?s (?:a )?valid|i agree|i see your)\b', 1),
+        "conclusion_first":     (r'^(?:yes[,\s]|no[,\s]|the (?:key|main|top|answer)|we believe|i (?:believe|argue)|the (?:three|first))', 1),
+        "persuasion_mix":       (r'\b(user|customer|client|story|told us|experienced|felt|a (?:real|specific) (?:user|customer|person|example))\b', 1),
+    }
+    pattern, min_hits = _checks.get(target_dim, (r'\b\w+\b', 5))
+    hits  = len(re.findall(pattern, text_l, re.MULTILINE | re.IGNORECASE))
+    if hits >= min_hits:
+        return True,  min(100, 65 + hits * 8)
+    return False, max(20, 35 + hits * 10)
+
+
+# Universal dim fallback fix phrases (used in mock dual-track result)
+_UNIVERSAL_FIX_PHRASES = {
+    "Directness & Logic":        "Lead with your stance immediately. Say this instead: 'To answer directly: [your core point]. The reason is [one key logic].' — never re-state the question first.",
+    "Conversational Resonance":  "Sound like you're talking, not reading. Say this instead: 'Think about it this way — [your core point]. The key insight is [idea].' — add connectors like you know / the thing is.",
+    "Evidence & Substantiation": "Add one concrete fact or story. Say this instead: 'For example, in [year], [who] at [place] did [what], and the result was [outcome].' — one specific case beats ten adjectives.",
+}
+
 
 def _cq_heuristic_thesis_defense(qa_texts):
     """Branch A: Thesis Defense — returns (directness, defensibility, tact) 0-100."""
@@ -1486,13 +1821,18 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
 
     # Build from session answers (server-side Q&A records from submit-answer /
     # submit-academic-qa routes — may have richer text than the frontend capture)
+    # Also carry question_type / anchor metadata for dual-track detection.
     session_transcripts = []
     for a in qa_answers:
         if a.get("type") in ("qa_answer", "academic_qa"):
             session_transcripts.append({
-                "question": a.get("question", ""),
-                "answer":   a.get("text", ""),
-                "type":     a.get("type", ""),
+                "question":        a.get("question",        ""),
+                "answer":          a.get("text",            ""),
+                "type":            a.get("type",            ""),
+                "question_type":   a.get("question_type",   "free"),
+                "anchor_type":     a.get("anchor_type",     ""),
+                "target_dim":      a.get("target_dim",      ""),
+                "scaffold_signal": a.get("scaffold_signal", ""),
             })
 
     # Use whichever source has more substantive text content
@@ -1516,12 +1856,41 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
             comm_transcripts.append(t)
             fe_answers_set.add(ans)
 
+    # ── Annotate comm_transcripts with question_type from session metadata ──────
+    # session_transcripts carry question_type; fe_transcripts may not.
+    # Match by stripped answer text so question_type propagates correctly.
+    _sess_meta = {
+        t["answer"].strip(): t
+        for t in session_transcripts if t["answer"].strip()
+    }
+    for t in comm_transcripts:
+        ans  = t["answer"].strip()
+        meta = _sess_meta.get(ans, {})
+        t.setdefault("question_type",   meta.get("question_type",   "free"))
+        t.setdefault("anchor_type",     meta.get("anchor_type",     ""))
+        t.setdefault("target_dim",      meta.get("target_dim",      ""))
+        t.setdefault("scaffold_signal", meta.get("scaffold_signal", ""))
+
     if not comm_transcripts or all(not t["answer"].strip() for t in comm_transcripts):
         app.logger.info("[CQ] No Q&A transcript data — returning no_data placeholder.")
         return _cq_no_data_result(scene_slug)
 
     qa_texts       = [t["answer"].strip() for t in comm_transcripts if t["answer"].strip()]
     exchange_count = len(comm_transcripts)
+
+    # ── Dual-track routing: anchor question present → use Module 3 evaluator ──
+    _anchor_ts = [t for t in comm_transcripts if t.get("question_type") == "anchor" and t["answer"].strip()]
+    _free_ts   = [t for t in comm_transcripts if t.get("question_type") != "anchor"  and t["answer"].strip()]
+    if _anchor_ts and _free_ts:
+        app.logger.info(
+            f"[CQ DUAL-TRACK] {len(_free_ts)} free + {len(_anchor_ts)} anchor exchange(s) detected. "
+            "Routing to dual-track evaluator."
+        )
+        return _run_dual_track_cq_evaluation(
+            _free_ts, _anchor_ts, scene_slug, scene_label,
+            audience, difficulty, exchange_count
+        )
+    # No anchor detected → fall through to single-track evaluation (backward compat)
 
     # ── Python heuristic pre-scoring ──────────────────────────────────────────
     if scene_slug == "thesis_defense":
@@ -1845,6 +2214,268 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(
             scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
             good_override=good_items, fix_override=fix_items,
+        )
+
+
+def _build_dual_track_mock_result(universal_heuristic, anchor_passed, anchor_score,
+                                    anchor_type, anchor_text, scene_slug, scene_label,
+                                    universal_total, exchange_count, free_texts, target_dim):
+    """Fallback dual-track CQ result when Gemini is unavailable."""
+    u_scores = dict(universal_heuristic)
+    u_scores[f"Anchor — {anchor_type}"] = anchor_score
+    combined_total = int(round(universal_total * 0.75 + anchor_score * 0.25))
+    dim_names  = list(universal_heuristic.keys()) + [f"Anchor — {anchor_type}"]
+    best_u_dim = max(universal_heuristic, key=universal_heuristic.get)
+    mid_u_dim  = sorted(universal_heuristic, key=universal_heuristic.get)[1]
+
+    good_items = [
+        f"[Universal] {best_u_dim} ({universal_heuristic[best_u_dim]}/100): "
+        f"Your response showed strength here. Keep applying this approach.",
+        f"[Universal] {mid_u_dim} ({universal_heuristic[mid_u_dim]}/100): "
+        f"Good baseline. Focused practice will push this above 75.",
+    ]
+    if anchor_passed:
+        good_items.append(
+            f"【ANCHOR PASS】[{scene_label}] {anchor_type} ({anchor_score}/100): "
+            f"You followed the scaffold hint and demonstrated the target skill. Excellent!"
+        )
+    else:
+        good_items.append(
+            f"[{scene_label}] {anchor_type} ({anchor_score}/100): "
+            f"You attempted the anchor question. Focus on following the scaffold hint exactly next time."
+        )
+
+    worst_u_dim = min(universal_heuristic, key=universal_heuristic.get)
+    fix_items = [{
+        "dimension": worst_u_dim,
+        "issue":     f"[Universal] {worst_u_dim} needs improvement.",
+        "example":   f'You said: "{free_texts[0][:120]}…"' if free_texts else "See transcript.",
+        "how_to_fix": _UNIVERSAL_FIX_PHRASES.get(worst_u_dim, "Practice focused Q&A coaching."),
+    }]
+    if not anchor_passed:
+        fix_items.append({
+            "dimension": anchor_type,
+            "issue":     (
+                f"[{scene_label}] The scaffold hint was provided but the {anchor_type} technique "
+                "was not fully demonstrated."
+            ),
+            "example":   f'You said: "{anchor_text[:120]}…"' if anchor_text else "No answer recorded.",
+            "how_to_fix": (
+                f"Say this instead: Demonstrate {anchor_type} in your very first sentence — "
+                "follow the scaffold exactly and practice until it is automatic."
+            ),
+        })
+    return {
+        "has_data":              True,
+        "scene_slug":            scene_slug,
+        "scene_label":           scene_label,
+        "cq_total":              combined_total,
+        "cq_scores":             u_scores,
+        "dim_names":             dim_names,
+        "weights":               [],
+        "what_i_did_good":       good_items[:3],
+        "areas_for_improvement": fix_items[:3],
+        "exchange_count":        exchange_count,
+        "dual_track":            True,
+        "anchor_passed":         anchor_passed,
+        "anchor_score":          anchor_score,
+    }
+
+
+def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_slug,
+                                    scene_label, audience, difficulty, exchange_count):
+    """
+    Dual-track CQ evaluation engine (Module 3).
+
+    Section A — Free questions → 3 universal dims (Directness / Conv Resonance / Evidence).
+    Section B — Anchor question → scaffold compliance + dynamic 'Say this instead' rewrite.
+
+    CQ scores: 3 universal dims + 1 anchor dim (4 bars in report chart).
+    Combined total: universal × 75% + anchor × 25%.
+    """
+    free_texts  = [t["answer"].strip() for t in free_transcripts if t["answer"].strip()]
+    anchor_info = anchor_transcripts[0]   # exactly ONE anchor per session
+    anchor_text = anchor_info.get("answer", "").strip()
+
+    d_score, cr_score, es_score = _cq_heuristic_universal(free_texts) if free_texts else (55, 55, 55)
+    universal_heuristic = {
+        "Directness & Logic":        int(d_score),
+        "Conversational Resonance":  int(cr_score),
+        "Evidence & Substantiation": int(es_score),
+    }
+    universal_total_h = int(round(d_score * 0.40 + cr_score * 0.30 + es_score * 0.30))
+
+    anchor_type     = anchor_info.get("anchor_type", "Anchor")
+    scaffold_signal = anchor_info.get("scaffold_signal", "")
+    target_dim      = anchor_info.get("target_dim", "")
+    anchor_q        = anchor_info.get("question", "")
+    anchor_passed_h, anchor_score_h = _check_anchor_compliance(anchor_text, target_dim)
+
+    app.logger.info(
+        f"[CQ DUAL-TRACK] scene={scene_slug} | free={len(free_transcripts)} | "
+        f"anchor={anchor_type} | heuristic={'PASS' if anchor_passed_h else 'FAIL'}({anchor_score_h})"
+    )
+
+    if not AI_ENABLED:
+        return _build_dual_track_mock_result(
+            universal_heuristic, anchor_passed_h, anchor_score_h,
+            anchor_type, anchor_text, scene_slug, scene_label,
+            universal_total_h, exchange_count, free_texts, target_dim
+        )
+
+    def _label_sentences(text):
+        parts   = re.split(r'(?<=[.!?])\s+', text.strip())
+        labeled = [f"[{j+1}] {p.strip()}" for j, p in enumerate(parts) if p.strip()]
+        return " ".join(labeled) if labeled else text
+
+    free_exchanges_text = "\n\n".join(
+        f"Q{i+1} [free]: {t['question']}\nA{i+1}: {_label_sentences(t['answer'])}"
+        for i, t in enumerate(free_transcripts) if t["answer"].strip()
+    ) or "(No free Q&A answers recorded)"
+
+    anchor_exchange_text = (
+        f"Q_anchor [{anchor_type}]: {anchor_q}\n"
+        f"A_anchor: {_label_sentences(anchor_text)}"
+    ) if anchor_text else "(No anchor answer recorded)"
+
+    cq_dual_prompt = (
+        "You are a Communication Quality (CQ) coach evaluating two types of Q&A exchanges.\n\n"
+        "══════════════════════════════════════════════\n"
+        "SECTION A — FREE QUESTION (Universal Dimensions)\n"
+        "══════════════════════════════════════════════\n"
+        "DIM 1 — Directness & Logic (40%)\n"
+        "90-100: Core stance in sentence 1-2. Strong openers: Yes/No/I believe/The key is.\n"
+        "70-89:  Mostly direct, one filler before the real answer.\n"
+        "50-69:  2+ background sentences before addressing the question.\n"
+        "0-49:   Question Dodging — opens with compliments/thanks/re-stating.\n"
+        "PENALTY: 'That's a great question' or rephrasing = -15 pts.\n\n"
+        "DIM 2 — Conversational Resonance (30%)\n"
+        "90-100: Live dialogue tone. Oral connectors: you know / think about it / the thing is.\n"
+        "70-89:  Some conversational elements.\n  50-69: Mixed.\n"
+        "0-49:   Reads like a formal essay: furthermore / therefore / in conclusion.\n\n"
+        "DIM 3 — Evidence & Substantiation (30%)\n"
+        "90-100: At least one concrete fact, data point, named case, year, or analogy.\n"
+        "70-89:  General example.  50-69: Topic mentioned, no specifics.\n"
+        "0-49:   Pure subjective (very/I feel) — zero evidence.\n\n"
+        f"ANCHORS (adjust ±15): Directness={d_score} | Conv={cr_score} | Evidence={es_score}\n\n"
+        f"FREE EXCHANGES:\n{free_exchanges_text}\n\n"
+        "══════════════════════════════════════════════\n"
+        "SECTION B — ANCHOR QUESTION (Scaffold Compliance)\n"
+        "══════════════════════════════════════════════\n"
+        "The anchor question included a 引导 (scaffold hint) in Chinese telling the user EXACTLY what to do.\n"
+        f"Scene: {scene_label} | Target: {anchor_type}\n"
+        f"Check: {scaffold_signal}\n"
+        f"Heuristic estimate: {'PASSED' if anchor_passed_h else 'FAILED'} ({anchor_score_h}/100)\n\n"
+        f"ANCHOR EXCHANGE:\n{anchor_exchange_text}\n\n"
+        "══════════════════════════════════════════════\n"
+        "OUTPUT RULES\n"
+        "══════════════════════════════════════════════\n"
+        "RULE 1: IELTS 5.5-6.0 vocabulary. Short sentences.\n"
+        "RULE 2 (CRITICAL): Every example MUST quote EXACT words from A1/A_anchor. NEVER invent quotes.\n"
+        "RULE 3: what_i_did_good = EXACTLY 3 items:\n"
+        "  Items 1-2: praise for universal dims A (with EXACT A1 quote).\n"
+        "  Item 3: anchor — if passed: prefix 【ANCHOR PASS】+ high praise; if failed: note attempt.\n"
+        "RULE 4: areas_for_improvement = 1-3 items. If anchor_passed=false, the LAST item MUST be the\n"
+        "  anchor item. Its how_to_fix MUST contain 'Say this instead:' followed by a DYNAMIC 2-sentence\n"
+        "  rewrite using the user's ACTUAL domain content from A_anchor (NOT generic placeholder text).\n"
+        "RULE 5 (QUOTE ISOLATION): each example field uses a DIFFERENT sentence from the transcripts.\n\n"
+        "Return ONLY valid JSON. No markdown:\n"
+        "{\n"
+        '  "universal_scores": {"Directness & Logic": int, "Conversational Resonance": int, "Evidence & Substantiation": int},\n'
+        '  "universal_total": int,\n'
+        '  "anchor_passed": bool,\n'
+        '  "anchor_score": int,\n'
+        '  "what_i_did_good": [\n'
+        '    "[Universal] Directness & Logic (N/100): praise + EXACT A1 quote",\n'
+        '    "[Universal] Conversational Resonance (N/100): praise + EXACT A1 quote",\n'
+        f'    "[{scene_label}] {anchor_type} (N/100): anchor result + EXACT A_anchor quote"\n'
+        '  ],\n'
+        '  "areas_for_improvement": [\n'
+        '    {"dimension": "Evidence & Substantiation", "issue": "...", "example": "You said: \'EXACT A1\'", "how_to_fix": "..."},\n'
+        f'    {{"dimension": "{anchor_type}", "issue": "...", "example": "You said: \'EXACT A_anchor\'", "how_to_fix": "Say this instead: \'dynamic 2-sentence rewrite using A_anchor domain content\'"}}\n'
+        '  ]\n'
+        '}'
+    )
+
+    _DIM_NAMES_BASE = ["Directness & Logic", "Conversational Resonance", "Evidence & Substantiation"]
+
+    try:
+        response = _ai_client.chat.completions.create(
+            model=EVAL_MODEL, max_tokens=2048,
+            messages=[{"role": "user", "content": cq_dual_prompt}],
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$",          "", raw)
+        result = json.loads(raw)
+
+        u_scores = result.get("universal_scores", universal_heuristic)
+        u_scores = {k: int(min(100, max(0, float(v)))) for k, v in u_scores.items()} if u_scores else dict(universal_heuristic)
+
+        u_total      = result.get("universal_total", universal_total_h)
+        u_total      = int(u_total) if 0 < int(u_total) <= 100 else universal_total_h
+        anchor_passed = result.get("anchor_passed", anchor_passed_h)
+        anchor_score  = int(result.get("anchor_score", anchor_score_h))
+
+        u_scores[f"Anchor — {anchor_type}"] = anchor_score
+        combined_total = int(round(u_total * 0.75 + anchor_score * 0.25))
+        dim_names = _DIM_NAMES_BASE + [f"Anchor — {anchor_type}"]
+
+        good_items = result.get("what_i_did_good") or [f"[Universal] Communication recorded."]
+        fix_items  = result.get("areas_for_improvement") or []
+
+        return {
+            "has_data":              True,
+            "scene_slug":            scene_slug,
+            "scene_label":           scene_label,
+            "cq_total":              combined_total,
+            "cq_scores":             u_scores,
+            "dim_names":             dim_names,
+            "weights":               [0.30, 0.225, 0.225, 0.25],
+            "what_i_did_good":       good_items,
+            "areas_for_improvement": fix_items,
+            "exchange_count":        exchange_count,
+            "dual_track":            True,
+            "anchor_passed":         anchor_passed,
+            "anchor_score":          anchor_score,
+        }
+
+    except json.JSONDecodeError as e:
+        app.logger.error(f"[CQ DUAL-TRACK] JSONDecodeError: {str(e)[:200]} — attempting repair")
+        try:
+            repaired = _repair_truncated_json(raw)
+            if repaired and isinstance(repaired, dict):
+                u_sc = repaired.get("universal_scores", universal_heuristic)
+                u_sc = {k: int(min(100, max(0, float(v)))) for k, v in u_sc.items()} if u_sc else dict(universal_heuristic)
+                a_p  = repaired.get("anchor_passed", anchor_passed_h)
+                a_s  = int(repaired.get("anchor_score", anchor_score_h))
+                u_sc[f"Anchor — {anchor_type}"] = a_s
+                u_t  = int(repaired.get("universal_total", universal_total_h))
+                comb = int(round(u_t * 0.75 + a_s * 0.25)) if 0 < u_t <= 100 else int(round(universal_total_h * 0.75 + a_s * 0.25))
+                return {
+                    "has_data": True, "scene_slug": scene_slug, "scene_label": scene_label,
+                    "cq_total": comb, "cq_scores": u_sc,
+                    "dim_names": _DIM_NAMES_BASE + [f"Anchor — {anchor_type}"],
+                    "weights": [], "what_i_did_good": repaired.get("what_i_did_good", []),
+                    "areas_for_improvement": repaired.get("areas_for_improvement", []),
+                    "exchange_count": exchange_count, "dual_track": True,
+                    "anchor_passed": a_p, "anchor_score": a_s,
+                }
+        except Exception:
+            pass
+        return _build_dual_track_mock_result(
+            universal_heuristic, anchor_passed_h, anchor_score_h,
+            anchor_type, anchor_text, scene_slug, scene_label,
+            universal_total_h, exchange_count, free_texts, target_dim
+        )
+
+    except Exception as e:
+        app.logger.error(f"[CQ DUAL-TRACK] {type(e).__name__}: {str(e)[:300]}")
+        traceback.print_exc()
+        return _build_dual_track_mock_result(
+            universal_heuristic, anchor_passed_h, anchor_score_h,
+            anchor_type, anchor_text, scene_slug, scene_label,
+            universal_total_h, exchange_count, free_texts, target_dim
         )
 
 
@@ -2942,8 +3573,10 @@ def api_start_session():
     }
     session["challenge_seed"] = challenge_seed
     if scenario in ("Class Presentation", "Academic Presentation"):
-        # Both names map to the same TED_QA_MATRIX bank; "Academic Presentation" kept for backward compat
-        session["qa_bank"] = build_class_presentation_qa(audience, difficulty)
+        # Dual-track: Q1 = AI-free, Q2 = anchor (when difficulty >= Medium).
+        # "Academic Presentation" kept for backward compat with old sessions.
+        _scene_for_qa = "class_presentation"
+        session["qa_bank"] = build_dual_track_qa(slides, audience, _scene_for_qa, difficulty)
     else:
         session["qa_bank"] = []
 
@@ -3144,10 +3777,14 @@ def api_submit_academic_qa():
     current_q = questions[current_idx] if current_idx < len(questions) else {}
     answers_list = list(session.get("answers", []))
     answers_list.append({
-        "type":         "academic_qa",
-        "question_idx": current_idx,
-        "question":     current_q.get("question", ""),
-        "text":         answer,
+        "type":            "academic_qa",
+        "question_idx":    current_idx,
+        "question":        current_q.get("question", ""),
+        "question_type":   current_q.get("question_type",   "free"),   # "free" | "anchor"
+        "anchor_type":     current_q.get("anchor_type",     ""),
+        "target_dim":      current_q.get("target_dim",      ""),
+        "scaffold_signal": current_q.get("scaffold_signal", ""),
+        "text":            answer,
     })
     session["answers"] = answers_list
 

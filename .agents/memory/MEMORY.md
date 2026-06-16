@@ -3,3 +3,4 @@
 - [Real Data Pipeline](real-data-pipeline.md) — frontend sends transcripts/QA/timer to /x/finish-presentation; backend merges with session; Gemini gets real WPM+filler+per-slide narration.
 - [Audio State Machine](audio-state-machine.md) — unified AudioMachine (audioMode: idle/narration/qa/acq); audioSuspendForQa() on INTERRUPT/ACADEMIC_QA_START; audioResumeAfterQa() on QA_FINISHED.
 - [Flask session disk offload](flask-session-disk-offload.md) — slides/reports must live on disk (not cookie) to avoid 4KB limit silently falling back to mock data and ending presentations early.
+- [Dual-Track Q&A Architecture](dual-track-qa.md) — Q1=AI-free (gpt-4o, no scaffold), Q2=anchor from ANCHOR_QUESTION_POOL (with 大白话 hint); CQ eval splits by question_type tag stored on session answer; universal dims for free, scene dims for anchor.
