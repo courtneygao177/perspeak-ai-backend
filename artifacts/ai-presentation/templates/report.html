@@ -760,7 +760,7 @@
   };
 
   // Build score-reason index from what_i_did_good + areas_for_improvement
-  const CQ_DATA = {{ cq | tojson }} || {};
+  const CQ_DATA = {{ (cq or {}) | tojson }};
   const _dimReason = {};
   (CQ_DATA.what_i_did_good || []).forEach(s => {
     const m = s.match(/\[Metric:\s*([^\]]+)\]/);
