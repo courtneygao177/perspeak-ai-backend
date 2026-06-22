@@ -1,0 +1,60 @@
+请将该区域的标题和所有卡片内的英文要点翻译为恰当的中文：
+
+1. 区块大标题：
+   * "1 AUDIENCE" -> "1、选择听众角色"
+   * "2 SCENARIO" -> "2、选择演练场景"
+
+2. 【AUDIENCE】卡片内容翻译：
+   * 【Professor 教授】卡片：
+     - "Asks long, detailed questions" -> "提问冗长且注重细节"
+     - "Focuses on logic and evidence" -> "极度看重逻辑与数据论据"
+     - "Demands academic rigor" -> "要求学术严谨性，直击论文痛点"
+   * 【Classmates 同学】卡片：
+     - "Friendly and curious" -> "态度友善，充满好奇心"
+     - "Asks practical questions" -> "倾向于提出应用层面的实际问题"
+     - "Wants real-world examples" -> "渴望听到生动的现实案例"
+   * 【VC 投资人】卡片：
+     - "Cold and results-focused" -> "冷静务实，结果导向"
+     - "Short, sharp questions" -> "提问短促、言辞犀利"
+     - "Cares only about numbers" -> "只关心核心数据与商业变现"
+
+3. 【SCENARIO】卡片内容翻译：
+   * 【Class Presentation 课堂演讲】卡片（带有 Smooth 标签）：
+     - 标签 "Smooth" -> "温和互动"
+     - "No sudden interruptions" -> "展示过程中无突然打断"
+     - "Classmates or professor ask questions" -> "演讲结束后由同学或教授提问"
+     - "Post-presentation Q&A round" -> "进入标准会后 Q&A 答辩环节"
+   * 【Thesis Defense 论文答辩】卡片（带有 Interrupts 标签）：
+     - 标签 "Interrupts" -> "随机打断"
+     - "AI stops you mid-presentation" -> "AI 会在你的演讲过程中随机切入打断"
+     - "Targets your weakest slide" -> "精准挑刺，针对你逻辑最薄弱的一页发问"
+     - "Up to 2 follow-up challenges" -> "包含最多 2 轮步步紧逼的连环追问"
+   * 【MBA Case Pitch 商业路演】卡片（带有 Interrupts 标签）：
+     - 标签 "Interrupts" -> "高压打断"
+     - "Investor-style interruptions" -> "模拟挑剔投资人的随时对抗式打断"
+     - "Business challenge questions" -> "直击商业模式、市场壁垒等硬核挑战"
+     - "High pressure, no small talk" -> "全程高压，没有客套，直面利益核心"
+
+==================================================
+模块三：【PRESSURE LEVEL 压力等级重构】（对应图三 截屏2026-06-22 下午8.47.51.png）
+==================================================
+请将该区块的标题和所有卡片内的要点翻译为恰当的中文：
+
+1. 区块大标题：
+   * "3 PRESSURE LEVEL" -> "3、选择高压等级"
+
+2. 【PRESSURE LEVEL】卡片内容翻译：
+   * 【Easy 温和支持】卡片：
+     - "Supportive audience" -> "听众全程表现支持与鼓励"
+     - "1 clarifying question only" -> "仅包含 1 个简单的澄清性问题"
+     - "No aggressive follow-ups" -> "无攻击性追问，体验轻松"
+   * 【Medium 正常互动】卡片：
+     - "Normal presentation setting" -> "标准的日常演讲/答辩环境"
+     - "1-2 follow-up questions" -> "包含 1-2 个层层深入的连环追问"
+     - "Balanced challenge level" -> "难度均衡，兼顾展示与适度对抗"
+   * 【Hard 高压死磕】卡片：
+     - "Skeptical, aggressive audience" -> "听众立场挑剔，充满质疑"
+     - "Continuous follow-up questions" -> "连珠炮式的持续对抗追问"
+     - "No compliments, just pressure" -> "全程没有任何客套夸奖，纯压力测试"
+
+请立即执行代码重构，完成界面文字的全面中文化，让用户的配置体验变得极度丝滑！

@@ -29,7 +29,7 @@
              class="mb-8 rounded-2xl overflow-hidden"
              style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(15,23,42,0.06)"
       <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none select-none
-                      hover:bg-slate-50 transition-colors">
+                      hover:bg-slate-50 transition-colors" style="display:flex;list-style:none">
         <div class="flex items-center gap-3">
           <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                style="background:#E6F4EA">
@@ -39,8 +39,8 @@
             </svg>
           </div>
           <div>
-            <p class="text-sm font-semibold text-[#0F172A]">PPT Logic Tree</p>
-            <p class="text-xs text-gray-600">{{ slides|length }} slide{{ 's' if slides|length != 1 }} · click to collapse</p>
+            <p class="text-sm font-semibold text-[#0F172A]">PPT 逻辑树</p>
+            <p class="text-xs text-gray-600">共 {{ slides|length }} 张幻灯片 · 点击收起</p>
           </div>
         </div>
         <svg id="treeChevron" class="w-4 h-4 text-gray-600 transition-transform duration-200 flex-shrink-0"
@@ -98,24 +98,24 @@
         <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
                 style="background:#059669">1</span>
-          Audience
+          选择听众角色
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set audiences = [
             ('Professor', '🎓', [
-              'Asks long, detailed questions',
-              'Focuses on logic and evidence',
-              'Demands academic rigor',
+              '提问冗长且注重细节',
+              '极度看重逻辑与数据论据',
+              '要求学术严谨性，直击论文痛点',
             ]),
             ('Classmates', '👥', [
-              'Friendly and curious',
-              'Asks practical questions',
-              'Wants real-world examples',
+              '态度友善，充满好奇心',
+              '倾向于提出应用层面的实际问题',
+              '渴望听到生动的现实案例',
             ]),
             ('VC', '💼', [
-              'Cold and results-focused',
-              'Short, sharp questions',
-              'Cares only about numbers',
+              '冷静务实，结果导向',
+              '提问短促、言辞犀利',
+              '只关心核心数据与商业变现',
             ]),
           ] %}
           {% for val, icon, bullets in audiences %}
@@ -143,27 +143,27 @@
         <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
                 style="background:#059669">2</span>
-          Scenario
+          选择演练场景
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set scenarios = [
-            ('Class Presentation', '📖', False, [
-              'No sudden interruptions',
-              'Classmates or professor ask questions',
-              'Post-presentation Q&A round',
+            ('Class Presentation', '📖', 'smooth', [
+              '展示过程中无突然打断',
+              '演讲结束后由同学或教授提问',
+              '进入标准会后 Q&A 答辩环节',
             ]),
-            ('Thesis Defense', '🔬', True, [
-              'AI stops you mid-presentation',
-              'Targets your weakest slide',
-              'Up to 2 follow-up challenges',
+            ('Thesis Defense', '🔬', 'interrupt', [
+              'AI 会在你的演讲过程中随机切入打断',
+              '精准挑刺，针对你逻辑最薄弱的一页发问',
+              '包含最多 2 轮步步紧逼的连环追问',
             ]),
-            ('MBA Case Pitch', '📈', True, [
-              'Investor-style interruptions',
-              'Business challenge questions',
-              'High pressure, no small talk',
+            ('MBA Case Pitch', '📈', 'hard_interrupt', [
+              '模拟挑剔投资人的随时对抗式打断',
+              '直击商业模式、市场壁垒等硬核挑战',
+              '全程高压，没有客套，直面利益核心',
             ]),
           ] %}
-          {% for val, icon, has_interrupt, bullets in scenarios %}
+          {% for val, icon, interrupt_type, bullets in scenarios %}
           <label class="config-card cursor-pointer group" data-group="scenario" data-value="{{ val }}">
             <input type="radio" name="scenario" value="{{ val }}" class="sr-only" {% if val == 'Class Presentation' %}checked{% endif %}>
             <div class="glass rounded-xl p-5 border-2 transition-all duration-200 h-full"
@@ -171,10 +171,12 @@
               <div class="text-2xl mb-3">{{ icon }}</div>
               <div class="flex items-start justify-between mb-3">
                 <div class="font-semibold text-[#0F172A] leading-tight">{{ val }}</div>
-                {% if has_interrupt %}
-                <span class="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ Interrupts</span>
+                {% if interrupt_type == 'smooth' %}
+                <span class="text-xs bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">✓ 温和互动</span>
+                {% elif interrupt_type == 'interrupt' %}
+                <span class="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ 随机打断</span>
                 {% else %}
-                <span class="text-xs bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">✓ Smooth</span>
+                <span class="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ 高压打断</span>
                 {% endif %}
               </div>
               <ul class="space-y-1">
@@ -195,24 +197,24 @@
         <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
                 style="background:rgba(5,150,105,0.25)">3</span>
-          Pressure Level
+          选择高压等级
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set difficulties = [
             ('Easy',   '🟢', '温和支持', [
-              'Supportive audience',
-              '1 clarifying question only',
-              'No aggressive follow-ups',
+              '听众全程表现支持与鼓励',
+              '仅包含 1 个简单的澄清性问题',
+              '无攻击性追问，体验轻松',
             ]),
             ('Medium', '🟡', '正常互动', [
-              'Normal presentation setting',
-              '1–2 follow-up questions',
-              'Balanced challenge level',
+              '标准的日常演讲/答辩环境',
+              '包含 1-2 个层层深入的连环追问',
+              '难度均衡，兼顾展示与适度对抗',
             ]),
             ('Hard',   '🔴', '高压死磕', [
-              'Skeptical, aggressive audience',
-              'Continuous follow-up questions',
-              'No compliments, just pressure',
+              '听众立场挑剔，充满质疑',
+              '连珠炮式的持续对抗追问',
+              '全程没有任何客套夸奖，纯压力测试',
             ]),
           ] %}
           {% for val, dot, zh, bullets in difficulties %}
