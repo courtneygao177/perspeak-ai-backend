@@ -7,10 +7,35 @@
   .alarm-overlay { background: rgba(153,27,27,0.15); border: 1px solid rgba(239,68,68,0.4); animation: alarmPulse 1.5s ease-in-out infinite; }
   @keyframes alarmPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } }
   @keyframes wave { from { transform: scaleY(0.4); } to { transform: scaleY(1.0); } }
+  @keyframes recordPulse { 0%,100% { transform:scale(1);opacity:0.8;} 50%{transform:scale(1.1);opacity:1;}}
   /* Slide image — fills its 16:9 wrapper, never overflows */
   #slideImgWrap { position:relative; width:100%; aspect-ratio:16/9; max-height:min(48vh,480px); overflow:hidden; border-radius:0.5rem; }
   #slideImg { display:block; width:100%; height:100%; object-fit:contain; border-radius:0.5rem; }
   .progress-bar-fill { transition: width 0.4s ease; }
+
+  /* Sidebar slide thumbnails */
+  .sidebar-thumb {
+    cursor: default;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: #f8fafc;
+  }
+  .sidebar-thumb.active {
+    border-color: #059669;
+    box-shadow: 0 0 0 2px rgba(5,150,105,0.15);
+  }
+  .sidebar-thumb img { width:100%; display:block; object-fit:contain; }
+  .sidebar-thumb .thumb-label {
+    font-size:0.6rem; color:#6b7280; padding:2px 4px 4px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    text-align:center; line-height:1.3;
+  }
+  .sidebar-thumb .thumb-num {
+    font-size:0.6rem; font-family:monospace; position:absolute; top:2px; left:3px;
+    background:rgba(0,0,0,0.55); color:#e2e8f0; padding:1px 4px; border-radius:3px;
+  }
 </style>
 {% endblock %}
 
@@ -43,11 +68,29 @@
     </div>
   </div>
 
-  <!-- Main layout -->
-  <div class="flex gap-4 flex-1" style="min-height: calc(100vh - 180px);">
+  <!-- Main layout: sidebar | center | right -->
+  <div class="flex gap-3 flex-1" style="min-height: calc(100vh - 180px);">
 
-    <!-- LEFT: Slide viewer -->
-    <div class="flex-1 flex flex-col gap-3">
+    <!-- ═══ LEFT SIDEBAR: Slide outline ════════════════════════════════════ -->
+    <div class="flex flex-col gap-2 overflow-y-auto flex-shrink-0"
+         id="slideOutlineSidebar"
+         style="width:6rem;max-height:calc(100vh - 180px);scrollbar-width:thin;scrollbar-color:#334155 transparent;">
+      {% for slide in slides %}
+      <div class="sidebar-thumb relative {% if slide.page == state.current_page %}active{% endif %}"
+           id="sthumb-{{ slide.page }}"
+           data-page="{{ slide.page }}">
+        <img src="/x/slide-image/{{ slide.page }}"
+             loading="lazy"
+             alt="Slide {{ slide.page }}"
+             onerror="this.style.opacity='0.3'">
+        <span class="thumb-num">{{ slide.page }}</span>
+        <p class="thumb-label">{{ (slide.title or '') | truncate(20, True, '') }}</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- ═══ CENTER: Slide viewer + QA panels ═══════════════════════════════ -->
+    <div class="flex-1 flex flex-col gap-3 min-w-0">
 
       <!-- Slide image panel -->
       <div id="slidePanel" class="slide-panel rounded-2xl flex-1 flex flex-col relative overflow-hidden">
@@ -97,27 +140,10 @@
         </div>
       </div>
 
-      <!-- Upcoming Slides Preview Strip -->
-      <div id="upcomingPanel" class="glass rounded-2xl px-4 py-3">
-        <div class="flex items-center justify-between mb-2.5">
-          <span class="text-xs font-semibold text-slate-500 uppercase tracking-widest">Upcoming</span>
-          <span id="upcomingLabel" class="text-xs text-gray-700 font-mono"></span>
-        </div>
-        <div id="upcomingStrip"
-             class="flex gap-2.5 overflow-x-auto pb-1"
-             style="scrollbar-width:thin; scrollbar-color:#374151 transparent;">
-          <!-- thumbnails injected by JS -->
-        </div>
-        <p id="upcomingDone" class="hidden text-xs text-gray-600 text-center py-2">
-          Last slide — presentation complete
-        </p>
-      </div>
-
       <!-- Academic / Class Presentation Post-Session Q&A Panel -->
       <div id="academicQaPanel" class="hidden rounded-2xl p-6"
            style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(15,23,42,0.06);">
         <div class="flex items-start gap-4">
-          <!-- Questioner avatar — updated by showAcademicQa() -->
           <div id="acqAvatarWrap" class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 text-xl"
                style="background:rgba(5,150,105,0.10)">🎓</div>
           <div class="flex-1">
@@ -159,7 +185,7 @@
         </div>
       </div>
 
-      <!-- QA Alert Panel -->
+      <!-- QA Alert Panel (mid-session interrupt) -->
       <div id="qaPanel" class="hidden alarm-overlay rounded-2xl p-6">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-xl bg-red-900/50 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -207,12 +233,12 @@
       </div>
     </div>
 
-    <!-- RIGHT: Controls -->
-    <div class="w-72 flex flex-col gap-4">
+    <!-- ═══ RIGHT: Controls ════════════════════════════════════════════════ -->
+    <div class="w-72 flex-shrink-0 flex flex-col gap-4">
 
-      <!-- Recording -->
-      <div class="glass rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-4">
+      <!-- Recording + Voice Input merged card -->
+      <div class="glass rounded-2xl p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
           <span class="text-sm font-semibold text-[#0F172A]">Recording</span>
           <div class="flex items-center gap-1.5">
             <div id="recActiveDot" class="w-2 h-2 rounded-full bg-red-500"
@@ -220,27 +246,27 @@
             <span id="recActiveLabel" class="text-xs font-mono text-gray-600">Mic off</span>
           </div>
         </div>
-        <style>@keyframes recordPulse { 0%,100% { transform:scale(1);opacity:0.8;} 50%{transform:scale(1.1);opacity:1;}}</style>
-        <div class="flex items-end gap-0.5 h-10 mb-4 justify-center">
+
+        <!-- Waveform visualiser -->
+        <div class="flex items-end gap-0.5 h-8 justify-center">
           {% for i in range(20) %}
           <div class="rounded-full w-1.5"
                style="background:rgba(217,167,82,0.35);height:{{ [15,25,35,28,42,20,32,45,18,38,22,40,30,15,35,28,42,18,32,25][loop.index0] }}%;animation:wave {{ [0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1][loop.index0] }}s ease-in-out infinite alternate;animation-delay:{{ (loop.index0*0.05)|round(2) }}s;"></div>
           {% endfor %}
         </div>
-        <textarea id="narrationInput"
-                  placeholder="Type your narration notes here…"
-                  class="w-full rounded-xl px-3 py-2
-                         text-slate-700 placeholder-slate-400 resize-none text-xs focus:outline-none
-                         transition-colors"
-                  style="background:#f8fafc;border:1px solid #e2e8f0"
-                  rows="4"></textarea>
-      </div>
 
-      <!-- Voice input -->
-      <div class="glass rounded-2xl p-5">
-        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Voice Input</h3>
+        <!-- Full-page transcript textarea -->
+        <textarea id="narrationInput"
+                  placeholder="Start recording or type your narration here…&#10;Your speech will appear here as you present this slide."
+                  class="w-full rounded-xl px-3 py-2.5 font-mono text-sm
+                         text-slate-700 placeholder-slate-400 resize-none focus:outline-none
+                         transition-colors overflow-y-auto leading-relaxed"
+                  style="background:#f8fafc;border:1px solid #e2e8f0;min-height:140px;"
+                  rows="7"></textarea>
+
+        <!-- Voice recording button embedded at bottom -->
         <button onclick="toggleNarrationVoice()" id="narrationVoiceBtn"
-                class="w-full rounded-xl text-xs py-2.5 transition-all flex items-center justify-center gap-2 border"
+                class="w-full rounded-xl text-xs py-2.5 transition-all flex items-center justify-center gap-2 border font-medium"
                 style="color:#059669;background:rgba(5,150,105,0.06);border-color:rgba(5,150,105,0.2)">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -250,26 +276,29 @@
         </button>
       </div>
 
-      <!-- Timer -->
-      <div class="glass rounded-2xl p-5">
-        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Timer</h3>
-        <div class="flex items-center justify-center">
-          <div class="text-center">
-            <div id="timerDisplay"
-                 class="text-3xl font-mono font-bold text-[#0F172A] tracking-wider mb-1">00:00</div>
-            <div id="timerStatus" class="text-xs text-green-400">Presenting</div>
+      <!-- Session Monitor: Timer + Log merged -->
+      <div class="glass rounded-2xl p-5 flex-1 flex flex-col gap-3 min-h-0">
+        <!-- Compact timer -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">⏱️</span>
+            <span id="timerDisplay" class="text-2xl font-mono font-bold text-[#0F172A] tracking-wider">00:00</span>
+            <span id="timerStatus" class="text-xs text-green-400 font-medium ml-1">Presenting</span>
           </div>
-        </div>
-        <div class="mt-3 flex justify-center">
           <button onclick="resetTimer()"
                   class="text-xs text-gray-600 hover:text-slate-400 underline transition-colors">Reset</button>
         </div>
-      </div>
 
-      <!-- Session log -->
-      <div class="glass rounded-2xl p-5 flex-1">
-        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Session Log</h3>
-        <div id="sessionLog" class="space-y-1.5 max-h-36 overflow-y-auto text-xs text-gray-600">
+        <!-- Divider -->
+        <div class="h-px bg-slate-100"></div>
+
+        <!-- Session log stream -->
+        <div class="flex items-center justify-between mb-0.5">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Session Log</span>
+        </div>
+        <div id="sessionLog"
+             class="flex-1 overflow-y-auto space-y-1.5 text-xs text-gray-600"
+             style="max-height:220px;scrollbar-width:thin;scrollbar-color:#334155 transparent;">
           <div class="flex gap-2">
             <span class="text-indigo-700 font-mono flex-shrink-0">00:00</span>
             <span>Session started</span>
@@ -352,16 +381,15 @@
   };
   let slides      = {{ slides | tojson }};
   let hasFile     = {{ 'true' if has_file else 'false' }};
-  const audienceRole = {{ config.audience | tojson }};   // 'Professor' | 'Classmates' | 'VC'
-  const scenarioType = {{ config.scenario | tojson }};   // 'Class Presentation' | 'Thesis Defense' | 'MBA Case Pitch'
+  const audienceRole = {{ config.audience | tojson }};
+  const scenarioType = {{ config.scenario | tojson }};
 
-  // ── Real data pipeline accumulators ─────────────────────────────────────────
-  // These are sent to /x/finish-presentation so Gemini sees actual user speech
-  let presentationTranscripts = []; // [{page, text, words}] — one entry per completed slide
-  let qaChatHistory           = []; // [{role:'ai'|'user', text, type:'interrupt'|'academic'}]
+  // ── Real data pipeline accumulators ──────────────────────────────────────
+  let presentationTranscripts = [];
+  let qaChatHistory           = [];
 
-  // Render upcoming preview on first load
-  document.addEventListener('DOMContentLoaded', () => renderUpcoming(state.current_page));
+  // ── Current-slide full transcript (accumulates STT segments, resets on next slide) ──
+  let currentSlideTranscript = '';
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   let timerSeconds  = 0;
@@ -379,13 +407,13 @@
   function pauseTimer() {
     timerPaused = true;
     document.getElementById('timerStatus').textContent = 'Paused — Q&A';
-    document.getElementById('timerStatus').className = 'text-xs text-orange-500';
+    document.getElementById('timerStatus').className = 'text-xs text-orange-500 font-medium ml-1';
     document.getElementById('timerDisplay').style.color = '#ea580c';
   }
   function resumeTimer() {
     timerPaused = false;
     document.getElementById('timerStatus').textContent = 'Presenting';
-    document.getElementById('timerStatus').className = 'text-xs text-green-500';
+    document.getElementById('timerStatus').className = 'text-xs text-green-400 font-medium ml-1';
     document.getElementById('timerDisplay').style.color = '#0F172A';
   }
   function resetTimer() {
@@ -402,7 +430,6 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg>`;
 
-    // Track if narration was recording — we keep it alive across NEXT_SLIDE
     const wasRecordingNarration = (audioMode === 'narration');
     const narration = document.getElementById('narrationInput').value.trim();
 
@@ -421,7 +448,6 @@
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
         });
-        // Suspend narration; remember we were recording so QA_FINISHED can auto-resume
         audioSuspendForQa(wasRecordingNarration);
         showQAChallenge(data.question, 1, data.challenge_type);
         qaChatHistory.push({ role: 'ai', text: data.question, type: 'interrupt' });
@@ -430,21 +456,20 @@
         btn.innerHTML = `<span class="text-red-400 text-xs">⚡ Answer first</span>`;
 
       } else if (data.action === 'NEXT_SLIDE') {
-        // Save this slide's narration
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
         });
         state.current_page = data.page;
         updateSlideDisplay(data.slide);
-        // Clear text for new slide — recording stream continues automatically
+        // ── Reset per-slide transcript accumulator ──
+        currentSlideTranscript = '';
         document.getElementById('narrationInput').value = '';
         addLog(`✓ Slide ${state.current_page - 1} → ${state.current_page}`);
         resetBtn();
-        // ── Continuous Recording: restart the SR instance for a clean result set ──
         if (wasRecordingNarration) {
-          _stopAllRecording();                        // flush old instance cleanly
-          setTimeout(() => _startNarrationRec(), 200); // auto-restart, no user click needed
+          _stopAllRecording();
+          setTimeout(() => _startNarrationRec(), 200);
         }
 
       } else if (data.action === 'ACADEMIC_QA_START') {
@@ -480,11 +505,9 @@
     if (challengeType) { typeBadge.textContent = challengeType; typeBadge.classList.remove('hidden'); }
     else               { typeBadge.classList.add('hidden'); }
 
-    // ── Audience-pinned avatar & identity ─────────────────────────────────
     const avatarWrap = document.getElementById('acqAvatarWrap');
     const labelEl    = document.getElementById('acqQuestionerLabel');
     const subtitleEl = document.getElementById('acqSubtitle');
-    // backward compat: old sessions may have stored 'Academic Presentation' (renamed to 'Class Presentation')
     const isClassPres = scenarioType === 'Class Presentation' || scenarioType === 'Academic Presentation';
 
     if (isClassPres && audienceRole === 'Professor') {
@@ -500,7 +523,6 @@
       labelEl.textContent = '👥 Classmate — Quick Q&A';
       subtitleEl.textContent = 'Your classmates want to understand your key takeaways.';
     } else {
-      // Academic Presentation — keep default green academic style
       avatarWrap.textContent = '🎓';
       avatarWrap.style.background = 'rgba(5,150,105,0.10)';
       labelEl.style.color = '#059669';
@@ -526,7 +548,6 @@
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg> Saving…`;
-    // Record user academic QA answer
     qaChatHistory.push({ role: 'user', text: answer, type: 'academic' });
 
     try {
@@ -538,7 +559,6 @@
       document.getElementById('acqInput').value = '';
 
       if (data.status === 'ACADEMIC_QA_NEXT') {
-        // Record next AI question in the chat history
         qaChatHistory.push({ role: 'ai', text: data.question, type: 'academic' });
         showAcademicQa(data.question, data.question_num, data.total_questions, data.challenge_type, data.category);
         addLog(`↪ Academic Q&A ${data.question_num} / ${data.total_questions}`);
@@ -569,7 +589,6 @@
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg> AI thinking…`;
-    // Record user's real QA answer
     qaChatHistory.push({ role: 'user', text: answer, type: 'interrupt' });
 
     try {
@@ -581,7 +600,6 @@
       document.getElementById('answerInput').value = '';
 
       if (data.status === 'CONTINUE_QA') {
-        // Record the follow-up AI question
         qaChatHistory.push({ role: 'ai', text: data.next_question, type: 'interrupt' });
         state.follow_up_round = data.round;
         document.getElementById('qaRoundBadge').textContent = `Round ${data.round}`;
@@ -592,7 +610,6 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>Submit Answer`;
 
       } else if (data.status === 'QA_FINISHED') {
-        // Unlock audio: narration stream can resume (user must click the button)
         audioResumeAfterQa();
         state.in_qa_mode = false; state.total_interruptions++;
         document.getElementById('interruptBadge').textContent = `⚡ ${state.total_interruptions} challenge(s)`;
@@ -616,36 +633,25 @@
     }
   }
 
-  // ── Finish presentation with loading overlay ───────────────────────────────
+  // ── Finish presentation ───────────────────────────────────────────────────
   function triggerFinish() {
     if (!confirm('End the presentation now and generate your report?')) return;
     finishPresentation();
   }
 
-  // ── Hard lock: prevent any double-submit race ─────────────────────────────
   let _finishLock = false;
 
   async function finishPresentation() {
-    // ── Guard 1: debounce — reject any duplicate call ──────────────────────
-    if (_finishLock) {
-      console.warn('finishPresentation() called while already in progress — ignored');
-      return;
-    }
+    if (_finishLock) { console.warn('finishPresentation() already in progress — ignored'); return; }
     _finishLock = true;
 
-    // ── Guard 2: immediately disable every interactive button ───────────────
     ['finishSlideBtn', 'submitAnswerBtn', 'acqSubmitBtn',
      'narrationVoiceBtn', 'voiceBtn', 'acqVoiceBtn'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.disabled = true;
     });
 
-    // ── Guard 3: stop all SR instances ──────────────────────────────────────
     _stopAllRecording();
-
-    // ── Guard 4: wait 400 ms so the final onresult events can flush ─────────
-    // SpeechRecognition fires onresult asynchronously after .stop(); if we
-    // send the fetch immediately the last spoken words may not be in the array.
     await new Promise(r => setTimeout(r, 400));
 
     const overlay = document.getElementById('reportLoading');
@@ -667,7 +673,6 @@
 
     addLog(`🔄 Sending ${presentationTranscripts.length} transcript(s) + ${qaChatHistory.length} Q&A exchange(s) to AI…`);
 
-    // ── Abort controller: front-end hard cap at 100 s ──────────────────────
     const controller = new AbortController();
     const abortTimer = setTimeout(() => controller.abort(), 100000);
 
@@ -685,7 +690,7 @@
             'Thesis Defense':       'thesis_defense',
             'MBA Case Pitch':       'case_pitch',
             'Class Presentation':   'class_presentation',
-            'Academic Presentation':'class_presentation',  // backward compat: old sessions
+            'Academic Presentation':'class_presentation',
           })[scenarioType] || 'class_presentation',
           audience: ({
             'Professor':  'professor',
@@ -705,20 +710,16 @@
       const data = await res.json();
       bar.style.width    = '100%';
       status.textContent = 'Report ready! Loading…';
-      setTimeout(() => {
-        if (data.redirect) window.location.href = data.redirect;
-      }, 500);
+      setTimeout(() => { if (data.redirect) window.location.href = data.redirect; }, 500);
     } catch(err) {
       clearTimeout(abortTimer);
       timers.forEach(clearTimeout);
       overlay.classList.add('hidden');
-      const isTimeout = err.name === 'AbortError';
-      const msg = isTimeout
+      const msg = err.name === 'AbortError'
         ? '⏱ Report timed out (>100s) — please reload and try again'
         : `❌ Report generation failed — ${err.message}`;
       addLog(msg);
       console.error('finishPresentation error:', err.name, err.message, err);
-      // Stay locked — do NOT reset/re-enable to prevent retry loops
     }
   }
 
@@ -738,72 +739,33 @@
     document.getElementById('slidePanel').style.borderColor = '';
   }
 
-  // ── Upcoming Slides Preview ────────────────────────────────────────────────
-  function renderUpcoming(currentPage) {
-    const strip = document.getElementById('upcomingStrip');
-    const done  = document.getElementById('upcomingDone');
-    const label = document.getElementById('upcomingLabel');
-    const upcoming = slides.filter(s => s.page > currentPage);
-
-    if (!upcoming.length) {
-      strip.innerHTML = '';
-      strip.classList.add('hidden');
-      done.classList.remove('hidden');
-      label.textContent = '';
-      return;
-    }
-    done.classList.add('hidden');
-    strip.classList.remove('hidden');
-    label.textContent = `${upcoming.length} slide${upcoming.length > 1 ? 's' : ''} remaining`;
-
-    strip.innerHTML = upcoming.map(s => `
-      <div class="flex-shrink-0 flex flex-col items-center gap-1 group">
-        <div class="relative w-28 h-[4.5rem] rounded-lg overflow-hidden
-                    border border-gray-800/60 bg-gray-900/60
-                    ring-1 ring-transparent group-hover:ring-indigo-500/40 transition-all">
-          <img src="/x/slide-image/${s.page}"
-               class="w-full h-full object-contain"
-               loading="lazy"
-               alt="Slide ${s.page}"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-          <div style="display:none"
-               class="absolute inset-0 flex items-center justify-center bg-gray-900/80">
-            <span class="text-xs text-slate-500 font-mono">${s.page}</span>
-          </div>
-          <!-- Page badge -->
-          <div class="absolute top-1 left-1 bg-black/60 rounded px-1 py-0.5">
-            <span class="text-xs text-slate-400 font-mono leading-none">${s.page}</span>
-          </div>
-        </div>
-        <p class="text-xs text-gray-600 max-w-[7rem] truncate text-center leading-tight
-                  group-hover:text-slate-400 transition-colors"
-           title="${(s.title || '').replace(/"/g, '&quot;')}">${s.title || ''}</p>
-      </div>
-    `).join('');
+  // ── Sidebar: highlight current slide, scroll into view ────────────────────
+  function updateSidebar(currentPage) {
+    document.querySelectorAll('.sidebar-thumb').forEach(el => {
+      const p = parseInt(el.dataset.page);
+      if (p === currentPage) {
+        el.classList.add('active');
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        el.classList.remove('active');
+      }
+    });
   }
 
   function updateSlideDisplay(slide) {
-    // Update label and fallback text
-    document.getElementById('slideNum').textContent = slide.page;
-    document.getElementById('slideTitle').textContent   = slide.title  || '';
-    document.getElementById('slideContent').textContent = slide.content || '';
+    document.getElementById('slideNum').textContent      = slide.page;
+    document.getElementById('slideTitle').textContent    = slide.title  || '';
+    document.getElementById('slideContent').textContent  = slide.content || '';
 
-    // Swap slide image — reset state first, then load new src
     const img      = document.getElementById('slideImg');
-    const wrap     = document.getElementById('slideImgWrap');
     const fallback = document.getElementById('slideFallback');
-    // Reset: show img, hide fallback
     img.style.display   = '';
     img.style.opacity   = '0';
     fallback.style.display = 'none';
     img.src = `/x/slide-image/${slide.page}`;
     img.onload  = () => { img.style.transition = 'opacity 0.3s'; img.style.opacity = '1'; };
-    img.onerror = () => {
-      img.style.display      = 'none';
-      fallback.style.display = 'flex';
-    };
+    img.onerror = () => { img.style.display = 'none'; fallback.style.display = 'flex'; };
 
-    // Update progress bar + dots
     const pct = Math.round((slide.page / state.total_pages) * 100);
     document.getElementById('progressFill').style.width = pct + '%';
     document.getElementById('progCurrent').textContent  = slide.page;
@@ -816,10 +778,8 @@
       else { dot.style.background=''; dot.classList.remove('w-5'); dot.classList.add('bg-gray-700','w-2'); }
     });
 
-    // Refresh upcoming preview
-    renderUpcoming(slide.page);
+    updateSidebar(slide.page);
 
-    // Slide transition animation
     const panel = document.getElementById('slidePanel');
     panel.style.opacity   = '0';
     panel.style.transform = 'translateX(15px)';
@@ -853,13 +813,11 @@
   }
 
   // ── Unified Audio State Machine ────────────────────────────────────────────
-  // RULE: Only ONE SpeechRecognition instance active at any time.
-  // Modes: 'idle' | 'narration' | 'qa' | 'acq'
   let audioMode    = 'idle';
   let _narrationRec = null;
   let _qaRec        = null;
   let _acqRec       = null;
-  let _narrationWasActiveBeforeQA = false; // for auto-resume after QA_FINISHED
+  let _narrationWasActiveBeforeQA = false;
   const MIC_SVG = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>`;
 
   function _stopAllRecording() {
@@ -871,11 +829,11 @@
   }
 
   function _syncAudioButtons() {
-    const nBtn    = document.getElementById('narrationVoiceBtn');
-    const qBtn    = document.getElementById('voiceBtn');
-    const aBtn    = document.getElementById('acqVoiceBtn');
-    const recDot  = document.getElementById('recActiveDot');
-    const recLbl  = document.getElementById('recActiveLabel');
+    const nBtn   = document.getElementById('narrationVoiceBtn');
+    const qBtn   = document.getElementById('voiceBtn');
+    const aBtn   = document.getElementById('acqVoiceBtn');
+    const recDot = document.getElementById('recActiveDot');
+    const recLbl = document.getElementById('recActiveLabel');
 
     const isNarrating = (audioMode === 'narration');
     if (nBtn) nBtn.innerHTML = isNarrating
@@ -888,10 +846,9 @@
       ? `<span class="w-2 h-2 rounded-full animate-pulse" style="background:#059669"></span>Stop`
       : `${MIC_SVG}Voice`;
 
-    // Recording status badge in the Recording panel header
-    if (recDot)  recDot.style.display  = isNarrating ? 'block' : 'none';
-    if (recLbl)  recLbl.textContent    = isNarrating ? '● Recording…' : 'Mic off';
-    if (recLbl)  recLbl.className      = isNarrating
+    if (recDot) recDot.style.display = isNarrating ? 'block' : 'none';
+    if (recLbl) recLbl.textContent   = isNarrating ? '● Recording…' : 'Mic off';
+    if (recLbl) recLbl.className     = isNarrating
       ? 'text-xs font-mono text-red-400'
       : 'text-xs font-mono text-gray-600';
   }
@@ -903,32 +860,49 @@
     return rec;
   }
 
-  // ── Internal: start narration recognition (shared by button + auto-restart) ──
+  // ── Narration STT: full-page accumulation (isFinal segments append, interim previews) ──
   function _startNarrationRec() {
-    if (audioMode !== 'idle') return; // safety: don't start if QA is active
+    if (audioMode !== 'idle') return;
     const rec = _makeSR(); if (!rec) return;
+
     rec.onresult = e => {
-      let t = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
-      document.getElementById('narrationInput').value = t;
+      let newFinal = '';
+      let interim  = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          newFinal += e.results[i][0].transcript;
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+      // Accumulate finalized text for this slide
+      if (newFinal.trim()) {
+        currentSlideTranscript += (currentSlideTranscript ? ' ' : '') + newFinal.trim();
+      }
+      // Show full slide history + live interim preview
+      const el = document.getElementById('narrationInput');
+      el.value = currentSlideTranscript + (interim ? ' ' + interim : '');
+      el.scrollTop = el.scrollHeight;
     };
+
     rec.onend = () => {
-      // If browser stopped recognition while still in narration mode → auto-restart
       if (audioMode === 'narration' && _narrationRec === rec) {
         _narrationRec = null;
-        setTimeout(() => { if (audioMode === 'idle') { /* was stopped externally */ return; }
-                           _startNarrationRec(); }, 150);
+        setTimeout(() => {
+          if (audioMode === 'idle') return;
+          _startNarrationRec();
+        }, 150);
       } else if (audioMode === 'narration') {
         audioMode = 'idle'; _syncAudioButtons();
       }
     };
+
     _narrationRec = rec;
     rec.start();
     audioMode = 'narration';
     _syncAudioButtons();
   }
 
-  // Narration voice button toggle
   function toggleNarrationVoice() {
     if (audioMode === 'narration') { _stopAllRecording(); return; }
     if (audioMode === 'qa' || audioMode === 'acq') {
@@ -938,23 +912,20 @@
     _startNarrationRec();
   }
 
-  // Called when INTERRUPT or ACADEMIC_QA_START fires
-  // wasActive: whether narration was recording before the interrupt
   function audioSuspendForQa(wasActive = false) {
     _narrationWasActiveBeforeQA = wasActive;
-    _stopAllRecording(); // mode → 'idle'; QA/ACQ buttons unlocked
+    _stopAllRecording();
   }
 
-  // Called when QA_FINISHED — auto-resume narration if it was active before
   function audioResumeAfterQa() {
-    _stopAllRecording(); // ensure QA stream stopped
+    _stopAllRecording();
     if (_narrationWasActiveBeforeQA) {
       _narrationWasActiveBeforeQA = false;
       setTimeout(() => { if (audioMode === 'idle') _startNarrationRec(); }, 300);
     }
   }
 
-  // QA voice button (mid-session interrupt answer)
+  // QA voice button (mid-session interrupt)
   function toggleVoice() {
     if (audioMode === 'qa') { _stopAllRecording(); return; }
     _stopAllRecording();
@@ -964,7 +935,7 @@
     _qaRec = rec; rec.start(); audioMode = 'qa'; _syncAudioButtons();
   }
 
-  // Academic QA voice button (post-session Q&A answer)
+  // Academic QA voice button (post-session)
   function toggleAcqVoice() {
     if (audioMode === 'acq') { _stopAllRecording(); return; }
     _stopAllRecording();
@@ -973,5 +944,8 @@
     rec.onend    = () => { if (audioMode==='acq') { audioMode='idle'; _syncAudioButtons(); } };
     _acqRec = rec; rec.start(); audioMode = 'acq'; _syncAudioButtons();
   }
+
+  // Init sidebar highlight on load
+  updateSidebar(state.current_page);
 </script>
 {% endblock %}
