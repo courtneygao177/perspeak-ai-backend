@@ -3427,6 +3427,178 @@ def _render_pptx_page(filepath, page_num):
         return None, None
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTENT QUALITY EVALUATION (Step 8c) — Per-slide 5-dimension transcript audit
+# ─────────────────────────────────────────────────────────────────────────────
+def run_content_quality_evaluation(fe_transcripts, slides, scene_slug, config):
+    """
+    Per-slide Content Quality audit — 5 fixed-order dimensions + optimized script.
+    Returns: {"has_data": bool, "slide_transcripts_report": [...], "scene_label": str}
+    """
+    slide_map = {
+        s.get("page", s.get("slide_id", 0)): s
+        for s in (slides or [])
+    }
+    valid = [t for t in (fe_transcripts or []) if (t.get("text") or "").strip()]
+
+    scene_label = {
+        "thesis_defense":     "Thesis Defense",
+        "case_pitch":         "MBA Case Pitch",
+        "class_presentation": "Class Presentation",
+    }.get(scene_slug or "", "Class Presentation")
+
+    register_guide_en = {
+        "thesis_defense":     (
+            "Strict Academic Prose. Replace all informal words "
+            "(get/a lot of/things/stuff) with academic alternatives "
+            "(obtain/substantial/components/material). Zero tolerance for casual register."
+        ),
+        "case_pitch":         (
+            "Executive Presence. Use precise finance and strategy vocabulary "
+            "(ROI/synergy/scalability/market penetration/KPI-driven). "
+            "Crisp, results-oriented, data-backed."
+        ),
+        "class_presentation": (
+            "Vivid and confident tone. Optimise for clarity and engagement. "
+            "Avoid excessive casual filler (like/you know/kind of)."
+        ),
+    }.get(scene_slug or "", "Balanced register, clear and fluent.")
+
+    register_guide_zh = {
+        "thesis_defense":     "学术论文答辩语体。严格Academic Prose，零容忍非正式词汇（get/a lot of/things），必须替换为学术词汇（obtain/substantial/components）。",
+        "case_pitch":         "商业高管气场（Executive Presence）。使用精准财务/战略驱动词（ROI/synergy/scalability/KPI-driven），语言crisp、results-oriented。",
+        "class_presentation": "允许适度生动表达，优化重点在生动自信。避免过度口语化（like/you know/kind of）。",
+    }.get(scene_slug or "", "平衡语体，清晰流利即可。")
+
+    if not valid:
+        return {"has_data": False, "slide_transcripts_report": [], "scene_label": scene_label}
+
+    # ── MOCK FALLBACK ────────────────────────────────────────────────────────
+    if not AI_ENABLED:
+        mock = []
+        for idx, t in enumerate(valid):
+            page = t.get("page", idx + 1)
+            s    = slide_map.get(page, {})
+            mock.append({
+                "slide_id":    page,
+                "slide_title": s.get("title", f"Slide {page}"),
+                "raw_transcript": t["text"].strip(),
+                "script_analysis": {
+                    "grammar_fluency":     {"score": 68, "feedback_zh": "主谓一致基本正确，但出现了若干中式英语结构（Chinglish），如\"according to the data shows\"。建议修正为\"as the data shows\"。"},
+                    "structural_logic":    {"score": 72, "feedback_zh": "有基本逻辑顺序，但未采用结论先行（BLUF）结构。建议先抛出核心论点，再展开论据支撑，而非直接罗列背景信息。"},
+                    "transition_hook":     {"score": 65, "feedback_zh": "开头缺乏承接上一页内容的逻辑钩子，结尾也未为下一张PPT埋下伏笔。建议在开头加入\"Building on this point...\"等过渡表达。"},
+                    "slide_alignment":     {"score": 75, "feedback_zh": "整体内容与PPT基本对应，但演讲时漏掉了PPT上的核心数据指标（Key Metrics），应主动在演讲中点出关键数字。"},
+                    "vocabulary_register": {"score": 70, "feedback_zh": f"语体适配度中等。当前场景为{scene_label}：{register_guide_zh}"},
+                },
+                "optimized_script": (
+                    "Building upon the foundation established in the previous section, "
+                    "this slide presents critical findings that directly substantiate our central argument. "
+                    "The evidence demonstrates a statistically significant correlation, "
+                    "with key metrics revealing a 23% improvement over the established baseline. "
+                    "In conclusion, these results validate our core hypothesis and naturally "
+                    "lead us to the next dimension of our analysis."
+                ),
+            })
+        return {"has_data": True, "slide_transcripts_report": mock, "scene_label": scene_label}
+
+    # ── REAL AI PATH ─────────────────────────────────────────────────────────
+    slides_text = ""
+    for t in valid:
+        page = t.get("page", 0)
+        s    = slide_map.get(page, {})
+        slides_text += (
+            f"\n\n--- SLIDE {page}: {s.get('title', '(untitled)')} ---\n"
+            f"PPT Elements (Key Points on Slide): {s.get('content', '(no content recorded)')}\n"
+            f"User Transcript: {t['text'].strip()}"
+        )
+
+    prompt = f"""You are an expert English presentation coach for non-native speakers.
+
+SCENE: {scene_label}
+VOCABULARY REGISTER RULE: {register_guide_en}
+
+Analyze EACH slide transcript below on exactly 5 dimensions IN THIS STRICT ORDER:
+
+1. grammar_fluency — Diagnose tense errors, subject-verb agreement, singular/plural issues, and Chinglish expressions. Be specific.
+2. structural_logic — Does the slide use BLUF (Bottom Line Up Front)? Is there a clear conclusion first, then supporting evidence? Identify any logic gaps.
+3. transition_hook — Does the opening smoothly link to the previous slide? Does the closing hook into the next? MUST reference findings from structural_logic — if there is a logic gap, specify what "logic hook" phrase would smooth the transition.
+4. slide_alignment — Cross-check against the PPT Elements. Did the user miss key metrics, go off-topic, or cover elements not on the slide?
+5. vocabulary_register — Scene-aware audit. Apply the register rule strictly. Name specific words that should be upgraded and provide replacements.
+
+For each slide, also write an `optimized_script` that:
+- Fixes ALL grammar issues identified
+- Uses BLUF structure (lead with the conclusion)
+- Opens with a smooth transition hook from the previous slide's content
+- Closes with a hook that naturally sets up the next slide
+- Uses vocabulary precisely calibrated for {scene_label}
+
+SLIDES TO ANALYZE:
+{slides_text}
+
+Return ONLY a valid JSON object — no markdown, no code fences, no comments:
+{{
+  "slides": [
+    {{
+      "slide_id": <integer page number>,
+      "slide_title": "<string>",
+      "script_analysis": {{
+        "grammar_fluency":     {{"score": <0-100>, "feedback_zh": "<Chinese feedback 2-4 sentences>"}},
+        "structural_logic":    {{"score": <0-100>, "feedback_zh": "<Chinese feedback 2-4 sentences>"}},
+        "transition_hook":     {{"score": <0-100>, "feedback_zh": "<Chinese feedback 2-4 sentences>"}},
+        "slide_alignment":     {{"score": <0-100>, "feedback_zh": "<Chinese feedback 2-4 sentences>"}},
+        "vocabulary_register": {{"score": <0-100>, "feedback_zh": "<Chinese feedback 2-4 sentences>"}}
+      }},
+      "optimized_script": "<complete polished English script for this slide, 3-6 sentences>"
+    }}
+  ]
+}}"""
+
+    try:
+        response = _ai_client.chat.completions.create(
+            model=EVAL_MODEL,
+            max_tokens=MAX_TOKENS,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$",           "", raw)
+
+        # Two-layer JSON repair (mirrors CQ evaluator pattern)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            raw2 = raw.replace("'", '"')
+            try:
+                data = json.loads(raw2)
+            except Exception:
+                raw3 = re.sub(r"(?<![\\])\\(?![\"\\\/bfnrtu])", r"\\\\", raw)
+                data = json.loads(raw3)
+
+        transcript_map = {t.get("page", 0): t.get("text", "").strip() for t in valid}
+        result = []
+        for sd in data.get("slides", []):
+            sid = sd.get("slide_id") or sd.get("page") or 0
+            try:
+                sid = int(sid)
+            except Exception:
+                sid = 0
+            result.append({
+                "slide_id":         sid,
+                "slide_title":      sd.get("slide_title", f"Slide {sid}"),
+                "raw_transcript":   transcript_map.get(sid, ""),
+                "script_analysis":  sd.get("script_analysis", {}),
+                "optimized_script": sd.get("optimized_script", ""),
+            })
+
+        app.logger.info(f"[ContentQuality] scene={scene_slug} | slides_audited={len(result)}")
+        return {"has_data": True, "slide_transcripts_report": result, "scene_label": scene_label}
+
+    except Exception as e:
+        app.logger.error(f"[ContentQuality] Error: {type(e).__name__}: {str(e)[:200]}")
+        traceback.print_exc()
+        return {"has_data": False, "slide_transcripts_report": [], "scene_label": scene_label, "error": str(e)}
+
+
 @app.route("/x/slide-image/<int:page>")
 def slide_image(page):
     """Serve a specific slide page as PNG — PDF via fitz, PPTX via Pillow."""
@@ -3957,12 +4129,25 @@ def api_finish_presentation():
         f"cq_total={cq_eval.get('cq_total')}"
     )
 
+    # Step 8c: Content Quality evaluation — per-slide transcript audit (5 dimensions)
+    content_quality_eval = run_content_quality_evaluation(
+        fe_transcripts=fe_transcripts,
+        slides=slides,
+        scene_slug=scene_slug,
+        config=config,
+    )
+    app.logger.info(
+        f"[ContentQuality] has_data={content_quality_eval.get('has_data')} | "
+        f"slides_audited={len(content_quality_eval.get('slide_transcripts_report', []))}"
+    )
+
     # Step 9: Training plan
     training_plan = generate_training_plan(pillar_eval, config, challenge_type)
 
     evaluation = {
         "pillar":                pillar_eval,
         "communication_quality": cq_eval,
+        "content_quality":       content_quality_eval,
         "training_plan":         training_plan,
         "scenario":              scenario,
         "audience":              config.get("audience",   "Professor"),
