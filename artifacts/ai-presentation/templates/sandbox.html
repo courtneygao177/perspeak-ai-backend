@@ -660,21 +660,22 @@
     overlay.classList.remove('hidden');
 
     const msgs = [
-      { delay: 0,     pct:  8, text: `Analyzing your ${presentationTranscripts.length} slides and Q&A exchanges… Please wait up to 45s` },
-      { delay: 8000,  pct: 28, text: 'Analysing Structure, Fluency, Relevance & Delivery…' },
-      { delay: 20000, pct: 52, text: 'Writing personalised feedback and training plan…' },
-      { delay: 35000, pct: 74, text: 'Almost ready — finalising your report…' },
-      { delay: 55000, pct: 90, text: 'Still working… large sessions can take up to 90s' },
+      { delay: 0,     pct:  6, text: `Launching 3 AI evaluators in parallel for ${presentationTranscripts.length} slide(s)…` },
+      { delay: 6000,  pct: 22, text: 'Analysing Structure · Fluency · Relevance · Delivery…' },
+      { delay: 18000, pct: 44, text: 'Evaluating Q&A performance + per-slide content audit…' },
+      { delay: 35000, pct: 66, text: 'Writing personalised feedback and training plan…' },
+      { delay: 55000, pct: 82, text: 'Almost ready — finalising your report…' },
+      { delay: 80000, pct: 92, text: 'Still working… complex sessions can take up to 120s' },
     ];
     const timers = msgs.map(m => setTimeout(() => {
       status.textContent = m.text;
       bar.style.width    = m.pct + '%';
     }, m.delay));
 
-    addLog(`🔄 Sending ${presentationTranscripts.length} transcript(s) + ${qaChatHistory.length} Q&A exchange(s) to AI…`);
+    addLog(`🔄 Sending ${presentationTranscripts.length} transcript(s) + ${qaChatHistory.length} Q&A exchange(s) to AI (parallel eval)…`);
 
     const controller = new AbortController();
-    const abortTimer = setTimeout(() => controller.abort(), 100000);
+    const abortTimer = setTimeout(() => controller.abort(), 170000);
 
     try {
       const res  = await fetch('/x/finish-presentation', {

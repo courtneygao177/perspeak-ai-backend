@@ -6,6 +6,12 @@ import io
 import re
 import traceback
 import uuid
+import concurrent.futures
+try:
+    from json_repair import repair_json as _repair_json
+    _HAS_JSON_REPAIR = True
+except ImportError:
+    _HAS_JSON_REPAIR = False
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from werkzeug.utils import secure_filename
 
@@ -3563,16 +3569,27 @@ Return ONLY a valid JSON object — no markdown, no code fences, no comments:
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$",           "", raw)
 
-        # Two-layer JSON repair (mirrors CQ evaluator pattern)
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            raw2 = raw.replace("'", '"')
+        # Multi-layer JSON repair — handles Chinese text with embedded quotes/newlines
+        data = None
+        parse_err = None
+        for attempt, candidate in enumerate([
+            raw,
+            re.sub(r"(?<![\\])\\(?![\"\\\/bfnrtu])", r"\\\\", raw),  # fix bad escapes
+        ]):
             try:
-                data = json.loads(raw2)
+                data = json.loads(candidate)
+                break
+            except json.JSONDecodeError as e:
+                parse_err = e
+        if data is None and _HAS_JSON_REPAIR:
+            try:
+                repaired = _repair_json(raw, return_objects=True)
+                if isinstance(repaired, dict):
+                    data = repaired
             except Exception:
-                raw3 = re.sub(r"(?<![\\])\\(?![\"\\\/bfnrtu])", r"\\\\", raw)
-                data = json.loads(raw3)
+                pass
+        if data is None:
+            raise parse_err or ValueError("All JSON repair attempts failed")
 
         transcript_map = {t.get("page", 0): t.get("text", "").strip() for t in valid}
         result = []
@@ -4106,40 +4123,34 @@ def api_finish_presentation():
         )
         session["qa_bank"] = qa_bank
 
-    # Step 8: 4-Pillar Presentation Quality evaluation
-    pillar_eval = run_pillar_evaluation(
-        slides, answers, config, challenge_seed,
-        fe_qa_history=fe_qa_history,
-        total_time_seconds=total_time_seconds,
+    # Steps 8 / 8b / 8c — run all three evaluations IN PARALLEL to cut latency
+    app.logger.info("[Eval] Launching pillar + CQ + ContentQuality in parallel…")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as _pool:
+        _fut_pillar = _pool.submit(
+            run_pillar_evaluation,
+            slides, answers, config, challenge_seed,
+            fe_qa_history, total_time_seconds,
+        )
+        _fut_cq = _pool.submit(
+            run_communication_quality_evaluation,
+            answers, config, fe_qa_history, scene_slug, total_time_seconds,
+        )
+        _fut_cqual = _pool.submit(
+            run_content_quality_evaluation,
+            fe_transcripts, slides, scene_slug, config,
+        )
+        pillar_eval          = _fut_pillar.result()
+        cq_eval              = _fut_cq.result()
+        content_quality_eval = _fut_cqual.result()
+
+    app.logger.info(
+        f"[Eval] All done | "
+        f"CQ has_data={cq_eval.get('has_data')} cq_total={cq_eval.get('cq_total')} | "
+        f"CQual has_data={content_quality_eval.get('has_data')} "
+        f"slides={len(content_quality_eval.get('slide_transcripts_report', []))}"
     )
 
     challenge_type = challenge_seed.get("challenge_type", "General")
-
-    # Step 8b: Communication Quality (CQ) evaluation — Q&A exchanges only
-    cq_eval = run_communication_quality_evaluation(
-        qa_answers=answers,
-        config=config,
-        fe_qa_history=fe_qa_history,
-        scene_slug=scene_slug,
-        total_qa_seconds=total_time_seconds,
-    )
-    app.logger.info(
-        f"[CQ] scene={cq_eval.get('scene_slug')} | "
-        f"has_data={cq_eval.get('has_data')} | "
-        f"cq_total={cq_eval.get('cq_total')}"
-    )
-
-    # Step 8c: Content Quality evaluation — per-slide transcript audit (5 dimensions)
-    content_quality_eval = run_content_quality_evaluation(
-        fe_transcripts=fe_transcripts,
-        slides=slides,
-        scene_slug=scene_slug,
-        config=config,
-    )
-    app.logger.info(
-        f"[ContentQuality] has_data={content_quality_eval.get('has_data')} | "
-        f"slides_audited={len(content_quality_eval.get('slide_transcripts_report', []))}"
-    )
 
     # Step 9: Training plan
     training_plan = generate_training_plan(pillar_eval, config, challenge_type)
