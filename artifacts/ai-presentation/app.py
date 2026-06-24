@@ -3070,6 +3070,35 @@ Return ONLY valid JSON. No markdown fences. No text outside the JSON object.
         if "filler_log" not in result:
             result["filler_log"] = []
 
+        # Normalize what_i_did_good: Gemini sometimes returns dicts instead of the
+        # requested strings. Convert any dict item to a formatted string so the
+        # Jinja2 template only ever sees plain strings.
+        def _norm_good_item(item):
+            if not isinstance(item, dict):
+                return str(item) if item else ""
+            # Try every key name Gemini has been observed to use
+            pillar = (item.get("pillar") or item.get("Pillar") or
+                      item.get("dimension") or item.get("Dimension") or
+                      item.get("category") or "")
+            title  = (item.get("title") or item.get("Title") or
+                      item.get("name") or item.get("Name") or "")
+            obs    = (item.get("observation") or item.get("Observation") or
+                      item.get("description") or item.get("Description") or
+                      item.get("feedback") or item.get("text") or
+                      item.get("content") or item.get("detail") or "")
+            if not obs:
+                # Last resort: join all non-empty string values
+                obs = " | ".join(str(v) for v in item.values() if v and isinstance(v, str))
+            if pillar and obs:
+                prefix = f"[{pillar}]"
+                if title:
+                    return f"{prefix} {title}: {obs}"
+                return f"{prefix} {obs}"
+            return obs or str(item)
+
+        raw_good = result.get("what_i_did_good") or []
+        result["what_i_did_good"] = [_norm_good_item(x) for x in raw_good if x]
+
         # Normalise jaw_dropping_moment — Gemini may return it or we fall back to heuristic
         if "jaw_dropping_moment" in result:
             result["jaw_dropping_moment"] = bool(result["jaw_dropping_moment"])

@@ -318,46 +318,26 @@
         </div>
         <div class="space-y-2.5">
           {% for item in pillar.what_i_did_good %}
-          {% if item is mapping %}
-            {# Dict format: {pillar, title, observation} #}
-            {% set p_name = item.pillar if item.pillar is defined else '' %}
-            {% set p_title = item.title if item.title is defined else '' %}
-            {% set p_obs = item.observation if item.observation is defined else (item.get('observation','') if item.get is defined else '') %}
-            {% if p_name == 'Structure' %}{% set tag_class = 'pillar-structure' %}
-            {% elif p_name == 'Fluency' %}{% set tag_class = 'pillar-fluency' %}
-            {% elif 'Relevance' in p_name %}{% set tag_class = 'pillar-relevance' %}
-            {% elif p_name == 'Delivery' %}{% set tag_class = 'pillar-delivery' %}
-            {% else %}{% set tag_class = '' %}{% endif %}
-            <div class="good-item">
-              <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-              </svg>
-              <p class="text-slate-700 text-sm leading-relaxed">
-                {% if tag_class %}<span class="pillar-tag {{ tag_class }}">{{ p_name }}</span>{% endif %}
-                {% if p_title %}<strong class="text-slate-800 font-semibold">{{ p_title }}:</strong> {% endif %}{{ p_obs }}
-              </p>
-            </div>
-          {% else %}
-            {# Legacy string format: "[Structure] Title: observation" #}
+            {# Backend always normalises items to strings: "[Pillar] Title: observation" #}
+            {% set s = item | string %}
             {% set tag_class = '' %}
-            {% if '[Structure]' in item %}{% set tag_class = 'pillar-structure' %}
-            {% elif '[Fluency]' in item %}{% set tag_class = 'pillar-fluency' %}
-            {% elif '[Content Relevance]' in item or '[Relevance]' in item %}{% set tag_class = 'pillar-relevance' %}
-            {% elif '[Delivery]' in item %}{% set tag_class = 'pillar-delivery' %}{% endif %}
+            {% if '[Structure]' in s %}{% set tag_class = 'pillar-structure' %}
+            {% elif '[Fluency]' in s %}{% set tag_class = 'pillar-fluency' %}
+            {% elif '[Content Relevance]' in s or '[Relevance]' in s %}{% set tag_class = 'pillar-relevance' %}
+            {% elif '[Delivery]' in s %}{% set tag_class = 'pillar-delivery' %}{% endif %}
             <div class="good-item">
               <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
               </svg>
               <p class="text-slate-700 text-sm leading-relaxed">
                 {% if tag_class %}
-                  {% set parts = item.split(']', 1) %}
+                  {% set parts = s.split(']', 1) %}
                   <span class="pillar-tag {{ tag_class }}">{{ parts[0][1:] }}</span>{{ parts[1] if parts|length > 1 else '' }}
                 {% else %}
-                  {{ item }}
+                  {{ s }}
                 {% endif %}
               </p>
             </div>
-          {% endif %}
           {% endfor %}
         </div>
       </div>
