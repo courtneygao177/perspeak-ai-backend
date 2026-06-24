@@ -25,9 +25,9 @@
   canvas { max-height:260px; }
   .good-item { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem; background:#f0fdf6;
                border:1px solid #bbf7d0; border-radius:.625rem; }
-  .fix-item  { background:#fffbeb; border:1px solid #fde68a; border-radius:.75rem; overflow:hidden; }
-  .fix-header{ padding:.75rem 1rem; background:#fef9c3; border-bottom:1px solid #fde68a; }
-  .fix-body  { padding:.875rem 1rem; display:grid; gap:.5rem; }
+  .fix-item  { background:#fff; border:1px solid #fcd34d; border-radius:.75rem; overflow:hidden; }
+  .fix-header{ padding:.75rem 1rem; background:#fef3c7; border-bottom:1px solid #fcd34d; }
+  .fix-body  { padding:.875rem 1rem; display:grid; gap:.5rem; background:#fffdf5; }
   .fix-label { font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
   .say-instead { background:#f0fdf6; border:1px solid #bbf7d0; border-radius:.5rem;
                  padding:.5rem .75rem; margin-top:.25rem; }
@@ -318,24 +318,46 @@
         </div>
         <div class="space-y-2.5">
           {% for item in pillar.what_i_did_good %}
-          {% set tag_class = '' %}
-          {% if '[Structure]' in item %}{% set tag_class = 'pillar-structure' %}
-          {% elif '[Fluency]' in item %}{% set tag_class = 'pillar-fluency' %}
-          {% elif '[Content Relevance]' in item or '[Relevance]' in item %}{% set tag_class = 'pillar-relevance' %}
-          {% elif '[Delivery]' in item %}{% set tag_class = 'pillar-delivery' %}{% endif %}
-          <div class="good-item">
-            <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-            </svg>
-            <p class="text-slate-600 text-sm leading-relaxed">
-              {% if tag_class %}
-                {% set parts = item.split(']', 1) %}
-                <span class="pillar-tag {{ tag_class }}">{{ parts[0][1:] }}</span>{{ parts[1] if parts|length > 1 else '' }}
-              {% else %}
-                {{ item }}
-              {% endif %}
-            </p>
-          </div>
+          {% if item is mapping %}
+            {# Dict format: {pillar, title, observation} #}
+            {% set p_name = item.pillar if item.pillar is defined else '' %}
+            {% set p_title = item.title if item.title is defined else '' %}
+            {% set p_obs = item.observation if item.observation is defined else (item.get('observation','') if item.get is defined else '') %}
+            {% if p_name == 'Structure' %}{% set tag_class = 'pillar-structure' %}
+            {% elif p_name == 'Fluency' %}{% set tag_class = 'pillar-fluency' %}
+            {% elif 'Relevance' in p_name %}{% set tag_class = 'pillar-relevance' %}
+            {% elif p_name == 'Delivery' %}{% set tag_class = 'pillar-delivery' %}
+            {% else %}{% set tag_class = '' %}{% endif %}
+            <div class="good-item">
+              <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+              </svg>
+              <p class="text-slate-700 text-sm leading-relaxed">
+                {% if tag_class %}<span class="pillar-tag {{ tag_class }}">{{ p_name }}</span>{% endif %}
+                {% if p_title %}<strong class="text-slate-800 font-semibold">{{ p_title }}:</strong> {% endif %}{{ p_obs }}
+              </p>
+            </div>
+          {% else %}
+            {# Legacy string format: "[Structure] Title: observation" #}
+            {% set tag_class = '' %}
+            {% if '[Structure]' in item %}{% set tag_class = 'pillar-structure' %}
+            {% elif '[Fluency]' in item %}{% set tag_class = 'pillar-fluency' %}
+            {% elif '[Content Relevance]' in item or '[Relevance]' in item %}{% set tag_class = 'pillar-relevance' %}
+            {% elif '[Delivery]' in item %}{% set tag_class = 'pillar-delivery' %}{% endif %}
+            <div class="good-item">
+              <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+              </svg>
+              <p class="text-slate-700 text-sm leading-relaxed">
+                {% if tag_class %}
+                  {% set parts = item.split(']', 1) %}
+                  <span class="pillar-tag {{ tag_class }}">{{ parts[0][1:] }}</span>{{ parts[1] if parts|length > 1 else '' }}
+                {% else %}
+                  {{ item }}
+                {% endif %}
+              </p>
+            </div>
+          {% endif %}
           {% endfor %}
         </div>
       </div>
@@ -362,8 +384,8 @@
           <div class="fix-item">
             <div class="fix-header">
               <div class="flex items-start gap-2">
-                <span class="text-yellow-400 text-sm flex-shrink-0 mt-0.5">⚠</span>
-                <p class="text-yellow-300 text-sm font-semibold leading-snug">
+                <span class="text-amber-600 text-sm flex-shrink-0 mt-0.5">⚠</span>
+                <p class="text-amber-900 text-sm font-semibold leading-snug">
                   {% if itag_class and display_label %}
                     <span class="pillar-tag {{ itag_class }}">{{ display_label }}</span>{{ display_issue }}
                   {% else %}
@@ -374,17 +396,17 @@
             </div>
             <div class="fix-body">
               <div>
-                <p class="fix-label text-orange-400 mb-1">Example from your speech</p>
-                <p class="text-slate-400 text-xs leading-relaxed italic">{{ item.example }}</p>
+                <p class="fix-label text-amber-700 mb-1">Example from your speech</p>
+                <p class="text-slate-600 text-xs leading-relaxed italic">{{ item.example }}</p>
               </div>
               <div>
-                <p class="fix-label text-green-400 mb-1">👉 How to fix</p>
+                <p class="fix-label text-emerald-600 mb-1">👉 How to fix</p>
                 {% set fix = item.how_to_fix if item.how_to_fix is string else '' %}
                 {% if 'Say this instead:' in fix %}
                   {% set fix_parts = fix.split('Say this instead:', 1) %}
                   <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ fix_parts[0] }}</p>
                   <div class="say-instead">
-                    <p class="text-green-300 text-xs leading-relaxed font-medium">
+                    <p class="text-emerald-700 text-xs leading-relaxed font-medium">
                       <span class="say-instead-arrow">→</span>Say this instead:{{ fix_parts[1] }}
                     </p>
                   </div>
@@ -704,28 +726,6 @@
   </div>
   {% endif %}
   </div><!-- /tab-pane-cqual -->
-
-  <!-- Training Plan -->
-  <div class="relative z-10 section-card p-6 mb-8">
-    <div class="flex items-center gap-3 mb-5">
-      <div class="w-8 h-8 rounded-lg flex items-center justify-center"
-           style="background:rgba(217,167,82,0.15)">
-        <svg class="w-4 h-4" style="color:#059669" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
-      </div>
-      <div>
-        <h2 class="text-sm font-semibold text-[#0F172A]">Personalized Training Plan</h2>
-        <p class="text-xs text-gray-600">
-          {% if ai_enabled %}AI-generated · IELTS 5.5 language level{% else %}Template-based plan{% endif %}
-        </p>
-      </div>
-    </div>
-    <div class="tp bg-surface-800/50 rounded-xl p-5 border border-gray-800/40">
-      {{ evaluation.training_plan | replace('\n', '<br>') | safe }}
-    </div>
-  </div>
 
   <!-- CTA -->
   <div class="relative z-10 flex gap-4 pb-10">
