@@ -925,9 +925,10 @@
 
   // Called at each slide boundary — captures current audio and fires background Speechace upload
   function _onSlideCapture(page, transcript) {
-    _speechacePending[page] = _stopMediaRecorder().then(blob =>
-      _speechaceUpload(page, transcript, blob)
-    );
+    _speechacePending[page] = _stopMediaRecorder().then(blob => {
+      _startMediaRecorder();            // immediately restart for the next slide
+      return _speechaceUpload(page, transcript, blob);
+    });
   }
 
   function _makeSR() {
@@ -1025,5 +1026,18 @@
 
   // Init sidebar highlight on load
   updateSidebar(state.current_page);
+
+  // ── Auto-start MediaRecorder on first user interaction ────────────────────
+  // This pre-arms the mic so even text-input users get pronunciation analysis.
+  // getUserMedia requires a user gesture; any click/keydown on the page counts.
+  (function _armMic() {
+    function _tryArm() {
+      if (!_mediaRecorder) _startMediaRecorder();
+      document.removeEventListener('click',   _tryArm);
+      document.removeEventListener('keydown', _tryArm);
+    }
+    document.addEventListener('click',   _tryArm, { once: true });
+    document.addEventListener('keydown', _tryArm, { once: true });
+  })();
 </script>
 {% endblock %}
