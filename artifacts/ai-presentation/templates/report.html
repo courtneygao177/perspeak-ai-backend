@@ -682,7 +682,7 @@
 
           <!-- ── Speechace Pronunciation Diagnostic ─────────────────────── -->
           {% set pd = slide.get('pronunciation_diagnostic') %}
-          {% if pd and pd.get('overall_score', 0) > 0 %}
+          {% if pd and (pd.get('overall_score', 0) > 0 or pd.get('summary_text') or pd.get('error_list')) %}
           <div class="mt-4 rounded-xl border border-indigo-200/70 bg-indigo-50/50 overflow-hidden">
             <div class="flex items-center justify-between px-3 py-2 bg-indigo-100/60">
               <span class="text-xs font-bold text-indigo-800">🎙️ Speechace 发音诊断</span>

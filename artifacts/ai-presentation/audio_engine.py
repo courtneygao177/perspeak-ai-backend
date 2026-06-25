@@ -22,7 +22,9 @@ _SPEECHACE_BASE = {
 def _speechace_url(path: str) -> str:
     base = _SPEECHACE_BASE.get((SPEECHACE_REGION or "singapore").lower(),
                                 _SPEECHACE_BASE["singapore"])
-    encoded_key = urllib.parse.quote(SPEECHACE_API_KEY, safe="")
+    # Normalize first (handle already-encoded keys), then encode once cleanly
+    clean_key   = urllib.parse.unquote(SPEECHACE_API_KEY)
+    encoded_key = urllib.parse.quote(clean_key, safe="")
     return f"{base}{path}?key={encoded_key}"
 
 
@@ -203,26 +205,26 @@ def _empty_diagnostic(reason: str = "") -> dict:
 
 def generate_pronunciation_demo(word: str, voice: str = "Stella") -> bytes | None:
     """
-    Generate MP3 pronunciation demo via Qwen CosyVoice-v3-flash (DashScope).
-    voice: 'Stella' (English female, clear RP accent) | 'Davis' (American male)
+    Generate MP3 pronunciation demo via DashScope sambert TTS (dashscope SDK).
     Returns raw MP3 bytes, or None on failure.
     """
     if not QWEN_API_KEY or not word:
         return None
     try:
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=QWEN_API_KEY,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        )
+        import dashscope
+        from dashscope.audio.tts import SpeechSynthesizer
+        dashscope.api_key = QWEN_API_KEY
         demo_text = f"The correct pronunciation is: {word}. {word}."
-        resp = client.audio.speech.create(
-            model="cosyvoice-v3-flash",
-            input=demo_text,
-            voice=voice,
-            response_format="mp3",
+        result = SpeechSynthesizer.call(
+            model="sambert-zhijia-v1",
+            text=demo_text,
+            sample_rate=22050,
+            format="mp3",
         )
-        return resp.content
+        audio = result.get_audio_data() if result else None
+        if audio and len(audio) > 500:
+            return bytes(audio)
+        return None
     except Exception as exc:
         traceback.print_exc()
         return None
