@@ -15,8 +15,8 @@ QWEN_API_KEY      = os.environ.get("QWEN_API_KEY", "")
 
 _SPEECHACE_PATH = "/api/scoring/text/v9/json"
 _SPEECHACE_BASE = {
-    "singapore": "https://api.speechace.co",
-    "us":        "https://api.speechace.co",   # same host, different key
+    "singapore": "https://api2.speechace.com",
+    "us":        "https://api.speechace.com",
 }
 
 
@@ -95,8 +95,11 @@ def recognize_and_diagnose(audio_bytes: bytes,
                             "config": {"num_words": 200}}]
         })
 
+    fields: dict = {"question_info": question_info}
+    if ref:
+        fields["text"] = ref
     body, ct = _build_multipart(
-        fields={"question_info": question_info},
+        fields=fields,
         files={"user_audio_file": (filename, audio_bytes, "audio/webm")},
     )
     url = _speechace_url()
