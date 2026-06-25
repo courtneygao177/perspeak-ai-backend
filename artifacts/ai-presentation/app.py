@@ -14,6 +14,7 @@ except ImportError:
     _HAS_JSON_REPAIR = False
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from werkzeug.utils import secure_filename
+import audio_engine
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "ai-presentation-dev-secret-2024")
@@ -4095,6 +4096,56 @@ def api_submit_academic_qa():
         return jsonify({"status": "ACADEMIC_QA_DONE"})
 
 
+@app.route("/api/speechace-score", methods=["POST"])
+def api_speechace_score():
+    """
+    Accepts a multipart POST with:
+      - audio: audio blob (webm/ogg)
+      - text:  Web-Speech-API transcript (reference text)
+      - page:  slide page number (int)
+    Returns pronunciation_diagnostic JSON.
+    """
+    audio_file = request.files.get("audio")
+    ref_text   = (request.form.get("text") or "").strip()
+    page       = int(request.form.get("page") or 0)
+
+    if not audio_file:
+        return jsonify({"error": "No audio provided"}), 400
+
+    audio_bytes = audio_file.read()
+    app.logger.info(
+        f"[Speechace] Scoring slide {page} | audio={len(audio_bytes)}B | "
+        f"ref_len={len(ref_text)} chars"
+    )
+
+    result = audio_engine.recognize_and_diagnose(
+        audio_bytes, reference_text=ref_text, filename=audio_file.filename or "audio.webm"
+    )
+    result["page"] = page
+    return jsonify(result)
+
+
+@app.route("/api/tts-demo")
+def api_tts_demo():
+    """
+    Returns MP3 audio for a pronunciation demo of the given word.
+    Query param: word=<string>
+    """
+    word  = (request.args.get("word") or "").strip()
+    voice = request.args.get("voice", "Stella")
+    if not word:
+        return jsonify({"error": "No word provided"}), 400
+
+    app.logger.info(f"[CosyVoice] TTS demo: word={word!r} voice={voice}")
+    mp3_bytes = audio_engine.generate_pronunciation_demo(word, voice=voice)
+    if not mp3_bytes:
+        return jsonify({"error": "TTS generation failed"}), 502
+
+    from flask import Response
+    return Response(mp3_bytes, mimetype="audio/mpeg",
+                    headers={"Content-Disposition": f'inline; filename="{word}.mp3"'})
+
+
 @app.route("/x/finish-presentation", methods=["POST"])
 def api_finish_presentation():
     """
@@ -4113,6 +4164,7 @@ def api_finish_presentation():
     fe_qa_history      = req_data.get("qa_chat_history", [])            # [{role,text,type}]
     total_time_seconds = int(req_data.get("total_time_seconds", 0) or 0)
     scene_slug         = req_data.get("scene",    None)                  # 'thesis_defense' | 'case_pitch' | 'class_presentation'
+    pronunciation_data = req_data.get("pronunciation_data", {})          # {str(page): diagnostic_dict}
 
     # Merge frontend transcripts into session answers (fill gaps from voice/type)
     if fe_transcripts:
@@ -4153,6 +4205,11 @@ def api_finish_presentation():
         session["qa_bank"] = qa_bank
 
     # Steps 8 / 8b / 8c — run all three evaluations IN PARALLEL to cut latency
+    # ── Log pronunciation data received from Speechace ─────────────────────────
+    app.logger.info(
+        f"[Pronunciation] Received data for {len(pronunciation_data)} slide(s)"
+    )
+
     app.logger.info("[Eval] Launching pillar + CQ + ContentQuality in parallel…")
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as _pool:
         _fut_pillar = _pool.submit(
@@ -4178,6 +4235,18 @@ def api_finish_presentation():
         f"CQual has_data={content_quality_eval.get('has_data')} "
         f"slides={len(content_quality_eval.get('slide_transcripts_report', []))}"
     )
+
+    # ── Merge Speechace pronunciation_diagnostic into slide_transcripts_report ─
+    if pronunciation_data and content_quality_eval.get("slide_transcripts_report"):
+        for slide in content_quality_eval["slide_transcripts_report"]:
+            page_key = str(slide.get("slide_id", ""))
+            diag = pronunciation_data.get(page_key)
+            if diag and isinstance(diag, dict):
+                slide["pronunciation_diagnostic"] = diag
+                app.logger.info(
+                    f"[Pronunciation] Merged diag for slide {page_key} | "
+                    f"score={diag.get('overall_score')} errors={len(diag.get('error_list', []))}"
+                )
 
     challenge_type = challenge_seed.get("challenge_type", "General")
 

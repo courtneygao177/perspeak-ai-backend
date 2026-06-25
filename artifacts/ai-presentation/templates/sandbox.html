@@ -391,6 +391,12 @@
   // ── Current-slide full transcript (accumulates STT segments, resets on next slide) ──
   let currentSlideTranscript = '';
 
+  // ── Speechace audio engine state ──────────────────────────────────────────
+  let _mediaRecorder      = null;
+  let _audioChunks        = [];
+  let _pronunciationCache = {};   // page (int) → diagnostic dict from /api/speechace-score
+  let _speechacePending   = {};   // page (int) → Promise
+
   // ── Timer ─────────────────────────────────────────────────────────────────
   let timerSeconds  = 0;
   let timerPaused   = false;
@@ -444,6 +450,7 @@
         state.in_qa_mode      = true;
         state.follow_up_round = 1;
         state.challenge_type  = data.challenge_type || '';
+        _onSlideCapture(state.current_page, narration);
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
@@ -456,6 +463,7 @@
         btn.innerHTML = `<span class="text-red-400 text-xs">⚡ Answer first</span>`;
 
       } else if (data.action === 'NEXT_SLIDE') {
+        _onSlideCapture(state.current_page, narration);
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
@@ -473,6 +481,7 @@
         }
 
       } else if (data.action === 'ACADEMIC_QA_START') {
+        _onSlideCapture(state.current_page, narration);
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
@@ -487,6 +496,7 @@
         btn.innerHTML = `<span class="text-indigo-400 text-xs">📋 Answer Q&A first</span>`;
 
       } else if (data.action === 'PRESENTATION_DONE') {
+        _onSlideCapture(state.current_page, narration);
         presentationTranscripts.push({
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
@@ -652,6 +662,15 @@
     });
 
     _stopAllRecording();
+    // Await any in-flight Speechace pronunciation uploads (max 10s)
+    const _pendingCount = Object.keys(_speechacePending).length;
+    if (_pendingCount > 0) {
+      addLog(`🎙️ Awaiting Speechace pronunciation analysis for ${_pendingCount} slide(s)…`);
+      await Promise.race([
+        Promise.all(Object.values(_speechacePending)),
+        new Promise(r => setTimeout(r, 10000)),
+      ]);
+    }
     await new Promise(r => setTimeout(r, 400));
 
     const overlay = document.getElementById('reportLoading');
@@ -687,6 +706,7 @@
           qa_chat_history:          qaChatHistory,
           slide_logic_tree:         slides,
           total_time_seconds:       timerSeconds,
+          pronunciation_data:       _pronunciationCache,
           scene: ({
             'Thesis Defense':       'thesis_defense',
             'MBA Case Pitch':       'case_pitch',
@@ -854,6 +874,62 @@
       : 'text-xs font-mono text-gray-600';
   }
 
+  // ── MediaRecorder: runs parallel to Web Speech API for pronunciation scoring ─
+  function _startMediaRecorder() {
+    if (!navigator.mediaDevices || !window.MediaRecorder) return;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
+        .find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(e){ return false; } }) || '';
+      _audioChunks = [];
+      _mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      _mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) _audioChunks.push(e.data);
+      };
+      _mediaRecorder.start(1000);
+    }).catch(e => console.warn('[AudioEngine] MediaRecorder unavailable:', e));
+  }
+
+  function _stopMediaRecorder() {
+    return new Promise(resolve => {
+      if (!_mediaRecorder || _mediaRecorder.state === 'inactive') {
+        _audioChunks = []; _mediaRecorder = null; resolve(null); return;
+      }
+      const mr = _mediaRecorder;
+      _mediaRecorder = null;
+      mr.onstop = () => {
+        const blob = _audioChunks.length
+          ? new Blob(_audioChunks, { type: mr.mimeType || 'audio/webm' })
+          : null;
+        _audioChunks = [];
+        try { mr.stream.getTracks().forEach(t => t.stop()); } catch(e) {}
+        resolve(blob);
+      };
+      try { mr.stop(); } catch(e) { _audioChunks = []; resolve(null); }
+    });
+  }
+
+  async function _speechaceUpload(page, transcript, blob) {
+    if (!blob || blob.size < 800 || !transcript) return null;
+    try {
+      const fd = new FormData();
+      fd.append('audio', blob, 'narration.webm');
+      fd.append('text',  transcript);
+      fd.append('page',  String(page));
+      const res = await fetch('/api/speechace-score', { method: 'POST', body: fd });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data && !data.error) _pronunciationCache[page] = data;
+      return data;
+    } catch(e) { console.warn('[AudioEngine] Speechace upload error:', e); return null; }
+  }
+
+  // Called at each slide boundary — captures current audio and fires background Speechace upload
+  function _onSlideCapture(page, transcript) {
+    _speechacePending[page] = _stopMediaRecorder().then(blob =>
+      _speechaceUpload(page, transcript, blob)
+    );
+  }
+
   function _makeSR() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert('Speech recognition is not supported in this browser. Please type instead.'); return null; }
@@ -865,6 +941,7 @@
   function _startNarrationRec() {
     if (audioMode !== 'idle') return;
     const rec = _makeSR(); if (!rec) return;
+    if (!_mediaRecorder) _startMediaRecorder();
 
     rec.onresult = e => {
       let newFinal = '';
