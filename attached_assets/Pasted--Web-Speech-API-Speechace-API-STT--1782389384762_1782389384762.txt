@@ -1,0 +1,46 @@
+我们要对系统的语音引擎（原本的 Web Speech API）进行彻底的工业级升级。
+后端引入【Speechace API（新加坡节点）】负责实时流式语音识别（STT）与音素级发音诊断，引入【阿里千问 CosyVoice-v3-flash】负责高保真示范音效合成（TTS）。
+要求：必须 100% 保持此前实现的“单页全量文字稿追加、切页清零、Q&A 联动、Content Quality 横向标签切换”的所有业务逻辑路径不变。
+
+请严格执行以下模块的代码焊接：
+
+==================================================
+模块一：后端 API 客户端封装 (services/audio_engine.py)
+==================================================
+1. 创建或修改 `audio_engine.py`，配置以下环境变量：
+   - `SPEECHACE_API_KEY`, `SPEECHACE_REGION="singapore"`
+   - `QWEN_API_KEY` (用于 CosyVoice-v3-flash)
+2. 【Speechace 链路焊接】：
+   - 封装 `recognize_and_diagnose(audio_stream_or_file)` 函数。调用 Speechace 的 `api/v1/viva` 或相关评测接口。
+   - 确保该接口同时返回：① 文本转写 (Text Transcript) ；② 单词/音素级发音评分数据（得分、读错的单词 `mispronounced_words`、预期标准音标、实际发音音标）。
+3. 【千问 CosyVoice 链路焊接】：
+   - 封装 `generate_pronunciation_demo(text)` 函数。调用 `cosyvoice-v3-flash` 模型，传入需要示范的正确单词或精修句子。
+   - 选用极具高级感的原生英音或美音音色，生成高保真音频流或静态 URL。
+
+==================================================
+模块二：保持并升级演练/Q&A 数据流 (qa_engine.py / rehearsal_controller)
+==================================================
+1. 【演练 Presentation 阶段数据流】：
+   - 用户的麦克风音频通过 Speechace 识别后，返回的文字【必须严格保持原有的逻辑路径】：动态追加到前端当前页的 `current_slide_transcript` 变量中，且点击 "Next Slide" 时全量打包存入后端并清零，严禁破坏此路径！
+2. 【高压 Q&A 阶段数据流】：
+   - 当进入 AI 追问或打断环节时，用户针对 Q&A 的语音回答同样交由 Speechace 识别，转换出的文本完整打包发给后端大语言模型进行【普适性三维标准评估 (Directness / Resonance / Evidence)】，原有分析链路保持不变。
+
+==================================================
+模块三：升级 report_generator.py 与 Content Quality 数据结构
+==================================================
+在最后的分析报告中，保持 Content Quality（文字稿质量）板块原有的“5维大白话审计、内容匹配度、原话 vs 优化稿左右对比”逻辑完全不变。在 JSON 结构中无缝注入 Speechace 返回的诊断总结：
+
+1. 在每一页的报告节点中，新增 `pronunciation_diagnostic` 字典对象：
+   ```json
+   "pronunciation_diagnostic": {
+       "summary_text": "在这一页的演练中，你的发音表现优异，但有 X 个专业词汇需要注意...",
+       "error_list": [
+           {
+               "word": "analysis",
+               "correct_phonetic": "/əˈnæləsɪs/",
+               "user_phonetic": "/ˌænəˈlaɪsɪs/",
+               "error_type": "重音位置错误",
+               "tts_demo_url": "" // 此处由后端调用 CosyVoice 传入 "analysis" 异步生成的示范音频链接
+           }
+       ]
+   }
