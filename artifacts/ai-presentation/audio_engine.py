@@ -13,19 +13,21 @@ SPEECHACE_API_KEY = os.environ.get("SPEECHACE_API_KEY", "")
 SPEECHACE_REGION  = os.environ.get("SPEECHACE_REGION", "singapore")
 QWEN_API_KEY      = os.environ.get("QWEN_API_KEY", "")
 
+_SPEECHACE_PATH = "/api/scoring/text/v9/json"
 _SPEECHACE_BASE = {
     "singapore": "https://api.speechace.co",
-    "us":        "https://api.speechace.com",
+    "us":        "https://api.speechace.co",   # same host, different key
 }
 
 
-def _speechace_url(path: str) -> str:
+def _speechace_url(user_id: str = "perspeakuser") -> str:
     base = _SPEECHACE_BASE.get((SPEECHACE_REGION or "singapore").lower(),
                                 _SPEECHACE_BASE["singapore"])
-    # Normalize first (handle already-encoded keys), then encode once cleanly
+    # Normalize (handle pre-encoded secrets), then encode once cleanly
     clean_key   = urllib.parse.unquote(SPEECHACE_API_KEY)
     encoded_key = urllib.parse.quote(clean_key, safe="")
-    return f"{base}{path}?key={encoded_key}"
+    uid         = urllib.parse.quote(user_id, safe="")
+    return f"{base}{_SPEECHACE_PATH}?key={encoded_key}&dialect=en-us&user_id={uid}"
 
 
 def _build_multipart(fields: dict, files: dict) -> tuple:
@@ -97,7 +99,7 @@ def recognize_and_diagnose(audio_bytes: bytes,
         fields={"question_info": question_info},
         files={"user_audio_file": (filename, audio_bytes, "audio/webm")},
     )
-    url = _speechace_url("/api/v9/scoring/text/scoring/json")
+    url = _speechace_url()
     try:
         req = urllib.request.Request(url, data=body,
                                      headers={"Content-Type": ct}, method="POST")
