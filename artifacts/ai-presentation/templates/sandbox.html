@@ -915,7 +915,7 @@
       fd.append('audio', blob, 'narration.webm');
       fd.append('text',  transcript);
       fd.append('page',  String(page));
-      const res = await fetch('/api/speechace-score', { method: 'POST', body: fd });
+      const res = await fetch('/x/speechace-score', { method: 'POST', body: fd });
       if (!res.ok) return null;
       const data = await res.json();
       if (data && !data.error) _pronunciationCache[page] = data;

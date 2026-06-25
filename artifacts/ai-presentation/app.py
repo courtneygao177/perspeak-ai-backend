@@ -4096,26 +4096,43 @@ def api_submit_academic_qa():
         return jsonify({"status": "ACADEMIC_QA_DONE"})
 
 
-@app.route("/api/speechace-score", methods=["POST"])
+@app.route("/x/speechace-score", methods=["POST"])
 def api_speechace_score():
     """
     Accepts a multipart POST with:
       - audio: audio blob (webm/ogg)
-      - text:  Web-Speech-API transcript (reference text)
+      - text:  user narration fallback (only used if no slide content found)
       - page:  slide page number (int)
-    Returns pronunciation_diagnostic JSON.
+
+    Reference text priority:
+      1. slide['content'] from session (what the user should say) — authoritative
+      2. user-submitted 'text' field (Web Speech transcript) — fallback
+    This ensures Speechace scores pronunciation against the intended script,
+    not the user's own speech (which would make all scores trivially high).
     """
-    audio_file = request.files.get("audio")
-    ref_text   = (request.form.get("text") or "").strip()
-    page       = int(request.form.get("page") or 0)
+    audio_file   = request.files.get("audio")
+    user_text    = (request.form.get("text") or "").strip()
+    page         = int(request.form.get("page") or 0)
 
     if not audio_file:
         return jsonify({"error": "No audio provided"}), 400
 
+    # ── Resolve authoritative reference text from slide content ──────────────
+    slides = _load_slides()
+    slide_ref = ""
+    for s in slides:
+        if s.get("page") == page:
+            title   = s.get("title", "")
+            content = s.get("content", "")
+            slide_ref = f"{title}. {content}".strip(" .") if title else content
+            break
+
+    ref_text = slide_ref or user_text   # prefer slide content; fall back to narration
+
     audio_bytes = audio_file.read()
     app.logger.info(
         f"[Speechace] Scoring slide {page} | audio={len(audio_bytes)}B | "
-        f"ref_len={len(ref_text)} chars"
+        f"ref_src={'slide' if slide_ref else 'user'} | ref_len={len(ref_text)} chars"
     )
 
     result = audio_engine.recognize_and_diagnose(
@@ -4125,7 +4142,7 @@ def api_speechace_score():
     return jsonify(result)
 
 
-@app.route("/api/tts-demo")
+@app.route("/x/tts-demo")
 def api_tts_demo():
     """
     Returns MP3 audio for a pronunciation demo of the given word.

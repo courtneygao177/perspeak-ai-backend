@@ -1010,7 +1010,7 @@
   function playTTS(word) {
     if (!word) return;
     if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
-    const audio = new Audio('/api/tts-demo?word=' + encodeURIComponent(word));
+    const audio = new Audio('/x/tts-demo?word=' + encodeURIComponent(word));
     _ttsAudio = audio;
     audio.play().catch(e => console.warn('[TTS] playback error:', e));
   }
