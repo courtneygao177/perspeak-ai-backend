@@ -4254,16 +4254,50 @@ def api_finish_presentation():
     )
 
     # ── Merge Speechace pronunciation_diagnostic into slide_transcripts_report ─
-    if pronunciation_data and content_quality_eval.get("slide_transcripts_report"):
-        for slide in content_quality_eval["slide_transcripts_report"]:
-            page_key = str(slide.get("slide_id", ""))
-            diag = pronunciation_data.get(page_key)
-            if diag and isinstance(diag, dict):
-                slide["pronunciation_diagnostic"] = diag
+    # pronunciation_data keys are str(page_int) because JSON serialises integer
+    # object-keys to strings: {1: diag} → {"1": diag}.
+    if pronunciation_data:
+        report = content_quality_eval.get("slide_transcripts_report") or []
+
+        # If the report is empty (no transcripts submitted), build minimal stubs
+        # so the pronunciation panel still appears in the report.
+        if not report:
+            for page_str in sorted(pronunciation_data.keys(),
+                                   key=lambda x: int(x) if x.isdigit() else 0):
+                diag = pronunciation_data[page_str]
+                if not isinstance(diag, dict):
+                    continue
+                try:
+                    page_int = int(page_str)
+                except ValueError:
+                    continue
+                s = next((sl for sl in slides if sl.get("page") == page_int), {})
+                report.append({
+                    "slide_id":    page_int,
+                    "slide_title": s.get("title", f"Slide {page_int}"),
+                    "raw_transcript": diag.get("transcript", "(no transcript recorded)"),
+                    "script_analysis": {},
+                    "optimized_script": "",
+                    "pronunciation_diagnostic": diag,
+                })
                 app.logger.info(
-                    f"[Pronunciation] Merged diag for slide {page_key} | "
+                    f"[Pronunciation] Stub slide {page_int} | "
                     f"score={diag.get('overall_score')} errors={len(diag.get('error_list', []))}"
                 )
+            if report:
+                content_quality_eval["slide_transcripts_report"] = report
+                content_quality_eval["has_data"] = True
+        else:
+            # Report already has slides — merge pronunciation into matching slides
+            for slide in report:
+                page_key = str(slide.get("slide_id", ""))
+                diag = pronunciation_data.get(page_key)
+                if diag and isinstance(diag, dict):
+                    slide["pronunciation_diagnostic"] = diag
+                    app.logger.info(
+                        f"[Pronunciation] Merged diag for slide {page_key} | "
+                        f"score={diag.get('overall_score')} errors={len(diag.get('error_list', []))}"
+                    )
 
     challenge_type = challenge_seed.get("challenge_type", "General")
 

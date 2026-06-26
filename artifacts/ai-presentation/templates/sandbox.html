@@ -909,7 +909,9 @@
   }
 
   async function _speechaceUpload(page, transcript, blob) {
-    if (!blob || blob.size < 800 || !transcript) return null;
+    // transcript is no longer required here — backend uses the slide's reference script.
+    // We only need a valid audio blob.
+    if (!blob || blob.size < 800) return null;
     try {
       const fd = new FormData();
       fd.append('audio', blob, 'narration.webm');
