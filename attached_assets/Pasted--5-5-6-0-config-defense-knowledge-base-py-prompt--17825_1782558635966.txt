@@ -1,0 +1,65 @@
+请将以下结构化知识库（已完成雅思 5.5-6.0 扁平化翻译与维度拆解）写入系统的答辩场景配置文件（如 config/defense_knowledge_base.py 或 prompt 模板）中。
+
+这些数据将直接驱动：
+1. Q&A 环节的后端 AI 专业提问库。
+2. Communication Quality（对答表现）的反馈与 How to fix 理论底层。
+3. Presentation Quality（演讲表现）的反馈与 How to fix 理论底层。
+
+==================================================
+PART 1: AI QUESTION BANK (专业提问库)
+==================================================
+# 注意：提问用词需保持专业度，模拟真实教授发问。
+DEFENSE_QUESTION_BANK = [
+    {
+        "id": "q1_reason",
+        "question": "What was your primary motivation for selecting this specific research topic?",
+        "answering_strategy": "Start with social or professional background. Connect it to your internship or practical experience. Mention discussions with your supervisor."
+    },
+    {
+        "id": "q2_significance",
+        "question": "Could you clarify the academic significance and practical objectives of your study?",
+        "answering_strategy": "Do not mix ideas. Clearly state how your paper helps the research field and what practical problems it solves."
+    },
+    {
+        "id": "q3_framework",
+        "question": "How did you design the basic framework and structure of this thesis?",
+        "answering_strategy": "Do not just read the outline. Explain the overall logic (e.g., General-Specific-General) and how different chapters connect."
+    },
+    {
+        "id": "q4_logic",
+        "question": "What is the underlying logical relationship between the different sections of your paper?",
+        "answering_strategy": "Explain the flow: introducing the background -> identifying the problem -> analyzing the causes -> proposing solutions."
+    },
+    {
+        "id": "q5_counterarguments",
+        "question": "Did you encounter any conflicting views or counterarguments during your research? How did you address them?",
+        "answering_strategy": "Never say 'No'. List different opinions. Do not completely agree or disagree; explain which theory you used as your foundation."
+    },
+    {
+        "id": "q6_scope_limitations",
+        "question": "What closely related issues or variables were excluded from the scope of your current research?",
+        "answering_strategy": "Be honest. Choose 1 or 2 related topics and give a short summary of why they need further study."
+    },
+    {
+        "id": "q7_depth_limitations",
+        "question": "In your opinion, which parts of your thesis require more profound investigation or lack sufficient depth?",
+        "answering_strategy": "Show self-awareness. Point out a specific section that is mentioned but not fully developed due to time or resource limits."
+    },
+    {
+        "id": "q8_argument_basis",
+        "question": "What constitutes the core theoretical basis or empirical evidence supporting your central argument?",
+        "answering_strategy": "Focus on the current facts, data, or core theories that prove your thesis statement is correct."
+    },
+    {
+        "id": "q9_innovation",
+        "question": "What are the distinct innovative points or unique perspectives of your research?",
+        "answering_strategy": "Explain if you used a new perspective, a unique angle, or studied a topic that few people have explored before."
+    },
+    {
+        "id": "q10_weaknesses",
+        "question": "What are the major limitations or weaknesses of this study?",
+        "answering_strategy": "Combine this with other knowledge areas. For example, mention that you need more knowledge in statistics to do deeper data analysis."
+    }
+]
+
+==================================================
