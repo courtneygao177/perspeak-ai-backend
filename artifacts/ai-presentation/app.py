@@ -154,7 +154,7 @@ BUSINESS_CHALLENGE_TYPES = {
     "Competitor Challenge": "Existing players are stronger than acknowledged",
 }
 
-INTERRUPTABLE_SCENARIOS = {"Thesis Defense", "MBA Case Pitch"}
+INTERRUPTABLE_SCENARIOS = {"MBA Case Pitch"}   # Thesis Defense → post-session Q&A only
 
 # ─────────────────────────────────────────────
 # AUDIENCE PERSONA DEFINITIONS
@@ -3988,10 +3988,13 @@ def api_check_slide():
     next_page = current_page + 1
     if next_page > len(slides):
         # ── Academic / Class Presentation: trigger post-session Q&A before report ──
-        if scenario in ("Academic Presentation", "Class Presentation"):
+        if scenario in ("Academic Presentation", "Class Presentation", "Thesis Defense"):
             qa_bank = session.get("qa_bank", [])
             difficulty = config.get("difficulty", "Medium")
-            qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
+            if scenario == "Thesis Defense":
+                qa_count = {"Easy": 3, "Medium": 5, "Hard": 8}.get(difficulty, 5)
+            else:
+                qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
             questions = [q for q in qa_bank if isinstance(q, dict)][:qa_count]
             if questions:
                 state["academic_qa_mode"] = True
