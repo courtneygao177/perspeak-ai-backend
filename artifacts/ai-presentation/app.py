@@ -1464,45 +1464,45 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
     COACHING = {
         "thesis_defense": [
             ("Directness",
-             "You opened with a clear directional stance, addressing the examiner's challenge without unnecessary preamble — a key viva skill.",
-             "Your response built too much background before stating your position. In a viva, your stance should appear in sentence 1 or 2.",
-             "Lead immediately with your claim. Say this instead: 'My research demonstrates [X]. The evidence for this is [specific data].'"),
+             "你开门见山地表明了立场，直接回应了考官的质疑，没有多余的铺垫——这是答辩的核心技能。",
+             "你在阐明观点之前铺垫了过多背景。在答辩中，核心立场应在第1到第2句话就出现。",
+             "直接从你的核心论点开始。Say this instead: 'My research demonstrates [X]. The evidence for this is [specific data].'"),
             ("Defensibility",
-             "You grounded your answers in concrete evidence — citing data, statistics, or prior literature — which significantly strengthened your defense.",
-             "Your answers relied on general reasoning without hard evidence. Academic examiners expect specific data to back every claim.",
-             "Anchor each answer in a number. Say this instead: 'Our n=[X] sample showed p<0.05 significance, confirming [conclusion].'"),
+             "你用具体数据、统计数字或文献引用支撑了论点，有力地强化了答辩说服力。",
+             "你的回答依赖泛泛的逻辑推理，缺乏具体数据。学术考官期望每一个论点都有实证支撑。",
+             "用数据锚定每一个论点。Say this instead: 'Our n=[X] sample showed p<0.05 significance, confirming [conclusion].'"),
             ("Tact",
-             "You handled challenges diplomatically — acknowledging the examiner's concern before building your rebuttal. Carnegie's Yes-Response at its best.",
-             "You moved straight to rebuttal without first finding common ground. Carnegie's Yes-Response builds rapport before you defend.",
-             "Open with agreement. Say this instead: 'That is a valid concern. I can see why you raise this — however, our data shows [answer].'"),
+             "你以外交式的方式应对质疑——在反驳之前先肯定了考官的关切，完美诠释了卡内基「是的，回应」技巧。",
+             "你直接进入反驳，没有先找到共同点。卡内基「是的，回应」技巧能在防御之前先建立融洽关系。",
+             "以认同开场。Say this instead: 'That is a valid concern. I can see why you raise this — however, our data shows [answer].'"),
         ],
         "case_pitch": [
             ("Conclusion First",
-             "You led with a clear verdict before the supporting argument — exactly the McKinsey Pyramid Principle that VCs expect.",
-             "You built context before your conclusion. VCs lose attention within 10 seconds — your stance must come in sentence 1.",
-             "Lead with your answer. Say this instead: 'Yes, [direct verdict]. The reason is [one key driver]. Here is the evidence: [metric].'"),
+             "你先给出结论再铺陈论据——这正是投资人期待的麦肯锡金字塔结构。",
+             "你先建立背景再得出结论。投资人10秒内就会失去注意力——你的立场必须在第一句话出现。",
+             "先亮出你的结论。Say this instead: 'Yes, [direct verdict]. The reason is [one key driver]. Here is the evidence: [metric].'"),
             ("Persuasion Mix",
-             "Your response balanced credibility (Ethos), data (Logos), and a customer story (Pathos) — Aristotle's full rhetorical triangle.",
-             "Your response leaned too heavily on data (Logos) without a customer story (Pathos) or credibility signal (Ethos).",
-             "Add a human story. Say this instead: 'One of our beta customers saw a [X%] improvement in [outcome] after [timeframe].'"),
+             "你的回答在公信力（Ethos）、数据（Logos）和客户故事（Pathos）之间取得了平衡——完整的亚里士多德修辞三角。",
+             "你的回答过于偏重数据（Logos），缺少客户故事（Pathos）和公信力信号（Ethos）。",
+             "加入一个真实客户故事。Say this instead: 'One of our beta customers saw a [X%] improvement in [outcome] after [timeframe].'"),
             ("Command Presence",
-             "You maintained confident, authoritative language throughout the challenge — no hedging, no approval-seeking.",
-             "Your language showed uncertainty under pressure — words like 'maybe', 'I think', 'perhaps'. VCs read hedges as lack of conviction.",
-             "Replace hedges with assertions. Say this instead: '[The answer] is [X]. We know this because [data]. There is no ambiguity.'"),
+             "你在整个质疑过程中保持了自信、权威的语言表达——没有模棱两可，没有寻求认可。",
+             "你在压力下出现了不确定的语言——「也许」、「我觉得」、「或许」。投资人会把这些视为缺乏信念。",
+             "用断言取代模糊表达。Say this instead: '[The answer] is [X]. We know this because [data]. There is no ambiguity.'"),
         ],
         "class_presentation": [
             ("Rule of Three",
-             "You organized your Q&A response into three clear buckets, making your answer easy to follow and memorable for the audience.",
-             "Your answer listed points without a three-part frame. The Rule of Three helps audiences retain your core message beyond the session.",
-             "Structure into three. Say this instead: 'There are three key things: first, [X]; second, [Y]; and third, [Z].'"),
+             "你将问答回复组织成了三个清晰的模块，使回答便于跟进和记忆。",
+             "你的回答罗列了要点，但没有三段式框架。三件事法则有助于听众在会后记住你的核心观点。",
+             "将回答结构化为三点。Say this instead: 'There are three key things: first, [X]; second, [Y]; and third, [Z].'"),
             ("Conversational Sense",
-             "Your Q&A responses felt like natural expanded conversation rather than scripted recitation — oral connectors and natural pacing throughout.",
-             "Your responses sounded formal or scripted. TED speakers speak like conversationalists, not academic presenters.",
-             "Add dialogue markers. Say this instead: 'Think about it this way — [your core point]. The key insight is [idea].'"),
+             "你的问答回答感觉像是自然展开的对话，而非照本宣科的背诵——口语连接词和自然节奏贯穿始终。",
+             "你的回答听起来正式或像在背稿。TED演讲者说话像聊天，而不像学术发言。",
+             "加入对话式语言标记。Say this instead: 'Think about it this way — [your core point]. The key insight is [idea].'"),
             ("Illustrative Support",
-             "You backed your points with a specific real-world example including concrete who/when/where details — bringing the idea vividly to life.",
-             "You gave conceptual explanations without a 5-W specific example. Carnegie teaches that 'tell me a story' always beats abstract reasoning.",
-             "Jump into a 5-W example. Say this instead: 'Let me give you a real case: in [year], [who] at [place] did [what], with result [outcome].'"),
+             "你用一个具体的真实案例支撑了观点，包括清晰的时间、地点、人物等细节——让想法生动起来。",
+             "你给出了概念性解释，却没有具体的5W案例。卡内基说「讲个故事」永远胜过抽象推理。",
+             "立刻跳入一个5W案例。Say this instead: 'Let me give you a real case: in [year], [who] at [place] did [what], with result [outcome].'"),
         ],
     }
 
@@ -1524,18 +1524,18 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
             )
             areas_for_improvement.append({
                 "dimension": dim_label,
-                "issue":     f"[{scene_label}] {dim_label}: Good foundation at {sc}/100. Continue refining to push above 85.",
-                "example":   f"Heuristic score: {sc}/100.",
-                "how_to_fix": "Keep applying the same technique. Focus on even sharper phrasing in your next session.",
+                "issue":     f"[{scene_label}] {dim_label}：{sc}/100 的良好基础，继续打磨以突破 85 分。",
+                "example":   f"启发式评分：{sc}/100。",
+                "how_to_fix": "保持当前技巧，在下次会话中聚焦更精准的表达。",
             })
         else:
             what_i_did_good.append(
-                f"[{scene_label}] {dim_label} ({sc}/100): You attempted this dimension. With focused practice, your score can improve significantly."
+                f"[{scene_label}] {dim_label} ({sc}/100): 你在这个维度做了尝试，有针对性地练习可以显著提升分数。"
             )
             areas_for_improvement.append({
                 "dimension": dim_label,
                 "issue":     f"[{scene_label}] {low_issue}",
-                "example":   f"Heuristic score: {sc}/100. Run a full AI-evaluated session to get verbatim quote feedback.",
+                "example":   f"启发式评分：{sc}/100。进行完整 AI 评估会话可获得逐字引用反馈。",
                 "how_to_fix": fix_phrase,
             })
 
@@ -1686,53 +1686,53 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
         "thesis_defense": [
             (dim_names[0],
              has_first_person or scores.get(dim_names[0], 60) >= 65,
-             "You used active voice and first-person stance, signalling academic confidence to the examiner.",
-             "Your response built context before stating your position. In a viva, place your stance in sentence 1 or 2.",
-             "Lead immediately with your claim. Say this instead: 'My research demonstrates [X]. The evidence is [specific data].'"),
+             "你使用了主动语态和第一人称立场，向考官传递了独立研究者的学术自信。",
+             "你在阐明立场之前铺垫了过多背景。在答辩中，核心立场应在第1到第2句话就出现。",
+             "直接从你的核心论点开始。Say this instead: 'My research demonstrates [X]. The evidence is [specific data].'"),
             (dim_names[1],
              has_numbers or scores.get(dim_names[1], 60) >= 65,
-             "You grounded your answers in evidence — data, citations, or quantitative reasoning that held up under scrutiny.",
-             "Your answers relied on general reasoning without hard evidence. Examiners need a number or citation per claim.",
-             "Anchor every answer in a number. Say this instead: 'Our n=[X] sample showed [result], confirmed by [citation].'"),
+             "你用数据、文献引用或定量推理支撑了论点，经受住了考官的审视。",
+             "你的回答依赖泛泛的逻辑推理，缺乏具体数据。考官期望每一个论点都有数字或文献支撑。",
+             "用数据锚定每一个论点。Say this instead: 'Our n=[X] sample showed [result], confirmed by [citation].'"),
             (dim_names[2],
              has_yes_resp or scores.get(dim_names[2], 60) >= 65,
-             "You showed diplomatic tact — acknowledging the examiner's concern before building your rebuttal.",
-             "You moved to rebuttal without first finding common ground. Carnegie's Yes-Response builds trust before you defend.",
-             "Open with agreement. Say this instead: 'That is a valid concern. Our data also shows [answer].'"),
+             "你展现了外交式的技巧——在反驳之前先肯定了考官的关切。",
+             "你直接进入反驳，没有先找到共同点。卡内基「是的，回应」技巧能在防御之前先建立信任。",
+             "以认同开场。Say this instead: 'That is a valid concern. Our data also shows [answer].'"),
         ],
         "case_pitch": [
             (dim_names[0],
              not has_hedges and scores.get(dim_names[0], 60) >= 65,
-             "You led with a clear verdict before the supporting argument — the McKinsey Pyramid structure VCs expect.",
-             "You built context before your conclusion. VCs lose attention in 10 seconds — your stance must come first.",
-             "Lead with your answer. Say this instead: 'Yes, [direct verdict]. The reason: [one key driver].'"),
+             "你先给出结论再铺陈论据——这正是投资人期待的麦肯锡金字塔结构。",
+             "你先建立背景再得出结论。投资人10秒内就会失去注意力——你的立场必须在第一句话出现。",
+             "先亮出你的结论。Say this instead: 'Yes, [direct verdict]. The reason: [one key driver].'"),
             (dim_names[1],
              (has_numbers or has_example) and scores.get(dim_names[1], 60) >= 65,
-             "Your response mixed credibility, data, and story — Aristotle's full rhetorical triangle applied perfectly.",
-             "Your response leaned on logic without a customer story or credibility signal.",
-             "Add a human story. Say this instead: 'One customer saw [X%] improvement after [timeframe].'"),
+             "你的回答混合了公信力、数据和故事——亚里士多德修辞三角的完美呈现。",
+             "你的回答偏重逻辑，缺少客户故事或公信力信号。",
+             "加入一个真实客户故事。Say this instead: 'One customer saw [X%] improvement after [timeframe].'"),
             (dim_names[2],
              not has_hedges and scores.get(dim_names[2], 60) >= 65,
-             "You held confident, authoritative language throughout — no hedging, no approval-seeking.",
-             "Uncertain language (maybe, I think, perhaps) appeared under pressure. VCs read hedges as lack of conviction.",
-             "Replace hedges with assertions. Say this instead: 'This is [X]. We know because [data].'"),
+             "你在整个过程中保持了自信、权威的语言表达——没有模棱两可，没有寻求认可。",
+             "压力下出现了不确定的语言（也许、我觉得、或许）。投资人会把这些视为缺乏信念。",
+             "用断言取代模糊表达。Say this instead: 'This is [X]. We know because [data].'"),
         ],
         "class_presentation": [
             (dim_names[0],
              has_structure and scores.get(dim_names[0], 60) >= 65,
-             "You organized your response into three clear buckets — easy to follow and memorable for the audience.",
-             "Your answer listed points without a three-part frame. The Rule of Three improves audience retention.",
-             "Structure into three. Say this instead: 'There are three things: first [X]; second [Y]; third [Z].'"),
+             "你将回答组织成了三个清晰的模块——便于跟进和记忆。",
+             "你的回答罗列了要点，但没有三段式框架。三件事法则能提升听众的记忆留存率。",
+             "将回答结构化为三点。Say this instead: 'There are three things: first [X]; second [Y]; third [Z].'"),
             (dim_names[1],
              scores.get(dim_names[1], 60) >= 65,
-             "Your responses felt like natural conversation rather than scripted recitation.",
-             "Your responses sounded formal or scripted. TED speakers use expanded conversation, not academic prose.",
-             "Add dialogue markers. Say this instead: 'Think about it this way — [core point]. The key is [insight].'"),
+             "你的回答感觉像是自然展开的对话，而非照本宣科的背诵。",
+             "你的回答听起来正式或像在背稿。TED演讲者说话像聊天，而不像学术发言。",
+             "加入对话式语言标记。Say this instead: 'Think about it this way — [core point]. The key is [insight].'"),
             (dim_names[2],
              has_example and scores.get(dim_names[2], 60) >= 65,
-             "You backed points with a specific real-world example including concrete who/when/where details.",
-             "You gave conceptual explanations without a 5-W specific example. Stories always beat abstract reasoning.",
-             "Jump into a 5-W example. Say this instead: 'In [year], [who] at [place] did [what], result: [outcome].'"),
+             "你用一个具体的真实案例支撑了观点，包括清晰的时间、地点、人物等细节。",
+             "你给出了概念性解释，却没有具体的5W案例。讲故事永远胜过抽象推理。",
+             "立刻跳入一个5W案例。Say this instead: 'In [year], [who] at [place] did [what], result: [outcome].'"),
         ],
     }
 
@@ -2131,6 +2131,10 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "══════════════════════════════════════════════\n"
         "OUTPUT RULES\n"
         "══════════════════════════════════════════════\n"
+        "RULE 0 (LANGUAGE — MANDATORY): ALL text in what_i_did_good and areas_for_improvement fields MUST be written in Simplified Chinese, EXCEPT: "
+        "(1) the EXACT English quotes from the user that appear inside single quotes '...' in what_i_did_good items; "
+        "(2) the English example sentence that comes AFTER 'Say this instead:' in how_to_fix. "
+        "The phrase 'Say this instead:' itself must remain in English as a delimiter. Everything else — issue, the text before 'Say this instead:', etc. — must be in Chinese.\n"
         "RULE 1: IELTS 5.5-6.0 vocabulary. Short, clear sentences for non-native speakers.\n"
         "RULE 2 (MOST IMPORTANT): Every item MUST quote EXACT words from A1/A2/A3 above. NEVER invent quotes.\n"
         "RULE 3: EXACTLY 3 items each in what_i_did_good and areas_for_improvement.\n"
@@ -2462,7 +2466,10 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "══════════════════════════════════════════════\n"
         "OUTPUT RULES\n"
         "══════════════════════════════════════════════\n"
-        "RULE 0 (JSON SAFETY): Return ONLY valid JSON. Use DOUBLE QUOTES for ALL strings. NEVER single quotes.\n"
+        "RULE 0a (JSON SAFETY): Return ONLY valid JSON. Use DOUBLE QUOTES for ALL strings. NEVER single quotes.\n"
+        "RULE 0b (LANGUAGE — MANDATORY): ALL text in what_i_did_good and areas_for_improvement MUST be in Simplified Chinese, EXCEPT: "
+        "(1) EXACT English quotes from the user inside single quotes in what_i_did_good; "
+        "(2) the English example sentence AFTER 'Say this instead:' in how_to_fix. The phrase 'Say this instead:' stays English as a delimiter.\n"
         "RULE 1: IELTS 5.5-6.0 vocabulary. Short sentences.\n"
         "RULE 2 (CRITICAL): Every example MUST quote EXACT words from the labelled transcripts. NEVER invent.\n"
         "  - FREE dims (Directness/Resonance/Evidence): quote ONLY from A1 sentences. NOT from A_anchor.\n"
