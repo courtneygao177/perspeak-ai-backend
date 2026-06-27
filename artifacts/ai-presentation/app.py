@@ -2973,12 +2973,8 @@ MANDATORY OUTPUT RULES — READ ALL BEFORE WRITING
 
 ⚡ SPEED RULE: Max 2 sentences per feedback item. Be concise. No essay text.
 
-RULE 1 — LANGUAGE (MANDATORY)
-All output text in what_i_did_good and areas_for_improvement MUST be written in Simplified Chinese, WITH TWO EXCEPTIONS:
-  (a) The EXACT English words the presenter spoke, reproduced inside single quotes '...' — keep these in English verbatim.
-  (b) The English model sentence that follows "Say this instead:" — keep that in English. The phrase "Say this instead:" itself must also stay in English as a delimiter.
-Everything else — the item title, the surrounding analysis, the how_to_fix explanation before "Say this instead:" — must be in Chinese.
-Vocabulary level: IELTS 5.5-6.0 equivalent in Chinese. Short, clear sentences for a non-native English speaker audience.
+RULE 1 — LANGUAGE
+Use IELTS 5.5-6.0 vocabulary only. Short, clear sentences. Write for a university student who is NOT a native English speaker. Say "show" not "demonstrate". Say "fix" not "mitigate". Say "use" not "utilise".
 
 RULE 2 — QUOTE RULE (MOST IMPORTANT)
 Every item MUST be grounded in the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION above.
@@ -2990,49 +2986,49 @@ what_i_did_good      → EXACTLY 4 items, one per pillar: Structure, Fluency, Co
 areas_for_improvement → EXACTLY 4 items, one per pillar: Structure, Fluency, Content Relevance, Delivery
 NO pillar may be skipped. NO extra items. Write in that exact order.
 
-RULE 4 — what_i_did_good FORMAT — USE TED SENTENCE TEMPLATES (ALL IN CHINESE except quoted speech)
+RULE 4 — what_i_did_good FORMAT — USE TED SENTENCE TEMPLATES
 Each item must follow ONE of these TED-style templates:
 
   [Structure] Rule of Three / Message Map:
-  "[Structure] 三点法则：你开场时清晰地列出了三点框架，说道：'[exact opening quote]'。这让听众保持专注，避免了信息过载。"
+  "[Structure] The Rule of Three: You opened with a clear 3-point frame, saying: '[exact opening quote]'. This kept your audience focused and prevented information overload."
 
   [Fluency] Dialogue Style:
-  "[Fluency] 对话式表达：你没有照本宣科，而是用自然的连接词，如 '[exact quote with connector]'，让演讲呈现出 TED 风格的对话感。"
+  "[Fluency] Conversational Delivery: Instead of reading a script, you used natural connectors like '[exact quote with connector]', which gave your talk a TED-style conversational feel."
 
   [Content Relevance] Picture Superiority:
-  "[Content Relevance] 画面感表达：你没有只是念幻灯片，而是用生动的语言说道：'[exact descriptive quote]'，在听众脑海中构建了鲜明的画面。"
+  "[Content Relevance] Picture Superiority: Instead of just reading the slides, you used vivid language: '[exact descriptive quote]', which painted a mental image for your audience."
 
   [Delivery] Punching Key Words:
-  "[Delivery] 关键词强调：你在关键处加了重音，说道：'[exact quote near stat or conclusion]'，创造出自然的停顿效果，提升了表达冲击力。"
+  "[Delivery] Punching Key Words: You emphasized a key point when you said: '[exact quote near stat or conclusion]', creating a natural pause effect that boosted impact."
 
   If the above templates don't match what the user DID (e.g., they didn't use Rule of Three),
-  write an honest positive observation using: "[Pillar] 简短标题：'[exact quote]'。[1句话说明为什么有效。]"
+  write an honest positive observation using: "[Pillar] Short Title: [exact quote]. [1 sentence why it works]."
 
 RULE 5 — areas_for_improvement FORMAT — USE TED IMPROVEMENT TEMPLATES
-Each object has EXACTLY these 4 keys. issue and how_to_fix MUST be in Chinese. example MUST quote the user's exact English speech. "Say this instead:" stays in English as a delimiter.
+Each object has EXACTLY these 4 keys. Use TED-style fix language:
 
   Structure weakness template:
-  "issue": "[Structure] 逻辑框架薄弱：你在过渡不同观点时标题不够清晰。"
-  "example": "你的原话：'[exact quote at a weak transition]'，让听众失去了逻辑焦点。"
-  "how_to_fix": "用 Twitter 式标题（140字以内）做过渡。Say this instead: 'Let's connect this to our main point: [rewritten example at IELTS 5.5 level].'"
+  "issue": "[Structure] Weak Message Map: Your headline was not clear enough when transitioning between ideas."
+  "example": "You said: '[exact quote at a weak transition]', which lost the logical focus for the audience."
+  "how_to_fix": "Make it a Twitter-style headline (under 140 characters). Say this instead: 'Let's connect this to our main point: [rewritten example at IELTS 5.5 level].'"
 
   Fluency weakness template:
-  "issue": "[Fluency] 照本宣科：你的语气像在念稿，而不是 TED 风格的对话。"
-  "example": "你逐字念道：'[exact mechanical quote from narration]'，缺少自然的连接词。"
-  "how_to_fix": "把内容内化，像聊天一样表达。Say this instead: '[more natural, shorter version].'"
+  "issue": "[Fluency] Script Reading over Dialogue: Your tone sounded like reading a paper rather than a TED-style talk."
+  "example": "You literally read: '[exact mechanical quote from narration]', with no natural connectors."
+  "how_to_fix": "Internalize your content and speak like a conversation. Say this instead: '[more natural, shorter version at IELTS 5.5 level].'"
 
   Relevance weakness template:
-  "issue": "[Content Relevance] 画面感缺失：你只是重复了幻灯片上的要点，没有用生动语言展开。"
-  "example": "第 [N] 张幻灯片上列出了 '[exact bullet from slide]'，你几乎用了相同的话：'[exact mirrored quote]'。"
-  "how_to_fix": "加入视觉比喻或真实案例。Say this instead: 'Think of it like [vivid analogy].'"
+  "issue": "[Content Relevance] Picture Superiority Violation: You echoed the slide bullets instead of painting a picture."
+  "example": "On Slide [N], the slide listed '[exact bullet from slide]', and you said almost the same words: '[exact mirrored quote]'."
+  "how_to_fix": "Add a visual metaphor or real example. Say this instead: 'Think of it like [vivid analogy].'"
 
   Delivery weakness template:
-  "issue": "[Delivery] [速度评级]：你的语速为 [X] WPM，[低于/超出] TED 黄金区间 160-190 WPM。"
-  "example": "你说：'[exact quote where speed was most noticeable]'，听起来[过快/过慢]。"
-  "how_to_fix": "录音并将语速调整至 160-190 WPM。Say this instead: '[same sentence at correct pacing with pauses marked as / ].'"
+  "issue": "[Delivery] [Speed verdict]: Your WPM of [X] is [outside/below/above] the TED golden zone of 160-190 WPM."
+  "example": "You said: '[exact quote where speed was most noticeable]', which sounded [rushed/hesitant]."
+  "how_to_fix": "Record yourself and aim for 160-190 WPM. Say this instead: '[same sentence at correct pacing with pauses marked as / ]'."
 
   If the above doesn't match, use the standard format:
-  "dimension": "...", "issue": "[Chinese description]", "example": "你的原话：'[English quote]'" or "第 N 张幻灯片中，你跳过了 [fact]。", "how_to_fix": "[Chinese advice] Say this instead: '[English example].'"
+  "dimension": "...", "issue": "...", "example": "You said: '...'" or "On Slide N, you skipped [fact].", "how_to_fix": "Say this instead: '...'"
 
 RULE 6 — pitch_data
 Return exactly 20 integers (range 50-250) simulating pitch variance for the Delivery chart.
