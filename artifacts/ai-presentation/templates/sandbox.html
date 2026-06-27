@@ -155,7 +155,17 @@
                     style="color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe"></span>
             </div>
             <p id="acqSubtitle" class="text-xs mb-3 text-slate-400">Answer each question before generating your report.</p>
-            <p id="acqQuestion" class="text-[#0F172A] text-base font-medium leading-relaxed mb-4"></p>
+            <p id="acqQuestion" class="text-[#0F172A] text-base font-medium leading-relaxed mb-2"></p>
+            <!-- Strategy hint button -->
+            <button id="acqStrategyBtn" onclick="toggleStrategy('acqStrategyPopover')"
+                    class="hidden mb-3 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200
+                           text-xs px-3 py-1.5 rounded-full flex items-center gap-2 cursor-pointer font-medium transition-colors">
+              💡 Stuck? Click for Answering Strategy
+            </button>
+            <div id="acqStrategyPopover" class="hidden mb-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <p class="text-xs font-semibold text-blue-700 mb-1">💡 Answering Strategy</p>
+              <p id="acqStrategyText" class="text-xs text-blue-800 leading-relaxed"></p>
+            </div>
             <div class="space-y-3">
               <textarea id="acqInput"
                         placeholder="Type your answer, or use Voice…"
@@ -200,7 +210,17 @@
               <span id="qaRoundBadge" class="text-xs bg-red-100 border border-red-300 text-red-700 px-2 py-0.5 rounded-full font-mono">Round 1</span>
               <span id="challengeTypeBadge" class="hidden text-xs bg-orange-100 border border-orange-300 text-orange-700 px-2 py-0.5 rounded-full font-mono"></span>
             </div>
-            <p id="qaQuestion" class="text-red-900 text-base font-medium leading-relaxed mb-4"></p>
+            <p id="qaQuestion" class="text-red-900 text-base font-medium leading-relaxed mb-2"></p>
+            <!-- Strategy hint button -->
+            <button id="qaStrategyBtn" onclick="toggleStrategy('qaStrategyPopover')"
+                    class="hidden mb-3 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200
+                           text-xs px-3 py-1.5 rounded-full flex items-center gap-2 cursor-pointer font-medium transition-colors">
+              💡 Stuck? Click for Answering Strategy
+            </button>
+            <div id="qaStrategyPopover" class="hidden mb-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <p class="text-xs font-semibold text-blue-700 mb-1">💡 Answering Strategy</p>
+              <p id="qaStrategyText" class="text-xs text-blue-800 leading-relaxed"></p>
+            </div>
             <div class="space-y-3">
               <textarea id="answerInput"
                         placeholder="Type your answer here, or use Voice input on the right"
@@ -396,6 +416,7 @@
   let _audioChunks        = [];
   let _pronunciationCache = {};   // page (int) → diagnostic dict from /api/speechace-score
   let _speechacePending   = {};   // page (int) → Promise
+  let _currentStrategy    = '';   // answering strategy for the active Q&A question
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   let timerSeconds  = 0;
@@ -456,8 +477,8 @@
           words: narration.split(/\s+/).filter(Boolean).length,
         });
         audioSuspendForQa(wasRecordingNarration);
-        showQAChallenge(data.question, 1, data.challenge_type);
-        qaChatHistory.push({ role: 'ai', text: data.question, type: 'interrupt' });
+        showQAChallenge(data.question, 1, data.challenge_type, data.answering_strategy || '');
+        qaChatHistory.push({ role: 'ai', text: data.question, type: 'interrupt', strategy: data.answering_strategy || '' });
         addLog(`⚡ Challenge: ${data.challenge_type || 'Unknown'}`);
         pauseTimer();
         btn.innerHTML = `<span class="text-red-400 text-xs">⚡ Answer first</span>`;
@@ -490,8 +511,8 @@
         pauseTimer();
         document.getElementById('finishSlideBtn').disabled = true;
         showAcademicQa(data.question, data.question_num, data.total_questions,
-                       data.challenge_type, data.category);
-        qaChatHistory.push({ role: 'ai', text: data.question, type: 'academic' });
+                       data.challenge_type, data.category, data.answering_strategy || '');
+        qaChatHistory.push({ role: 'ai', text: data.question, type: 'academic', strategy: data.answering_strategy || '' });
         addLog(`📋 Post-session Q&A started (${data.total_questions} question(s))`);
         btn.innerHTML = `<span class="text-indigo-400 text-xs">📋 Answer Q&A first</span>`;
 
@@ -508,8 +529,19 @@
   }
 
   // ── Academic / Class Presentation Post-Session Q&A ────────────────────────
-  function showAcademicQa(question, num, total, challengeType, category) {
+  function showAcademicQa(question, num, total, challengeType, category, strategy) {
     document.getElementById('acqQuestion').textContent = question;
+    // Strategy hint
+    _currentStrategy = strategy || '';
+    const btn = document.getElementById('acqStrategyBtn');
+    const pop = document.getElementById('acqStrategyPopover');
+    pop.classList.add('hidden');
+    if (_currentStrategy) {
+      document.getElementById('acqStrategyText').textContent = _currentStrategy;
+      btn.classList.remove('hidden');
+    } else {
+      btn.classList.add('hidden');
+    }
     document.getElementById('acqNumBadge').textContent = `Q ${num} / ${total}`;
     const typeBadge = document.getElementById('acqTypeBadge');
     if (challengeType) { typeBadge.textContent = challengeType; typeBadge.classList.remove('hidden'); }
@@ -569,8 +601,8 @@
       document.getElementById('acqInput').value = '';
 
       if (data.status === 'ACADEMIC_QA_NEXT') {
-        qaChatHistory.push({ role: 'ai', text: data.question, type: 'academic' });
-        showAcademicQa(data.question, data.question_num, data.total_questions, data.challenge_type, data.category);
+        qaChatHistory.push({ role: 'ai', text: data.question, type: 'academic', strategy: data.answering_strategy || '' });
+        showAcademicQa(data.question, data.question_num, data.total_questions, data.challenge_type, data.category, data.answering_strategy || '');
         addLog(`↪ Academic Q&A ${data.question_num} / ${data.total_questions}`);
         btn.disabled = false;
         btn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -745,7 +777,7 @@
   }
 
   // ── UI helpers ────────────────────────────────────────────────────────────
-  function showQAChallenge(question, round, challengeType) {
+  function showQAChallenge(question, round, challengeType, strategy) {
     document.getElementById('qaQuestion').textContent   = question;
     document.getElementById('qaRoundBadge').textContent = `Round ${round}`;
     const ct = document.getElementById('challengeTypeBadge');
@@ -753,6 +785,22 @@
     document.getElementById('qaPanel').classList.remove('hidden');
     document.getElementById('finishSlideBtn').disabled = true;
     document.getElementById('slidePanel').style.borderColor = 'rgba(239,68,68,0.5)';
+    // Strategy hint
+    _currentStrategy = strategy || '';
+    const btn = document.getElementById('qaStrategyBtn');
+    const pop = document.getElementById('qaStrategyPopover');
+    pop.classList.add('hidden');
+    if (_currentStrategy) {
+      document.getElementById('qaStrategyText').textContent = _currentStrategy;
+      btn.classList.remove('hidden');
+    } else {
+      btn.classList.add('hidden');
+    }
+  }
+
+  function toggleStrategy(popoverId) {
+    const pop = document.getElementById(popoverId);
+    if (pop) pop.classList.toggle('hidden');
   }
 
   function hideQAPanel() {

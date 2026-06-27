@@ -15,6 +15,11 @@ except ImportError:
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from werkzeug.utils import secure_filename
 import audio_engine
+from config.defense_knowledge_base import (
+    DEFENSE_QUESTION_BANK,
+    INTERRUPT_STRATEGIES,
+    DEFENSE_STRATEGY_BY_TYPE,
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "ai-presentation-dev-secret-2024")
@@ -1783,7 +1788,8 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
 
 
 def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
-                                          scene_slug=None, total_qa_seconds=0):
+                                          scene_slug=None, total_qa_seconds=0,
+                                          slides=None):
     """
     Communication Quality (CQ) evaluation engine.
     Evaluates ONLY Q&A + interrupt exchanges — NOT the presentation narration.
@@ -1819,11 +1825,12 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         ai_qs   = [h for h in fe_qa_history if h.get("role") == "ai"]
         user_as = [h for h in fe_qa_history if h.get("role") == "user"]
         for i, ua in enumerate(user_as):
-            ai_q = ai_qs[i]["text"] if i < len(ai_qs) else ""
+            ai_item = ai_qs[i] if i < len(ai_qs) else {}
             fe_transcripts.append({
-                "question": ai_q,
-                "answer":   ua.get("text", ""),
-                "type":     ua.get("type", "qa_answer"),
+                "question":           ai_item.get("text", ""),
+                "answer":             ua.get("text", ""),
+                "type":               ua.get("type", "qa_answer"),
+                "answering_strategy": ai_item.get("strategy", ""),
             })
 
     # Build from session answers (server-side Q&A records from submit-answer /
@@ -2076,12 +2083,47 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     w1p = int(weights[1] * 100)
     w2p = int(weights[2] * 100)
 
+    # ── 3-way cross-analysis context: Strategies × User Answers × Slide Content ──
+    _slide_content_text = ""
+    if slides:
+        _slide_content_text = "\n".join(
+            f"  Slide {s.get('page','?')}: {s.get('title','')} — {s.get('content','')[:200]}"
+            for s in (slides or [])
+        )
+
+    _strategy_analysis_text = ""
+    for _i, _ex in enumerate(fe_transcripts[:5], 1):
+        _strat = _ex.get("answering_strategy", "")
+        if _strat:
+            _strategy_analysis_text += (
+                f"\n  Q{_i} Recommended Strategy: {_strat}\n"
+                f"  Q{_i} User Answer: {_ex.get('answer','')[:300]}\n"
+            )
+
+    _three_way_section = ""
+    if _strategy_analysis_text:
+        _three_way_section = (
+            "══════════════════════════════════════════════\n"
+            "3-WAY CROSS-ANALYSIS (use this for coaching)\n"
+            "══════════════════════════════════════════════\n"
+            "For each answer, compare: (1) Recommended Strategy vs (2) User's Actual Answer vs "
+            "(3) Slide Evidence below.\n"
+            "Did the user follow the strategy structure? Did they cite slide data?\n"
+            f"{_strategy_analysis_text}\n"
+        )
+    if _slide_content_text:
+        _three_way_section += (
+            "── Defence Slide Content (check if user cited this evidence) ──\n"
+            f"{_slide_content_text}\n\n"
+        )
+
     cq_prompt = (
         f"You are an expert Communication Quality (CQ) coach for {scene_label} scenarios. "
         f"Evaluate ONLY the Q&A exchange transcripts below — NOT the presentation narration.\n\n"
         f"Audience: {audience} | Difficulty: {difficulty} | Scene: {scene_label}\n\n"
         "══════════════════════════════════════════════\n"
         f"{rubric_text}\n\n"
+        f"{_three_way_section}"
         "══════════════════════════════════════════════\n"
         "Q&A EXCHANGE TRANSCRIPTS (evaluate ONLY these)\n"
         "══════════════════════════════════════════════\n"
@@ -3865,6 +3907,12 @@ def api_start_session():
         # "Academic Presentation" kept for backward compat with old sessions.
         _scene_for_qa = "class_presentation"
         session["qa_bank"] = build_dual_track_qa(slides, audience, _scene_for_qa, difficulty)
+    elif scenario == "Thesis Defense":
+        # Use DEFENSE_QUESTION_BANK (10 research-defence questions with strategies)
+        import random as _rand
+        _pool = list(DEFENSE_QUESTION_BANK)
+        _rand.shuffle(_pool)
+        session["qa_bank"] = _pool
     else:
         session["qa_bank"] = []
 
@@ -3927,10 +3975,13 @@ def api_check_slide():
         state["follow_up_round"] = 1
         state["chat_history"] = []
         session["state"] = state
+        c_type = challenge_seed.get("challenge_type", "")
+        strategy = INTERRUPT_STRATEGIES.get(c_type, "")
         return jsonify({
             "action": "INTERRUPT",
             "question": challenge_seed["initial_challenge"],
-            "challenge_type": challenge_seed.get("challenge_type", ""),
+            "challenge_type": c_type,
+            "answering_strategy": strategy,
             "page": current_page,
         })
 
@@ -3950,12 +4001,13 @@ def api_check_slide():
                 session["academic_qa_questions"] = questions
                 first_q = questions[0]
                 return jsonify({
-                    "action":          "ACADEMIC_QA_START",
-                    "question":        first_q.get("question", ""),
-                    "question_num":    1,
-                    "total_questions": len(questions),
-                    "challenge_type":  first_q.get("challenge_type", ""),
-                    "category":        first_q.get("category", ""),
+                    "action":              "ACADEMIC_QA_START",
+                    "question":            first_q.get("question", ""),
+                    "question_num":        1,
+                    "total_questions":     len(questions),
+                    "challenge_type":      first_q.get("challenge_type", ""),
+                    "category":            first_q.get("category", ""),
+                    "answering_strategy":  first_q.get("answering_strategy", ""),
                 })
         session["state"] = state
         return jsonify({"action": "PRESENTATION_DONE"})
@@ -4082,12 +4134,13 @@ def api_submit_academic_qa():
         session["state"] = state
         next_q = questions[next_idx]
         return jsonify({
-            "status":          "ACADEMIC_QA_NEXT",
-            "question":        next_q.get("question", ""),
-            "question_num":    next_idx + 1,
-            "total_questions": len(questions),
-            "challenge_type":  next_q.get("challenge_type", ""),
-            "category":        next_q.get("category", ""),
+            "status":              "ACADEMIC_QA_NEXT",
+            "question":            next_q.get("question", ""),
+            "question_num":        next_idx + 1,
+            "total_questions":     len(questions),
+            "challenge_type":      next_q.get("challenge_type", ""),
+            "category":            next_q.get("category", ""),
+            "answering_strategy":  next_q.get("answering_strategy", ""),
         })
     else:
         state["academic_qa_mode"]  = False
@@ -4237,6 +4290,7 @@ def api_finish_presentation():
         _fut_cq = _pool.submit(
             run_communication_quality_evaluation,
             answers, config, fe_qa_history, scene_slug, total_time_seconds,
+            slides,
         )
         _fut_cqual = _pool.submit(
             run_content_quality_evaluation,

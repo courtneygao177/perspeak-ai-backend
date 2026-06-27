@@ -1,0 +1,25 @@
+模块二：升级后端动态审计模型 (report_generator.py)
+==================================================
+重构 Communication Quality 板块下的 `what_i_did_good` 和 `areas_for_improvement` 输出逻辑。
+【核心限制】：AI 严禁使用死板的模板套话，必须动态交叉对比以下三个维度：
+1. 【The Answering Strategy】：系统推荐的答题结构（如：先说社会背景 -> 结合实习 -> 提到导师）。
+2. 【User's Actual Answer】：Speechace 转写出的用户实际回答文本。
+3. 【Defense Slide Content】：当前答辩 PPT 的结构树内容（检查用户是否脱离了自己 PPT 的论据）。
+
+请严格按照以下 IELTS 5.5 - 6.0 语言水平的理论底层驱动 LLM 动态合成报告：
+
+# 1. 动态优秀行为判定 (What I Did Good)
+- 判准 1 (Direct Response)：如果用户实际回答的第一句完美响应了 Strategy 的核心，且包含 Slide 上的关键词：
+  * Dynamic English Feedback: "Excellent. You followed the strategy perfectly. You answered the professor's question directly in your first sentence and successfully linked it to the key milestones on your slide."
+- 判准 2 (Structured Pointing)：如果用户在回答中使用了 Strategy 建议的逻辑连接词：
+  * Dynamic English Feedback: "Great job on structure. You used clear transition words like 'First' and 'Second' to separate your arguments, which perfectly matches our answering guide."
+
+# 2. 动态改进区判定 (Areas for Improvement & How to Fix)
+- 判准 1 (Off-Topic / Missing Slide Evidence)：如果用户回答完全偏离了 Strategy 的核心路径，或者空洞无物、没结合 PPT 上的数据：
+  * Dynamic English Feedback: "Your answer drifted away from the suggested strategy. You did not mention the practical data or formulas on your current slide. Professors want to see real evidence from your paper."
+  * How to Fix: "Next time, click the tip button to check the strategy. Say this: 'As shown on my slide, the data in chapter 3 clearly proves that...'"
+- 判准 2 (Lack of Theoretical Foundation / Supervisor Mention)：若用户被问到动机/框架，却没能按照 Strategy 提及导师或理论：
+  * Dynamic English Feedback: "You missed a key strategy point. When professors ask about your framework, you should mention your discussions with your supervisor to show academic respect."
+  * How to Fix: "Try to say this: 'I designed this framework based on the foundation theory of [Author], and improved it after getting valuable suggestions from my supervisor.'"
+
+请立即开始重构，打通前端交互提示与后端三向动态交叉审计的数据流！
