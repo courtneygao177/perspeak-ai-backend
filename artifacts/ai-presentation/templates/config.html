@@ -327,12 +327,36 @@
     }
   }
 
+  // ── Difficulty bullet swap for Thesis Defense ────────────────────────────
+  const THESIS_Q_BULLETS = {
+    'Easy':   '包含 3 道学术答辩问题',
+    'Medium': '包含 5 道学术答辩问题',
+    'Hard':   '包含 8 道学术答辩问题'
+  };
+  function syncDifficultyBullets() {
+    const scenario = document.querySelector('input[name="scenario"]:checked')?.value || '';
+    const isThesis = scenario === 'Thesis Defense';
+    document.querySelectorAll('[data-group="difficulty"]').forEach(card => {
+      const val  = card.dataset.value;
+      const lis  = card.querySelectorAll('ul li');
+      if (lis.length < 2) return;
+      const li   = lis[1];
+      const node = Array.from(li.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+      if (!node) return;
+      if (!li.dataset.origText) li.dataset.origText = node.textContent;
+      node.textContent = isThesis
+        ? (THESIS_Q_BULLETS[val] || li.dataset.origText)
+        : li.dataset.origText;
+    });
+  }
+
   // Wire scenario cards to also trigger the constraint check
   document.querySelectorAll('[data-group="scenario"]').forEach(card => {
-    card.addEventListener('click', syncAudienceConstraints);
+    card.addEventListener('click', () => { syncAudienceConstraints(); syncDifficultyBullets(); });
   });
   // Run once on load to apply initial state
   syncAudienceConstraints();
+  syncDifficultyBullets();
 
   // ── Logic Tree chevron animation ──────────────────────────────────────────
   const logicTree = document.getElementById('logicTree');

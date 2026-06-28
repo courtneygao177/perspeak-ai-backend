@@ -3915,11 +3915,12 @@ def api_start_session():
         _scene_for_qa = "class_presentation"
         session["qa_bank"] = build_dual_track_qa(slides, audience, _scene_for_qa, difficulty)
     elif scenario == "Thesis Defense":
-        # Use DEFENSE_QUESTION_BANK (10 research-defence questions with strategies)
+        # Use DEFENSE_QUESTION_BANK; question count aligned with difficulty selection
         import random as _rand
+        _Q_COUNT = {"Easy": 3, "Medium": 5, "Hard": 8}
         _pool = list(DEFENSE_QUESTION_BANK)
         _rand.shuffle(_pool)
-        session["qa_bank"] = _pool
+        session["qa_bank"] = _pool[:_Q_COUNT.get(difficulty, 5)]
     else:
         session["qa_bank"] = []
 
