@@ -230,7 +230,7 @@
               <ul class="mt-3 space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span><span class="bullet-text">{{ b }}</span>
                 </li>
                 {% endfor %}
               </ul>
@@ -327,26 +327,25 @@
     }
   }
 
-  // ── Difficulty bullet swap for Thesis Defense ────────────────────────────
+  // ── Difficulty bullet swap: Thesis Defense ↔ other scenarios ─────────────
   const THESIS_Q_BULLETS = {
     'Easy':   '包含 3 道学术答辩问题',
     'Medium': '包含 5 道学术答辩问题',
     'Hard':   '包含 8 道学术答辩问题'
   };
   function syncDifficultyBullets() {
-    const scenario = document.querySelector('input[name="scenario"]:checked')?.value || '';
-    const isThesis = scenario === 'Thesis Defense';
+    const scenario  = document.querySelector('input[name="scenario"]:checked')?.value || '';
+    const isThesis  = scenario === 'Thesis Defense';
     document.querySelectorAll('[data-group="difficulty"]').forEach(card => {
       const val  = card.dataset.value;
       const lis  = card.querySelectorAll('ul li');
       if (lis.length < 2) return;
-      const li   = lis[1];
-      const node = Array.from(li.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
-      if (!node) return;
-      if (!li.dataset.origText) li.dataset.origText = node.textContent;
-      node.textContent = isThesis
-        ? (THESIS_Q_BULLETS[val] || li.dataset.origText)
-        : li.dataset.origText;
+      const span = lis[1].querySelector('.bullet-text');
+      if (!span) return;
+      if (!span.dataset.origText) span.dataset.origText = span.textContent;
+      span.textContent = isThesis
+        ? (THESIS_Q_BULLETS[val] || span.dataset.origText)
+        : span.dataset.origText;
     });
   }
 
