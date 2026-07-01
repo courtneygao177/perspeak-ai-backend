@@ -1493,6 +1493,10 @@ def _cq_no_data_result(scene_slug):
         "what_i_did_good":       [],
         "areas_for_improvement": [],
         "exchange_count":        0,
+        "communication_quality_report": {
+            "overall_cq_score":      0,
+            "per_question_analysis": [],
+        },
     }
 
 
@@ -1548,7 +1552,8 @@ def _repair_truncated_json(raw):
 
 def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
                     exchange_count=0, ai_scores=None,
-                    good_override=None, fix_override=None):
+                    good_override=None, fix_override=None,
+                    per_question_override=None):
     """
     Score-aware, scene-specific heuristic fallback.
     Used when Gemini is unavailable or returns corrupted JSON.
@@ -1570,45 +1575,45 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
     COACHING = {
         "thesis_defense": [
             ("Directness",
-             "你开门见山地表明了立场，直接回应了考官的质疑，没有多余的铺垫——这是答辩的核心技能。",
-             "你在阐明观点之前铺垫了过多背景。在答辩中，核心立场应在第1到第2句话就出现。",
-             "直接从你的核心论点开始。Say this instead: 'My research demonstrates [X]. The evidence for this is [specific data].'"),
+             "You stated your position right away and answered the examiner's challenge directly, with no unnecessary lead-in — a core defense skill.",
+             "You added too much background before making your point. In a defense, your core stance should appear in sentence 1 or 2.",
+             "Start with your core argument first. Say this instead: 'My research demonstrates [X]. The evidence for this is [specific data].'"),
             ("Defensibility",
-             "你用具体数据、统计数字或文献引用支撑了论点，有力地强化了答辩说服力。",
-             "你的回答依赖泛泛的逻辑推理，缺乏具体数据。学术考官期望每一个论点都有实证支撑。",
-             "用数据锚定每一个论点。Say this instead: 'Our n=[X] sample showed p<0.05 significance, confirming [conclusion].'"),
+             "You backed your argument with concrete data, statistics, or citations, which strengthened your defense.",
+             "Your answer relied on general reasoning without specific data. Academic examiners expect every claim to have evidence.",
+             "Anchor every claim with data. Say this instead: 'Our n=[X] sample showed p<0.05 significance, confirming [conclusion].'"),
             ("Tact",
-             "你以外交式的方式应对质疑——在反驳之前先肯定了考官的关切，完美诠释了卡内基「是的，回应」技巧。",
-             "你直接进入反驳，没有先找到共同点。卡内基「是的，回应」技巧能在防御之前先建立融洽关系。",
-             "以认同开场。Say this instead: 'That is a valid concern. I can see why you raise this — however, our data shows [answer].'"),
+             "You handled the challenge diplomatically — acknowledging the examiner's concern before your rebuttal, a strong Carnegie 'Yes-Response'.",
+             "You moved straight into rebuttal without finding common ground first. A Carnegie 'Yes-Response' builds rapport before you defend.",
+             "Open with acknowledgment. Say this instead: 'That is a valid concern. I can see why you raise this — however, our data shows [answer].'"),
         ],
         "case_pitch": [
             ("Conclusion First",
-             "你先给出结论再铺陈论据——这正是投资人期待的麦肯锡金字塔结构。",
-             "你先建立背景再得出结论。投资人10秒内就会失去注意力——你的立场必须在第一句话出现。",
-             "先亮出你的结论。Say this instead: 'Yes, [direct verdict]. The reason is [one key driver]. Here is the evidence: [metric].'"),
+             "You gave your conclusion before the supporting details — exactly the McKinsey Pyramid structure investors expect.",
+             "You built context before reaching your conclusion. Investors lose interest within 10 seconds — your stance must come in the first sentence.",
+             "Lead with your conclusion. Say this instead: 'Yes, [direct verdict]. The reason is [one key driver]. Here is the evidence: [metric].'"),
             ("Persuasion Mix",
-             "你的回答在公信力（Ethos）、数据（Logos）和客户故事（Pathos）之间取得了平衡——完整的亚里士多德修辞三角。",
-             "你的回答过于偏重数据（Logos），缺少客户故事（Pathos）和公信力信号（Ethos）。",
-             "加入一个真实客户故事。Say this instead: 'One of our beta customers saw a [X%] improvement in [outcome] after [timeframe].'"),
+             "Your answer balanced credibility (Ethos), data (Logos), and a customer story (Pathos) — a complete Aristotle rhetorical triangle.",
+             "Your answer leaned too heavily on data (Logos), with little customer story (Pathos) or credibility signal (Ethos).",
+             "Add one real customer story. Say this instead: 'One of our beta customers saw a [X%] improvement in [outcome] after [timeframe].'"),
             ("Command Presence",
-             "你在整个质疑过程中保持了自信、权威的语言表达——没有模棱两可，没有寻求认可。",
-             "你在压力下出现了不确定的语言——「也许」、「我觉得」、「或许」。投资人会把这些视为缺乏信念。",
-             "用断言取代模糊表达。Say this instead: '[The answer] is [X]. We know this because [data]. There is no ambiguity.'"),
+             "You kept a confident, authoritative tone throughout the challenge — no hedging, no seeking approval.",
+             "Under pressure, your language showed uncertainty — words like 'maybe', 'I think', 'perhaps'. Investors read this as a lack of conviction.",
+             "Replace hedges with clear assertions. Say this instead: '[The answer] is [X]. We know this because [data]. There is no ambiguity.'"),
         ],
         "class_presentation": [
             ("Rule of Three",
-             "你将问答回复组织成了三个清晰的模块，使回答便于跟进和记忆。",
-             "你的回答罗列了要点，但没有三段式框架。三件事法则有助于听众在会后记住你的核心观点。",
-             "将回答结构化为三点。Say this instead: 'There are three key things: first, [X]; second, [Y]; and third, [Z].'"),
+             "You organized your answer into three clear parts, which made it easy to follow and remember.",
+             "Your answer listed points but had no three-part structure. The Rule of Three helps your audience remember your main ideas.",
+             "Structure your answer into three points. Say this instead: 'There are three key things: first, [X]; second, [Y]; and third, [Z].'"),
             ("Conversational Sense",
-             "你的问答回答感觉像是自然展开的对话，而非照本宣科的背诵——口语连接词和自然节奏贯穿始终。",
-             "你的回答听起来正式或像在背稿。TED演讲者说话像聊天，而不像学术发言。",
-             "加入对话式语言标记。Say this instead: 'Think about it this way — [your core point]. The key insight is [idea].'"),
+             "Your answer sounded like a natural conversation rather than a recited script, with oral connectors and a natural rhythm throughout.",
+             "Your answer sounded formal or scripted. TED speakers talk like they are having a conversation, not giving a lecture.",
+             "Add conversational language markers. Say this instead: 'Think about it this way — [your core point]. The key insight is [idea].'"),
             ("Illustrative Support",
-             "你用一个具体的真实案例支撑了观点，包括清晰的时间、地点、人物等细节——让想法生动起来。",
-             "你给出了概念性解释，却没有具体的5W案例。卡内基说「讲个故事」永远胜过抽象推理。",
-             "立刻跳入一个5W案例。Say this instead: 'Let me give you a real case: in [year], [who] at [place] did [what], with result [outcome].'"),
+             "You supported your point with a specific, real example, including clear details like time, place, and people — this made the idea vivid.",
+             "You gave a conceptual explanation without a concrete 5-W example. A real story always beats abstract reasoning.",
+             "Jump straight into a 5-W example. Say this instead: 'Let me give you a real case: in [year], [who] at [place] did [what], with result [outcome].'"),
         ],
     }
 
@@ -1630,18 +1635,18 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
             )
             areas_for_improvement.append({
                 "dimension": dim_label,
-                "issue":     f"[{scene_label}] {dim_label}：{sc}/100 的良好基础，继续打磨以突破 85 分。",
-                "example":   f"启发式评分：{sc}/100。",
-                "how_to_fix": "保持当前技巧，在下次会话中聚焦更精准的表达。",
+                "issue":     f"[{scene_label}] {dim_label}: Good foundation ({sc}/100). Keep refining to push above 85.",
+                "example":   f"Heuristic score: {sc}/100.",
+                "how_to_fix": "Keep applying this technique, and focus on even more precise wording next time.",
             })
         else:
             what_i_did_good.append(
-                f"[{scene_label}] {dim_label} ({sc}/100): 你在这个维度做了尝试，有针对性地练习可以显著提升分数。"
+                f"[{scene_label}] {dim_label} ({sc}/100): You attempted this dimension. Focused practice will meaningfully improve your score."
             )
             areas_for_improvement.append({
                 "dimension": dim_label,
                 "issue":     f"[{scene_label}] {low_issue}",
-                "example":   f"启发式评分：{sc}/100。进行完整 AI 评估会话可获得逐字引用反馈。",
+                "example":   f"Heuristic score: {sc}/100. A full AI evaluation session provides exact-quote feedback.",
                 "how_to_fix": fix_phrase,
             })
 
@@ -1656,6 +1661,10 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
         "what_i_did_good":      good_override  if good_override  else what_i_did_good,
         "areas_for_improvement": fix_override  if fix_override   else areas_for_improvement,
         "exchange_count":       exchange_count,
+        "communication_quality_report": {
+            "overall_cq_score":      cq_total,
+            "per_question_analysis": per_question_override if per_question_override is not None else [],
+        },
     }
 
 
@@ -1792,53 +1801,53 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
         "thesis_defense": [
             (dim_names[0],
              has_first_person or scores.get(dim_names[0], 60) >= 65,
-             "你使用了主动语态和第一人称立场，向考官传递了独立研究者的学术自信。",
-             "你在阐明立场之前铺垫了过多背景。在答辩中，核心立场应在第1到第2句话就出现。",
-             "直接从你的核心论点开始。Say this instead: 'My research demonstrates [X]. The evidence is [specific data].'"),
+             "You used active voice and a first-person stance, showing the academic confidence of an independent researcher.",
+             "You added too much background before stating your position. In a defense, your core stance should appear in sentence 1 or 2.",
+             "Start with your core argument first. Say this instead: 'My research demonstrates [X]. The evidence is [specific data].'"),
             (dim_names[1],
              has_numbers or scores.get(dim_names[1], 60) >= 65,
-             "你用数据、文献引用或定量推理支撑了论点，经受住了考官的审视。",
-             "你的回答依赖泛泛的逻辑推理，缺乏具体数据。考官期望每一个论点都有数字或文献支撑。",
-             "用数据锚定每一个论点。Say this instead: 'Our n=[X] sample showed [result], confirmed by [citation].'"),
+             "You backed your argument with data, citations, or quantitative reasoning, which held up under the examiner's scrutiny.",
+             "Your answer relied on general reasoning without specific data. Examiners expect every claim to be backed by numbers or citations.",
+             "Anchor every claim with data. Say this instead: 'Our n=[X] sample showed [result], confirmed by [citation].'"),
             (dim_names[2],
              has_yes_resp or scores.get(dim_names[2], 60) >= 65,
-             "你展现了外交式的技巧——在反驳之前先肯定了考官的关切。",
-             "你直接进入反驳，没有先找到共同点。卡内基「是的，回应」技巧能在防御之前先建立信任。",
-             "以认同开场。Say this instead: 'That is a valid concern. Our data also shows [answer].'"),
+             "You showed diplomatic skill — acknowledging the examiner's concern before your rebuttal.",
+             "You moved straight into rebuttal without finding common ground first. A Carnegie 'Yes-Response' builds trust before you defend.",
+             "Open with acknowledgment. Say this instead: 'That is a valid concern. Our data also shows [answer].'"),
         ],
         "case_pitch": [
             (dim_names[0],
              not has_hedges and scores.get(dim_names[0], 60) >= 65,
-             "你先给出结论再铺陈论据——这正是投资人期待的麦肯锡金字塔结构。",
-             "你先建立背景再得出结论。投资人10秒内就会失去注意力——你的立场必须在第一句话出现。",
-             "先亮出你的结论。Say this instead: 'Yes, [direct verdict]. The reason: [one key driver].'"),
+             "You gave your conclusion before the supporting details — exactly the McKinsey Pyramid structure investors expect.",
+             "You built context before reaching your conclusion. Investors lose interest within 10 seconds — your stance must come in the first sentence.",
+             "Lead with your conclusion. Say this instead: 'Yes, [direct verdict]. The reason: [one key driver].'"),
             (dim_names[1],
              (has_numbers or has_example) and scores.get(dim_names[1], 60) >= 65,
-             "你的回答混合了公信力、数据和故事——亚里士多德修辞三角的完美呈现。",
-             "你的回答偏重逻辑，缺少客户故事或公信力信号。",
-             "加入一个真实客户故事。Say this instead: 'One customer saw [X%] improvement after [timeframe].'"),
+             "Your answer blended credibility, data, and a story — a strong Aristotle rhetorical triangle.",
+             "Your answer leaned on logic, with little customer story or credibility signal.",
+             "Add one real customer story. Say this instead: 'One customer saw [X%] improvement after [timeframe].'"),
             (dim_names[2],
              not has_hedges and scores.get(dim_names[2], 60) >= 65,
-             "你在整个过程中保持了自信、权威的语言表达——没有模棱两可，没有寻求认可。",
-             "压力下出现了不确定的语言（也许、我觉得、或许）。投资人会把这些视为缺乏信念。",
-             "用断言取代模糊表达。Say this instead: 'This is [X]. We know because [data].'"),
+             "You kept a confident, authoritative tone throughout — no hedging, no seeking approval.",
+             "Under pressure, your language showed uncertainty (maybe, I think, perhaps). Investors read this as a lack of conviction.",
+             "Replace hedges with clear assertions. Say this instead: 'This is [X]. We know because [data].'"),
         ],
         "class_presentation": [
             (dim_names[0],
              has_structure and scores.get(dim_names[0], 60) >= 65,
-             "你将回答组织成了三个清晰的模块——便于跟进和记忆。",
-             "你的回答罗列了要点，但没有三段式框架。三件事法则能提升听众的记忆留存率。",
-             "将回答结构化为三点。Say this instead: 'There are three things: first [X]; second [Y]; third [Z].'"),
+             "You organized your answer into three clear parts, which made it easy to follow and remember.",
+             "Your answer listed points but had no three-part structure. The Rule of Three improves audience retention.",
+             "Structure your answer into three points. Say this instead: 'There are three things: first [X]; second [Y]; third [Z].'"),
             (dim_names[1],
              scores.get(dim_names[1], 60) >= 65,
-             "你的回答感觉像是自然展开的对话，而非照本宣科的背诵。",
-             "你的回答听起来正式或像在背稿。TED演讲者说话像聊天，而不像学术发言。",
-             "加入对话式语言标记。Say this instead: 'Think about it this way — [core point]. The key is [insight].'"),
+             "Your answer sounded like a natural conversation rather than a recited script.",
+             "Your answer sounded formal or scripted. TED speakers talk like they are having a conversation, not giving a lecture.",
+             "Add conversational language markers. Say this instead: 'Think about it this way — [core point]. The key is [insight].'"),
             (dim_names[2],
              has_example and scores.get(dim_names[2], 60) >= 65,
-             "你用一个具体的真实案例支撑了观点，包括清晰的时间、地点、人物等细节。",
-             "你给出了概念性解释，却没有具体的5W案例。讲故事永远胜过抽象推理。",
-             "立刻跳入一个5W案例。Say this instead: 'In [year], [who] at [place] did [what], result: [outcome].'"),
+             "You supported your point with a specific, real example, including clear details like time, place, and people.",
+             "You gave a conceptual explanation without a concrete 5-W example. A real story always beats abstract reasoning.",
+             "Jump straight into a 5-W example. Say this instead: 'In [year], [who] at [place] did [what], result: [outcome].'"),
         ],
     }
 
@@ -1893,9 +1902,48 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
     return what_i_did_good, areas_for_improvement
 
 
+def _fallback_per_question_analysis(comm_transcripts):
+    """
+    Local, English, IELTS 5.5-6.0-level per-question analysis used whenever the
+    LLM call fails, times out, or returns malformed JSON. Guarantees the
+    frontend always receives a non-empty communication_quality_report so the
+    per-question card layout never breaks.
+    """
+    items = []
+    for t in comm_transcripts:
+        answer = t.get("answer", "").strip()
+        if not answer:
+            continue
+        strategy = t.get("answering_strategy", "")
+        followed_strategy = bool(strategy) and any(
+            w.lower() in answer.lower() for w in strategy.split()[:6]
+        )
+        items.append({
+            "question_id":            t.get("question_id", ""),
+            "question_text":          t.get("question", "") or "(question not recorded)",
+            "user_actual_answer":     answer,
+            "what_i_did_good": (
+                "You gave a clear, complete answer to the question. "
+                "Your response was easy to follow and stayed on topic."
+            ),
+            "areas_for_improvement": (
+                "Your answer could use more specific evidence or a clearer opening "
+                "sentence to strengthen your main point."
+                if not followed_strategy else
+                "Your answer followed the suggested strategy, but could add one more "
+                "concrete detail to make it fully convincing."
+            ),
+            "how_to_fix": (
+                "Say this instead: Start with your main point in the first sentence, "
+                "then support it with one specific fact or example."
+            ),
+        })
+    return items
+
+
 def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                                           scene_slug=None, total_qa_seconds=0,
-                                          slides=None):
+                                          slides=None, qa_bank=None):
     """
     Communication Quality (CQ) evaluation engine.
     Evaluates ONLY Q&A + interrupt exchanges — NOT the presentation narration.
@@ -1937,6 +1985,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                 "answer":             ua.get("text", ""),
                 "type":               ua.get("type", "qa_answer"),
                 "answering_strategy": ai_item.get("strategy", ""),
+                "question_id":        f"interrupt_{i + 1}",
             })
 
     # Build from session answers (server-side Q&A records from submit-answer /
@@ -1946,13 +1995,15 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     for a in qa_answers:
         if a.get("type") in ("qa_answer", "academic_qa"):
             session_transcripts.append({
-                "question":        a.get("question",        ""),
-                "answer":          a.get("text",            ""),
-                "type":            a.get("type",            ""),
-                "question_type":   a.get("question_type",   "free"),
-                "anchor_type":     a.get("anchor_type",     ""),
-                "target_dim":      a.get("target_dim",      ""),
-                "scaffold_signal": a.get("scaffold_signal", ""),
+                "question":           a.get("question",        ""),
+                "answer":             a.get("text",            ""),
+                "type":               a.get("type",            ""),
+                "question_type":      a.get("question_type",   "free"),
+                "anchor_type":        a.get("anchor_type",     ""),
+                "target_dim":         a.get("target_dim",      ""),
+                "scaffold_signal":    a.get("scaffold_signal", ""),
+                "question_id":        a.get("question_id",     ""),
+                "answering_strategy": a.get("answering_strategy", ""),
             })
 
     # Use whichever source has more substantive text content
@@ -1986,10 +2037,22 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     for t in comm_transcripts:
         ans  = t["answer"].strip()
         meta = _sess_meta.get(ans, {})
-        t.setdefault("question_type",   meta.get("question_type",   "free"))
-        t.setdefault("anchor_type",     meta.get("anchor_type",     ""))
-        t.setdefault("target_dim",      meta.get("target_dim",      ""))
-        t.setdefault("scaffold_signal", meta.get("scaffold_signal", ""))
+        t.setdefault("question_type",      meta.get("question_type",      "free"))
+        t.setdefault("anchor_type",        meta.get("anchor_type",        ""))
+        t.setdefault("target_dim",         meta.get("target_dim",         ""))
+        t.setdefault("scaffold_signal",    meta.get("scaffold_signal",    ""))
+        t.setdefault("question_id",        meta.get("question_id",        ""))
+        t.setdefault("answering_strategy", meta.get("answering_strategy", ""))
+
+    # ── Backfill missing question_id / answering_strategy from qa_bank ────────
+    _qa_bank_by_id = {q.get("id"): q for q in (qa_bank or []) if q.get("id")}
+    for i, t in enumerate(comm_transcripts):
+        if not t.get("question_id"):
+            t["question_id"] = f"q{i + 1}"
+        if not t.get("answering_strategy"):
+            _qb = _qa_bank_by_id.get(t["question_id"])
+            if _qb:
+                t["answering_strategy"] = _qb.get("answering_strategy", "")
 
     if not comm_transcripts or all(not t["answer"].strip() for t in comm_transcripts):
         app.logger.info("[CQ] No Q&A transcript data — returning no_data placeholder.")
@@ -2042,7 +2105,8 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return " ".join(labeled) if labeled else text
 
     exchanges_text = "\n\n".join(
-        f"Q{i+1} [{t.get('type','qa')}]: {t['question']}\nA{i+1}: {_label_sentences(t['answer'])}"
+        f"Q{i+1} [id={t.get('question_id', f'q{i+1}')}] [{t.get('type','qa')}]: {t['question']}\n"
+        f"A{i+1}: {_label_sentences(t['answer'])}"
         for i, t in enumerate(comm_transcripts) if t["answer"].strip()
     ) or "(No Q&A answers recorded)"
 
@@ -2237,10 +2301,9 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "══════════════════════════════════════════════\n"
         "OUTPUT RULES\n"
         "══════════════════════════════════════════════\n"
-        "RULE 0 (LANGUAGE — MANDATORY): ALL text in what_i_did_good and areas_for_improvement fields MUST be written in Simplified Chinese, EXCEPT: "
-        "(1) the EXACT English quotes from the user that appear inside single quotes '...' in what_i_did_good items; "
-        "(2) the English example sentence that comes AFTER 'Say this instead:' in how_to_fix. "
-        "The phrase 'Say this instead:' itself must remain in English as a delimiter. Everything else — issue, the text before 'Say this instead:', etc. — must be in Chinese.\n"
+        "RULE 0 (LANGUAGE — MANDATORY): ALL text in what_i_did_good, areas_for_improvement, how_to_fix, "
+        "and every field inside communication_quality_report MUST be written in PURE ENGLISH ONLY. "
+        "Do NOT write any Chinese characters anywhere in the output — not even as translation aids.\n"
         "RULE 1: IELTS 5.5-6.0 vocabulary. Short, clear sentences for non-native speakers.\n"
         "RULE 2 (MOST IMPORTANT): Every item MUST quote EXACT words from A1/A2/A3 above. NEVER invent quotes.\n"
         "RULE 3: EXACTLY 3 items each in what_i_did_good and areas_for_improvement.\n"
@@ -2254,6 +2317,20 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         f"  ▸ {dim_names[1]} example → find the sentence that best reveals [{_quote_signal_labels[scene_slug][1]}]\n"
         f"  ▸ {dim_names[2]} example → find the sentence that best reveals [{_quote_signal_labels[scene_slug][2]}]\n"
         "  If a dimension's signal is completely absent, quote the nearest relevant fragment and note the absence.\n\n"
+        "RULE 7 (PER-QUESTION TIMELINE — MANDATORY): In ADDITION to the dimension-level fields above, "
+        "produce a communication_quality_report object with ONE entry per Q&A exchange listed in the "
+        "transcripts (Q1, Q2, Q3…). For EACH exchange:\n"
+        "  - question_id: copy the exact [id=...] value shown next to that Qn.\n"
+        "  - question_text: copy the question text verbatim.\n"
+        "  - user_actual_answer: copy the user's full answer verbatim (remove the [n] sentence labels).\n"
+        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0, praising something concrete and "
+        "quoting the user's exact words.\n"
+        "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0, naming ONE specific weakness "
+        "in THIS answer, using the 3-WAY CROSS-ANALYSIS above (Recommended Strategy vs Actual Answer vs "
+        "Slide Evidence) when available for that question.\n"
+        "  - how_to_fix: MUST start with the exact phrase 'Say this instead:' followed by a rewritten example "
+        "sentence in pure English, IELTS 5.5-6.0.\n"
+        "  Every field must be pure English — no Chinese.\n\n"
         "Return ONLY valid JSON. No markdown fences. No text outside JSON.\n\n"
         "{\n"
         f'  "cq_scores": {{"{dim_names[0]}": <int 0-100>, "{dim_names[1]}": <int 0-100>, "{dim_names[2]}": <int 0-100>}},\n'
@@ -2267,7 +2344,14 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         f'    {{"dimension": "{dim_names[0]}", "issue": "...", "example": "You said: \'...\'", "how_to_fix": "Say this instead: \'...\'"}},\n'
         f'    {{"dimension": "{dim_names[1]}", "issue": "...", "example": "You said: \'...\'", "how_to_fix": "Say this instead: \'...\'"}},\n'
         f'    {{"dimension": "{dim_names[2]}", "issue": "...", "example": "You said: \'...\'", "how_to_fix": "Say this instead: \'...\'"}}\n'
-        '  ]\n'
+        '  ],\n'
+        '  "communication_quality_report": {\n'
+        '    "overall_cq_score": <int 0-100>,\n'
+        '    "per_question_analysis": [\n'
+        '      {"question_id": "...", "question_text": "...", "user_actual_answer": "...", '
+        '"what_i_did_good": "...", "areas_for_improvement": "...", "how_to_fix": "Say this instead: ..."}\n'
+        '    ]\n'
+        '  }\n'
         '}'
     )
 
@@ -2305,6 +2389,17 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
             result["what_i_did_good"] = [f"[{scene_label}] Communication recorded."]
         if not result.get("areas_for_improvement"):
             result["areas_for_improvement"] = []
+
+        # Normalize communication_quality_report — fall back to a local
+        # English per-question analysis if the LLM omitted/mangled it.
+        cqr = result.get("communication_quality_report") or {}
+        pqa = cqr.get("per_question_analysis")
+        if not pqa or not isinstance(pqa, list):
+            pqa = _fallback_per_question_analysis(comm_transcripts)
+        result["communication_quality_report"] = {
+            "overall_cq_score":     int(cqr.get("overall_cq_score", result["cq_total"]) or result["cq_total"]),
+            "per_question_analysis": pqa,
+        }
 
         result["has_data"]       = True
         result["scene_slug"]     = scene_slug
@@ -2345,6 +2440,15 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                     int(ai_total) if 0 < int(ai_total) <= 100
                     else int(round(sum(v * w for v, w in zip(vals, weights))))
                 )
+                cqr = repaired.get("communication_quality_report") or {}
+                pqa = cqr.get("per_question_analysis")
+                if not pqa or not isinstance(pqa, list):
+                    pqa = _fallback_per_question_analysis(comm_transcripts)
+                repaired["communication_quality_report"] = {
+                    "overall_cq_score":      int(cqr.get("overall_cq_score", repaired["cq_total"]) or repaired["cq_total"]),
+                    "per_question_analysis": pqa,
+                }
+
                 repaired["has_data"]       = True
                 repaired["scene_slug"]     = scene_slug
                 repaired["scene_label"]    = scene_label
@@ -2362,6 +2466,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(
             scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
             good_override=good_items, fix_override=fix_items,
+            per_question_override=_fallback_per_question_analysis(comm_transcripts),
         )
 
     except Exception as e:
@@ -2373,12 +2478,14 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(
             scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
             good_override=good_items, fix_override=fix_items,
+            per_question_override=_fallback_per_question_analysis(comm_transcripts),
         )
 
 
 def _build_dual_track_mock_result(universal_heuristic, anchor_passed, anchor_score,
                                     anchor_type, anchor_text, scene_slug, scene_label,
-                                    universal_total, exchange_count, free_texts, target_dim):
+                                    universal_total, exchange_count, free_texts, target_dim,
+                                    per_question_override=None):
     """Fallback dual-track CQ result when Gemini is unavailable."""
     u_scores = dict(universal_heuristic)
     u_scores[f"Anchor — {anchor_type}"] = anchor_score
@@ -2438,6 +2545,10 @@ def _build_dual_track_mock_result(universal_heuristic, anchor_passed, anchor_sco
         "dual_track":            True,
         "anchor_passed":         anchor_passed,
         "anchor_score":          anchor_score,
+        "communication_quality_report": {
+            "overall_cq_score":      combined_total,
+            "per_question_analysis": per_question_override if per_question_override is not None else [],
+        },
     }
 
 
@@ -2479,7 +2590,8 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         return _build_dual_track_mock_result(
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
-            universal_total_h, exchange_count, free_texts, target_dim
+            universal_total_h, exchange_count, free_texts, target_dim,
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts),
         )
 
     def _label_sentences(text):
@@ -2573,16 +2685,16 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "OUTPUT RULES\n"
         "══════════════════════════════════════════════\n"
         "RULE 0a (JSON SAFETY): Return ONLY valid JSON. Use DOUBLE QUOTES for ALL strings. NEVER single quotes.\n"
-        "RULE 0b (LANGUAGE — MANDATORY): ALL text in what_i_did_good and areas_for_improvement MUST be in Simplified Chinese, EXCEPT: "
-        "(1) EXACT English quotes from the user inside single quotes in what_i_did_good; "
-        "(2) the English example sentence AFTER 'Say this instead:' in how_to_fix. The phrase 'Say this instead:' stays English as a delimiter.\n"
+        "RULE 0b (LANGUAGE — MANDATORY): ALL text in what_i_did_good, areas_for_improvement, how_to_fix, and "
+        "every field inside communication_quality_report MUST be written in PURE ENGLISH ONLY. Do NOT write "
+        "any Chinese characters anywhere in the output.\n"
         "RULE 1: IELTS 5.5-6.0 vocabulary. Short sentences.\n"
         "RULE 2 (CRITICAL): Every example MUST quote EXACT words from the labelled transcripts. NEVER invent.\n"
         "  - FREE dims (Directness/Resonance/Evidence): quote ONLY from A1 sentences. NOT from A_anchor.\n"
         "  - ANCHOR dim: quote ONLY from A_anchor sentences. NOT from A1.\n"
         "RULE 3: what_i_did_good = EXACTLY 3 strings:\n"
-        "  Item 1: [Metric: 普适标准] Directness & Logic (N/100): brief praise. You said: exact sentence [1] or [2] from A1.\n"
-        "  Item 2: [Metric: 普适标准] Conversational Resonance (N/100): brief praise. You said: exact different sentence from A1.\n"
+        "  Item 1: [Metric: Universal] Directness & Logic (N/100): brief praise. You said: exact sentence [1] or [2] from A1.\n"
+        "  Item 2: [Metric: Universal] Conversational Resonance (N/100): brief praise. You said: exact different sentence from A1.\n"
         f"  Item 3 (anchor):\n{_anchor_pass_ln}\n{_anchor_fail_ln}\n"
         "RULE 4: areas_for_improvement = 1-3 objects. QUOTE ISOLATION — each example uses a DIFFERENT sentence:\n"
         "  - Universal dim items quote ONLY from A1. Anchor dim items quote ONLY from A_anchor.\n"
@@ -2590,6 +2702,13 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "    followed by a DYNAMIC 2-3 sentence rewrite using the user ACTUAL vocabulary and domain content\n"
         "    from A_anchor (their topic, claims, specific words). NEVER write generic placeholder sentences.\n"
         f"    {_scene_example}\n"
+        "RULE 5 (PER-QUESTION TIMELINE — MANDATORY): ALSO produce a communication_quality_report object with "
+        "ONE entry per exchange in BOTH the FREE EXCHANGES and the ANCHOR EXCHANGE. For each: question_id "
+        "(copy the [id=...] if shown, else use 'anchor' for the anchor exchange), question_text, "
+        "user_actual_answer (verbatim, no [n] labels), what_i_did_good (1-2 sentences, pure English, "
+        "IELTS 5.5-6.0, quoting exact words), areas_for_improvement (1-2 sentences, pure English, naming ONE "
+        "specific weakness), how_to_fix (MUST start with 'Say this instead:' followed by a rewritten example). "
+        "No Chinese anywhere.\n"
         "Return ONLY valid JSON. No markdown. No text outside JSON. Double quotes only:\n"
         "{\n"
         '  "universal_scores": {"Directness & Logic": int, "Conversational Resonance": int, "Evidence & Substantiation": int},\n'
@@ -2597,14 +2716,21 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         '  "anchor_passed": bool,\n'
         '  "anchor_score": int,\n'
         '  "what_i_did_good": [\n'
-        '    "[Metric: \u666e\u9002\u6807\u51c6] Directness & Logic (N/100): praise. You said: exact A1 sentence.",\n'
-        '    "[Metric: \u666e\u9002\u6807\u51c6] Conversational Resonance (N/100): praise. You said: exact different A1 sentence.",\n'
+        '    "[Metric: Universal] Directness & Logic (N/100): praise. You said: exact A1 sentence.",\n'
+        '    "[Metric: Universal] Conversational Resonance (N/100): praise. You said: exact different A1 sentence.",\n'
         f'    {_good_item3_tmpl}\n'
         '  ],\n'
         '  "areas_for_improvement": [\n'
         '    {"dimension": "Evidence & Substantiation", "issue": "...", "example": "You said: exact A1 sentence.", "how_to_fix": "..."},\n'
         f'    {_fix_anchor_tmpl}\n'
-        '  ]\n'
+        '  ],\n'
+        '  "communication_quality_report": {\n'
+        '    "overall_cq_score": <int 0-100>,\n'
+        '    "per_question_analysis": [\n'
+        '      {"question_id": "...", "question_text": "...", "user_actual_answer": "...", '
+        '"what_i_did_good": "...", "areas_for_improvement": "...", "how_to_fix": "Say this instead: ..."}\n'
+        '    ]\n'
+        '  }\n'
         '}'
     )
 
@@ -2644,6 +2770,11 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         good_items = result.get("what_i_did_good") or [f"[Universal] Communication recorded."]
         fix_items  = result.get("areas_for_improvement") or []
 
+        cqr = result.get("communication_quality_report") or {}
+        pqa = cqr.get("per_question_analysis")
+        if not pqa or not isinstance(pqa, list):
+            pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts)
+
         return {
             "has_data":              True,
             "scene_slug":            scene_slug,
@@ -2658,6 +2789,10 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
             "dual_track":            True,
             "anchor_passed":         anchor_passed,
             "anchor_score":          anchor_score,
+            "communication_quality_report": {
+                "overall_cq_score":      int(cqr.get("overall_cq_score", combined_total) or combined_total),
+                "per_question_analysis": pqa,
+            },
         }
 
     except json.JSONDecodeError as e:
@@ -2683,6 +2818,10 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
                     )
                     good = good or _fb["what_i_did_good"]
                     fix  = fix  or _fb["areas_for_improvement"]
+                cqr = repaired.get("communication_quality_report") or {}
+                pqa = cqr.get("per_question_analysis")
+                if not pqa or not isinstance(pqa, list):
+                    pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts)
                 return {
                     "has_data": True, "scene_slug": scene_slug, "scene_label": scene_label,
                     "cq_total": comb, "cq_scores": u_sc,
@@ -2691,13 +2830,18 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
                     "areas_for_improvement": fix,
                     "exchange_count": exchange_count, "dual_track": True,
                     "anchor_passed": a_p, "anchor_score": a_s,
+                    "communication_quality_report": {
+                        "overall_cq_score":      int(cqr.get("overall_cq_score", comb) or comb),
+                        "per_question_analysis": pqa,
+                    },
                 }
         except Exception:
             pass
         return _build_dual_track_mock_result(
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
-            universal_total_h, exchange_count, free_texts, target_dim
+            universal_total_h, exchange_count, free_texts, target_dim,
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts),
         )
 
     except Exception as e:
@@ -2706,7 +2850,8 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         return _build_dual_track_mock_result(
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
-            universal_total_h, exchange_count, free_texts, target_dim
+            universal_total_h, exchange_count, free_texts, target_dim,
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts),
         )
 
 
@@ -4172,6 +4317,7 @@ def api_submit_answer():
         "page": state["current_page"],
         "round": follow_up_round,
         "text": user_answer,
+        "question_id": f"interrupt_p{state['current_page']}_r{follow_up_round}",
     })
     session["answers"] = answers_list
 
@@ -4240,11 +4386,13 @@ def api_submit_academic_qa():
     answers_list.append({
         "type":            "academic_qa",
         "question_idx":    current_idx,
+        "question_id":     current_q.get("id", f"q{current_idx + 1}"),
         "question":        current_q.get("question", ""),
         "question_type":   current_q.get("question_type",   "free"),   # "free" | "anchor"
         "anchor_type":     current_q.get("anchor_type",     ""),
         "target_dim":      current_q.get("target_dim",      ""),
         "scaffold_signal": current_q.get("scaffold_signal", ""),
+        "answering_strategy": current_q.get("answering_strategy", ""),
         "text":            answer,
     })
     session["answers"] = answers_list
@@ -4411,7 +4559,7 @@ def api_finish_presentation():
         _fut_cq = _pool.submit(
             run_communication_quality_evaluation,
             answers, config, fe_qa_history, scene_slug, total_time_seconds,
-            slides,
+            slides, qa_bank,
         )
         _fut_cqual = _pool.submit(
             run_content_quality_evaluation,

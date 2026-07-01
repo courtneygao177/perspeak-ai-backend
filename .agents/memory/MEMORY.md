@@ -4,3 +4,5 @@
 - [Audio State Machine](audio-state-machine.md) — unified AudioMachine (audioMode: idle/narration/qa/acq); audioSuspendForQa() on INTERRUPT/ACADEMIC_QA_START; audioResumeAfterQa() on QA_FINISHED.
 - [Flask session disk offload](flask-session-disk-offload.md) — slides/reports must live on disk (not cookie) to avoid 4KB limit silently falling back to mock data and ending presentations early.
 - [Dual-Track Q&A Architecture](dual-track-qa.md) — Q1=AI-free (gpt-4o, no scaffold), Q2=anchor from ANCHOR_QUESTION_POOL (with 大白话 hint); CQ eval splits by question_type tag stored on session answer; universal dims for free, scene dims for anchor.
+- [CQ per-question report schema](cq-per-question-report.md) — `communication_quality_report.per_question_analysis` is the canonical per-question CQ feedback shape; all CQ text (incl. dimension-level) must stay pure English (RULE 0 reversed).
+- [ai-presentation app_preview limitation](ai-presentation-app-quirks.md) — this Flask app isn't a registered artifact, so the screenshot tool's app_preview mode can't target it; verify via curl + HTML/JSON inspection instead.
