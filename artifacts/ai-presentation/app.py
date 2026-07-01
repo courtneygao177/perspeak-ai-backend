@@ -124,7 +124,7 @@ except Exception as _e:
 # ── Multi-model routing ───────────────────────────────────────────────────────
 # Each step is routed to the best-fit model via the same relay endpoint.
 # Override any model via env vars in Replit Secrets.
-VISION_MODEL = os.environ.get("VISION_MODEL", "gpt-4o")                    # Step 1: Vision
+VISION_MODEL = os.environ.get("VISION_MODEL", "claude-sonnet-5")           # Step 1: Vision
 TEXT_MODEL   = os.environ.get("TEXT_MODEL",   "gpt-4o")                      # Steps 3,5,6: reasoning
 EVAL_MODEL   = os.environ.get("EVAL_MODEL",   "gemini-2.5-flash")            # Steps 8,9: long-context eval
 MODEL        = os.environ.get("UNIFIED_MODEL", TEXT_MODEL)                   # legacy fallback
