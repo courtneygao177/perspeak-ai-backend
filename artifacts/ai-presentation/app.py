@@ -861,6 +861,112 @@ Return ONLY valid JSON in this exact structure (no other text, no markdown):
 
 
 # ─────────────────────────────────────────────
+# THESIS DEFENSE: DYNAMIC QUESTION FUSION ENGINE (Step 7)
+# Rewrites DEFENSE_QUESTION_BANK templates by fusing them with the user's
+# actual thesis topic / slide content, so the AI examiner never reads the
+# raw template verbatim. answering_strategy stays anchored to the template
+# question's underlying logic — only the wording of the question changes.
+# ─────────────────────────────────────────────
+def _build_thesis_context(slides):
+    """Compress parsed slides into a compact topic + keyword block for prompt injection."""
+    if not slides:
+        return "No slide content available — the user's PPT/PDF could not be parsed."
+    titles = [s.get("title", "") for s in slides if s.get("title")]
+    topic = titles[0] if titles else "Untitled Thesis"
+    lines = [f"Thesis Topic (inferred from slide 1): {topic}"]
+    for s in slides[:8]:
+        claims = ", ".join(s.get("key_claims", []) or [])
+        line = f"Slide {s.get('page')}: {s.get('title', '')} — {s.get('content', '')[:180]}"
+        if claims:
+            line += f" | Key claims: {claims}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def generate_custom_defense_question(base_question_obj, thesis_context):
+    """
+    Rewrite a single DEFENSE_QUESTION_BANK template question by deeply embedding
+    the user's actual thesis topic, keywords, or slide content. Falls back to the
+    original template question text on any AI failure or when AI is disabled.
+    """
+    base_text = base_question_obj.get("question", "")
+    if not AI_ENABLED:
+        return base_text
+
+    system_prompt = (
+        "You are an expert professor conducting a formal thesis defense. Your task is to "
+        "take a question from the template database and rewrite it by deeply embedding "
+        "the user's actual thesis topic, keywords, or presentation slides.\n\n"
+        "[Rules for Generating the Question]:\n"
+        "- DO NOT just read the template question verbatim. You MUST mention specific terms, "
+        "methods, or markets from the user's thesis context.\n"
+        "- The question wording must remain highly professional and academic (IELTS 7.0+ level).\n"
+        "- Ensure the user can easily recognize that you have genuinely reviewed their specific slides.\n"
+        "- Preserve the template question's underlying intent/challenge type — change only how it "
+        "is phrased, never what is fundamentally being asked.\n"
+        "- Return ONLY the rewritten question text — no labels, no quotes, no explanations."
+    )
+    user_prompt = (
+        f"Base Question Template: {base_text}\n"
+        f"Answering Strategy for reference only (do not repeat verbatim): "
+        f"{base_question_obj.get('answering_strategy', '')}\n\n"
+        f"User's Thesis Topic/PPT Content:\n{thesis_context}\n\n"
+        "Task: Rewrite the Base Question Template into a customized question. Inject the "
+        "user's specific topic details naturally. Keep the professional academic tone intact."
+    )
+    try:
+        resp = _ai_client.chat.completions.create(
+            model=TEXT_MODEL,
+            max_tokens=200,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        text = (resp.choices[0].message.content or "").strip().strip('"')
+        return text if text else base_text
+    except Exception as e:
+        app.logger.error(f"[DEFENSE QA] Custom question generation failed for {base_question_obj.get('id')}: {e}")
+        return base_text
+
+
+def customize_defense_qa_bank(pool, slides):
+    """
+    Apply generate_custom_defense_question() to every sampled template question,
+    in parallel (bounded thread pool) to keep /config latency reasonable even at
+    Hard difficulty (8 questions). id / challenge_type / category / answering_strategy
+    are copied through unchanged — only 'question' is replaced with the fused text.
+    The original template text is preserved as 'template_question' for debugging/logging.
+    """
+    import concurrent.futures as _cf
+
+    results = [None] * len(pool)
+
+    if not AI_ENABLED or not pool:
+        for i, q in enumerate(pool):
+            q2 = dict(q)
+            q2["template_question"] = q.get("question", "")
+            results[i] = q2
+        return results
+
+    thesis_context = _build_thesis_context(slides)
+
+    def _work(i, q):
+        q2 = dict(q)
+        q2["template_question"] = q.get("question", "")
+        q2["question"] = generate_custom_defense_question(q, thesis_context)
+        return i, q2
+
+    with _cf.ThreadPoolExecutor(max_workers=min(6, len(pool))) as ex:
+        futures = [ex.submit(_work, i, q) for i, q in enumerate(pool)]
+        for fut in _cf.as_completed(futures):
+            i, q2 = fut.result()
+            results[i] = q2
+
+    return results
+
+
+# ─────────────────────────────────────────────
 # CLAUDE: DYNAMIC FOLLOW-UP GENERATOR (Step 6)
 # ─────────────────────────────────────────────
 def generate_followup_question(
@@ -3915,12 +4021,16 @@ def api_start_session():
         _scene_for_qa = "class_presentation"
         session["qa_bank"] = build_dual_track_qa(slides, audience, _scene_for_qa, difficulty)
     elif scenario == "Thesis Defense":
-        # Use DEFENSE_QUESTION_BANK; question count aligned with difficulty selection
+        # Use DEFENSE_QUESTION_BANK; question count aligned with difficulty selection.
+        # Each sampled template question is then fused with the user's actual thesis
+        # topic/slide content via generate_custom_defense_question() — the AI examiner
+        # never reads the raw template verbatim. answering_strategy stays anchored.
         import random as _rand
         _Q_COUNT = {"Easy": 3, "Medium": 5, "Hard": 8}
         _pool = list(DEFENSE_QUESTION_BANK)
         _rand.shuffle(_pool)
-        session["qa_bank"] = _pool[:_Q_COUNT.get(difficulty, 5)]
+        _sampled = _pool[:_Q_COUNT.get(difficulty, 5)]
+        session["qa_bank"] = customize_defense_qa_bank(_sampled, slides)
     else:
         session["qa_bank"] = []
 
