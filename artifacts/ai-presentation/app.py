@@ -1961,41 +1961,113 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
     return what_i_did_good, areas_for_improvement
 
 
-def _fallback_per_question_analysis(comm_transcripts):
+def _nearest_slide_for_text(slides, *texts):
+    """
+    Heuristic slide-matcher: picks the slide whose title/content shares the
+    most keyword overlap with the given question/answer text(s). Used by the
+    non-AI fallback path to ground feedback in real PPT content instead of
+    generic advice, even when the LLM is unavailable.
+    """
+    if not slides:
+        return None
+    combined = " ".join(t or "" for t in texts).lower()
+    words = set(re.findall(r"[a-z]{4,}", combined))
+    if not words:
+        return slides[0]
+    best, best_score = None, -1
+    for s in slides:
+        slide_words = set(re.findall(r"[a-z]{4,}", (s.get("title", "") + " " + s.get("content", "")).lower()))
+        score = len(words & slide_words)
+        if score > best_score:
+            best, best_score = s, score
+    return best or slides[0]
+
+
+def _dedupe_pqa(pqa):
+    """
+    Some LLM responses emit one per_question_analysis entry per exchange AND
+    per dimension pass, producing duplicate cards for the same question in
+    the report UI. Keep only the first entry per question_id/question_text.
+    """
+    if not isinstance(pqa, list):
+        return pqa
+    seen = set()
+    deduped = []
+    for item in pqa:
+        if not isinstance(item, dict):
+            continue
+        key = item.get("question_id") or item.get("question_text", "")
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _fallback_per_question_analysis(comm_transcripts, slides=None):
     """
     Local, English, IELTS 5.5-6.0-level per-question analysis used whenever the
     LLM call fails, times out, or returns malformed JSON. Guarantees the
     frontend always receives a non-empty communication_quality_report so the
     per-question card layout never breaks.
+
+    Even without the LLM, this still grounds feedback in the ACTUAL user
+    answer (quoted verbatim) and the nearest matching slide's real content,
+    instead of a single interchangeable canned message for every question.
     """
     items = []
     for t in comm_transcripts:
         answer = t.get("answer", "").strip()
         if not answer:
             continue
-        strategy = t.get("answering_strategy", "")
-        followed_strategy = bool(strategy) and any(
-            w.lower() in answer.lower() for w in strategy.split()[:6]
-        )
+        question = t.get("question", "") or "(question not recorded)"
+        words = answer.split()
+        short_answer = len(words) <= 4
+        quoted_fragment = answer if short_answer else " ".join(words[:14]) + ("…" if len(words) > 14 else "")
+
+        slide = _nearest_slide_for_text(slides, question, answer)
+        slide_title   = (slide or {}).get("title", "")
+        slide_content = (slide or {}).get("content", "")
+
+        if short_answer:
+            what_good = (
+                f"You said '{quoted_fragment}', which correctly names the core keyword the question "
+                "was asking about. That shows you understood what was being asked."
+            )
+        else:
+            what_good = (
+                f"When you said '{quoted_fragment}', you gave a real answer instead of avoiding the "
+                "question, and it stayed on the same topic the question raised."
+            )
+
+        if slide_title or slide_content:
+            areas_improve = (
+                f"Your slide on '{slide_title}' has more specific content ({slide_content[:140].strip()}"
+                f"{'…' if len(slide_content) > 140 else ''}) that you did not use in your answer. "
+                "Naming that specific detail would make your answer much stronger."
+            )
+            how_fix = (
+                f"Say this instead: '{quoted_fragment}' — and here is the specific point from my slide "
+                f"on {slide_title or 'this topic'}: {slide_content[:160].strip()}"
+                f"{'…' if len(slide_content) > 160 else ''}. That is why this matters for my presentation."
+            )
+        else:
+            areas_improve = (
+                f"Your answer '{quoted_fragment}' is too short to fully answer the question. "
+                "Add one concrete number, name, or fact to back it up."
+            )
+            how_fix = (
+                f"Say this instead: '{quoted_fragment}, and to be specific, the key evidence is [name one "
+                "exact fact, number, or example from your own presentation here].'"
+            )
+
         items.append({
             "question_id":            t.get("question_id", ""),
-            "question_text":          t.get("question", "") or "(question not recorded)",
+            "question_text":          question,
             "user_actual_answer":     answer,
-            "what_i_did_good": (
-                "You gave a clear, complete answer to the question. "
-                "Your response was easy to follow and stayed on topic."
-            ),
-            "areas_for_improvement": (
-                "Your answer could use more specific evidence or a clearer opening "
-                "sentence to strengthen your main point."
-                if not followed_strategy else
-                "Your answer followed the suggested strategy, but could add one more "
-                "concrete detail to make it fully convincing."
-            ),
-            "how_to_fix": (
-                "Say this instead: Start with your main point in the first sentence, "
-                "then support it with one specific fact or example."
-            ),
+            "what_i_did_good":        what_good,
+            "areas_for_improvement":  areas_improve,
+            "how_to_fix":             how_fix,
         })
     return items
 
@@ -2078,13 +2150,18 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     else:
         comm_transcripts = [t for t in fe_transcripts if t["answer"].strip()]
 
-    # Merge any session entries the frontend didn't capture
-    fe_answers_set = {t["answer"].strip() for t in fe_transcripts}
+    # Merge any session entries the frontend didn't capture. Guard against
+    # re-appending entries already present in comm_transcripts (this happened
+    # when comm_transcripts was seeded from session_transcripts itself and
+    # fe_transcripts was empty/smaller — every session entry looked "not yet
+    # captured by the frontend" and got appended a second time, doubling the
+    # exchange count and duplicating per-question analysis cards).
+    existing_answers_set = {t["answer"].strip() for t in comm_transcripts}
     for t in session_transcripts:
         ans = t["answer"].strip()
-        if ans and ans not in fe_answers_set:
+        if ans and ans not in existing_answers_set:
             comm_transcripts.append(t)
-            fe_answers_set.add(ans)
+            existing_answers_set.add(ans)
 
     # ── Annotate comm_transcripts with question_type from session metadata ──────
     # session_transcripts carry question_type; fe_transcripts may not.
@@ -2130,7 +2207,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         )
         return _run_dual_track_cq_evaluation(
             _free_ts, _anchor_ts, scene_slug, scene_label,
-            audience, difficulty, exchange_count
+            audience, difficulty, exchange_count, slides=slides
         )
     # No anchor detected → fall through to single-track evaluation (backward compat)
 
@@ -2376,19 +2453,33 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         f"  ▸ {dim_names[1]} example → find the sentence that best reveals [{_quote_signal_labels[scene_slug][1]}]\n"
         f"  ▸ {dim_names[2]} example → find the sentence that best reveals [{_quote_signal_labels[scene_slug][2]}]\n"
         "  If a dimension's signal is completely absent, quote the nearest relevant fragment and note the absence.\n\n"
-        "RULE 7 (PER-QUESTION TIMELINE — MANDATORY): In ADDITION to the dimension-level fields above, "
-        "produce a communication_quality_report object with ONE entry per Q&A exchange listed in the "
-        "transcripts (Q1, Q2, Q3…). For EACH exchange:\n"
+        "RULE 7 (PER-QUESTION TIMELINE — 3-AXIS FUSION — MANDATORY): In ADDITION to the dimension-level "
+        "fields above, produce a communication_quality_report object with ONE entry per Q&A exchange "
+        "listed in the transcripts (Q1, Q2, Q3…). For EACH exchange you MUST silently perform a 3-axis "
+        "fusion BEFORE writing any field:\n"
+        "  AXIS 1 — the REAL slide content relevant to this question (see slide list above / defence slide "
+        "content section). Find the specific slide whose title/content matches this question's topic.\n"
+        "  AXIS 2 — internally infer the ideal, complete answer this exact question deserves, built ONLY "
+        "from concrete facts/numbers/named concepts found in that slide's real content (do not output this "
+        "inferred answer as its own field — use it only to judge the gap in AXIS 3).\n"
+        "  AXIS 3 — the user's ACTUAL answer text for this question, exactly as given, however short.\n"
+        "  Now write the three output fields, GROUNDED in this fusion — never generic:\n"
         "  - question_id: copy the exact [id=...] value shown next to that Qn.\n"
         "  - question_text: copy the question text verbatim.\n"
         "  - user_actual_answer: copy the user's full answer verbatim (remove the [n] sentence labels).\n"
-        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0, praising something concrete and "
-        "quoting the user's exact words.\n"
-        "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0, naming ONE specific weakness "
-        "in THIS answer, using the 3-WAY CROSS-ANALYSIS above (Recommended Strategy vs Actual Answer vs "
-        "Slide Evidence) when available for that question.\n"
-        "  - how_to_fix: MUST start with the exact phrase 'Say this instead:' followed by a rewritten example "
-        "sentence in pure English, IELTS 5.5-6.0.\n"
+        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. You MUST quote the user's exact "
+        "words verbatim, even if the answer is only one or two words — if it is that short, praise that they "
+        "captured the right keyword and note it needs expansion; do not invent a longer quote.\n"
+        "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0. Name the SPECIFIC fact, "
+        "number, named concept, or term from the AXIS 1 slide content that the user's AXIS 3 answer left "
+        "out. NEVER write generic advice such as 'add more evidence' or 'be clearer' — always name the "
+        "exact missing slide detail. If no matching slide exists, name the specific gap in the user's own "
+        "answer instead (still concrete, never generic).\n"
+        "  - how_to_fix: MUST start with the exact phrase 'Say this instead:' followed by a FULL, "
+        "ready-to-recite paragraph of 2-4 complete sentences that the student could literally read aloud. "
+        "It must blend the user's own AXIS 3 wording with the specific AXIS 1 slide vocabulary/data, in "
+        "flat IELTS 5.5-6.0 sentence structure. NEVER give generic methodology advice like 'state your "
+        "conclusion first, then give evidence' — always write the actual answer content itself.\n"
         "  Every field must be pure English — no Chinese.\n\n"
         "Return ONLY valid JSON. No markdown fences. No text outside JSON.\n\n"
         "{\n"
@@ -2454,7 +2545,8 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         cqr = result.get("communication_quality_report") or {}
         pqa = cqr.get("per_question_analysis")
         if not pqa or not isinstance(pqa, list):
-            pqa = _fallback_per_question_analysis(comm_transcripts)
+            pqa = _fallback_per_question_analysis(comm_transcripts, slides=slides)
+        pqa = _dedupe_pqa(pqa)
         result["communication_quality_report"] = {
             "overall_cq_score":     int(cqr.get("overall_cq_score", result["cq_total"]) or result["cq_total"]),
             "per_question_analysis": pqa,
@@ -2502,7 +2594,8 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                 cqr = repaired.get("communication_quality_report") or {}
                 pqa = cqr.get("per_question_analysis")
                 if not pqa or not isinstance(pqa, list):
-                    pqa = _fallback_per_question_analysis(comm_transcripts)
+                    pqa = _fallback_per_question_analysis(comm_transcripts, slides=slides)
+                pqa = _dedupe_pqa(pqa)
                 repaired["communication_quality_report"] = {
                     "overall_cq_score":      int(cqr.get("overall_cq_score", repaired["cq_total"]) or repaired["cq_total"]),
                     "per_question_analysis": pqa,
@@ -2525,7 +2618,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(
             scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
             good_override=good_items, fix_override=fix_items,
-            per_question_override=_fallback_per_question_analysis(comm_transcripts),
+            per_question_override=_fallback_per_question_analysis(comm_transcripts, slides=slides),
         )
 
     except Exception as e:
@@ -2537,7 +2630,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(
             scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
             good_override=good_items, fix_override=fix_items,
-            per_question_override=_fallback_per_question_analysis(comm_transcripts),
+            per_question_override=_fallback_per_question_analysis(comm_transcripts, slides=slides),
         )
 
 
@@ -2612,7 +2705,8 @@ def _build_dual_track_mock_result(universal_heuristic, anchor_passed, anchor_sco
 
 
 def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_slug,
-                                    scene_label, audience, difficulty, exchange_count):
+                                    scene_label, audience, difficulty, exchange_count,
+                                    slides=None):
     """
     Dual-track CQ evaluation engine (Module 3).
 
@@ -2650,7 +2744,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
             universal_total_h, exchange_count, free_texts, target_dim,
-            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts),
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides),
         )
 
     def _label_sentences(text):
@@ -2667,6 +2761,21 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         f"Q_anchor [{anchor_type}]: {anchor_q}\n"
         f"A_anchor: {_label_sentences(anchor_text)}"
     ) if anchor_text else "(No anchor answer recorded)"
+
+    _dual_slide_content_text = ""
+    if slides:
+        _dual_slide_content_text = "\n".join(
+            f"  Slide {s.get('page', '?')}: {s.get('title', '')} — {s.get('content', '')[:200]}"
+            for s in slides
+        )
+    _dual_slide_section = (
+        (
+            "══════════════════════════════════════════════\n"
+            "PRESENTATION SLIDE CONTENT (real data — use for per-question fusion below)\n"
+            "══════════════════════════════════════════════\n"
+            f"{_dual_slide_content_text}\n\n"
+        ) if _dual_slide_content_text else ""
+    )
 
     # Pre-compute strings containing quotes/backslashes (Python 3.11 f-string restriction)
     _scene_example_map = {
@@ -2740,6 +2849,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         f"Check: {scaffold_signal}\n"
         f"Heuristic estimate: {'PASSED' if anchor_passed_h else 'FAILED'} ({anchor_score_h}/100)\n\n"
         f"ANCHOR EXCHANGE:\n{anchor_exchange_text}\n\n"
+        f"{_dual_slide_section}"
         "══════════════════════════════════════════════\n"
         "OUTPUT RULES\n"
         "══════════════════════════════════════════════\n"
@@ -2761,12 +2871,29 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "    followed by a DYNAMIC 2-3 sentence rewrite using the user ACTUAL vocabulary and domain content\n"
         "    from A_anchor (their topic, claims, specific words). NEVER write generic placeholder sentences.\n"
         f"    {_scene_example}\n"
-        "RULE 5 (PER-QUESTION TIMELINE — MANDATORY): ALSO produce a communication_quality_report object with "
-        "ONE entry per exchange in BOTH the FREE EXCHANGES and the ANCHOR EXCHANGE. For each: question_id "
-        "(copy the [id=...] if shown, else use 'anchor' for the anchor exchange), question_text, "
-        "user_actual_answer (verbatim, no [n] labels), what_i_did_good (1-2 sentences, pure English, "
-        "IELTS 5.5-6.0, quoting exact words), areas_for_improvement (1-2 sentences, pure English, naming ONE "
-        "specific weakness), how_to_fix (MUST start with 'Say this instead:' followed by a rewritten example). "
+        "RULE 5 (PER-QUESTION TIMELINE — 3-AXIS FUSION — MANDATORY): ALSO produce a communication_quality_report "
+        "object with ONE entry per exchange in BOTH the FREE EXCHANGES and the ANCHOR EXCHANGE. For EACH "
+        "exchange, silently perform a 3-axis fusion BEFORE writing any field:\n"
+        "  AXIS 1 — the REAL slide content above whose title/content matches this question's topic.\n"
+        "  AXIS 2 — internally infer the ideal, complete answer this question deserves, built ONLY from "
+        "concrete facts/numbers/named concepts in that slide (do not output this as its own field).\n"
+        "  AXIS 3 — the user's ACTUAL answer text for this exchange, exactly as given, however short.\n"
+        "  Then write, GROUNDED in this fusion — never generic:\n"
+        "  - question_id (copy the [id=...] if shown, else use 'anchor' for the anchor exchange)\n"
+        "  - question_text (verbatim)\n"
+        "  - user_actual_answer (verbatim, no [n] labels)\n"
+        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. Quote the user's exact words "
+        "verbatim, even if the answer is only one or two words — if that short, praise the correct keyword "
+        "and note it needs expanding; never invent a longer quote.\n"
+        "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0. Name the SPECIFIC fact, "
+        "number, or named concept from the AXIS 1 slide that the AXIS 3 answer left out. NEVER write "
+        "generic advice like 'add more evidence' — always name the exact missing slide detail. If no "
+        "matching slide exists, name the specific gap in the user's own answer instead.\n"
+        "  - how_to_fix: MUST start with 'Say this instead:' followed by a FULL, ready-to-recite paragraph "
+        "of 2-4 complete sentences the student could literally read aloud, blending their own AXIS 3 "
+        "wording with the specific AXIS 1 slide vocabulary/data, in flat IELTS 5.5-6.0 sentence structure. "
+        "NEVER give generic methodology advice (e.g. 'state your conclusion first') — write the actual "
+        "answer content itself.\n"
         "No Chinese anywhere.\n"
         "Return ONLY valid JSON. No markdown. No text outside JSON. Double quotes only:\n"
         "{\n"
@@ -2832,7 +2959,8 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         cqr = result.get("communication_quality_report") or {}
         pqa = cqr.get("per_question_analysis")
         if not pqa or not isinstance(pqa, list):
-            pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts)
+            pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides)
+        pqa = _dedupe_pqa(pqa)
 
         return {
             "has_data":              True,
@@ -2880,7 +3008,8 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
                 cqr = repaired.get("communication_quality_report") or {}
                 pqa = cqr.get("per_question_analysis")
                 if not pqa or not isinstance(pqa, list):
-                    pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts)
+                    pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides)
+                pqa = _dedupe_pqa(pqa)
                 return {
                     "has_data": True, "scene_slug": scene_slug, "scene_label": scene_label,
                     "cq_total": comb, "cq_scores": u_sc,
@@ -2900,7 +3029,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
             universal_total_h, exchange_count, free_texts, target_dim,
-            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts),
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides),
         )
 
     except Exception as e:
@@ -2910,7 +3039,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
             universal_total_h, exchange_count, free_texts, target_dim,
-            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts),
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides),
         )
 
 
