@@ -7,3 +7,4 @@
 - [CQ per-question report schema](cq-per-question-report.md) — `communication_quality_report.per_question_analysis` is the canonical per-question CQ feedback shape; all CQ text (incl. dimension-level) must stay pure English (RULE 0 reversed).
 - [ai-presentation app_preview limitation](ai-presentation-app-quirks.md) — this Flask app isn't a registered artifact, so the screenshot tool's app_preview mode can't target it; verify via curl + HTML/JSON inspection instead.
 - [Transcript merge dedup pitfall](transcript-merge-dedup.md) — merging two answer-source lists must dedupe against the already-built combined list, not just one source, or entries silently double.
+- [Non-templated fallback feedback](fallback-feedback-heuristics.md) — heuristic (non-LLM) fallback text generators must vary per item via content signals, and quote something concrete even in the "nothing matched" branch.

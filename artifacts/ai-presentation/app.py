@@ -2004,17 +2004,140 @@ def _dedupe_pqa(pqa):
     return deduped
 
 
-def _fallback_per_question_analysis(comm_transcripts, slides=None):
+def _cq_signal_scan(answer):
+    """
+    Extract lightweight, scene-agnostic linguistic signals from a single answer,
+    used to ground the local per-question fallback analysis in the ACTUAL text
+    of THIS specific answer — never a fixed template. Each signal also records
+    which sentence (if any) triggered it, so feedback can quote the exact point
+    in the answer that demonstrates (or fails to demonstrate) a dimension.
+    """
+    sentences = re.split(r'(?<=[.!?])\s+', answer.strip())
+    sentences = [s.strip() for s in sentences if s.strip()] or [answer.strip()]
+    first = sentences[0]
+
+    def find(pattern, in_sentences=None):
+        for s in (in_sentences or sentences):
+            if re.search(pattern, s, re.I):
+                return s
+        return None
+
+    return {
+        "sentences": sentences,
+        "first": first,
+        "first_person_or_data_open": find(r"^\s*(i|we|our|my|the data|the results?|this (study|research))\b", [first]),
+        "verdict_open":              find(r"^\s*(yes|no|we believe|absolutely|definitely|our (view|answer) is)\b", [first]),
+        "evidence":                  find(r"\d|%|percent|p\s*<\s*0|p-value|significant|according to|studies? show|citation"),
+        "acknowledgment":            find(r"\b(valid concern|fair point|i see why|good question|you raise|that'?s true|that is a (valid|fair))\b"),
+        "hedge":                     find(r"\b(maybe|perhaps|i think|i guess|kind of|sort of|probably|might|not sure)\b"),
+        "customer_or_metric":        find(r"\d|%|customer|user|client|beta|case study|revenue"),
+        "oral_marker":               find(r"\b(you know|think about it|the thing is|basically|honestly)\b"),
+        "example_marker":            find(r"\b(for example|for instance|such as|in \d{4}|last (year|month)|e\.g\.)\b"),
+        "three_point_structure":     bool(re.search(r"\bfirst(ly)?\b.{0,150}\bsecond(ly)?\b.{0,200}\b(third(ly)?|finally|lastly)\b", answer, re.I | re.S)),
+    }
+
+
+def _dim_hit_and_sentence(sig, key):
+    """Resolve one dimension's (hit, quotable_sentence) from a pre-computed signal scan."""
+    if key == "no_hedge":
+        s = sig["hedge"]
+        # When no hedge phrase exists, quote the actual first sentence as the
+        # concrete example of confident language — never a bare "no hedge found".
+        return (s is None), (s if s is not None else sig["first"])
+    if key == "three_point_structure":
+        return sig["three_point_structure"], None
+    s = sig.get(key)
+    return (s is not None), s
+
+
+_STOPWORDS_FOR_KEYWORD_OVERLAP = {
+    "the", "a", "an", "is", "are", "was", "were", "do", "does", "did", "you", "your",
+    "how", "what", "why", "which", "that", "this", "of", "to", "in", "on", "for", "and",
+    "or", "with", "about", "it", "as", "will", "would", "could", "can", "i", "we", "our",
+}
+
+
+def _keyword_overlap_highlight(question, sentences):
+    """
+    When an answer doesn't trip any scene dimension signal, still ground the
+    feedback in a specific point rather than a generic template: find a
+    substantive keyword from THIS question that the user actually echoed in
+    THIS answer, and return that keyword plus the sentence carrying it. Both
+    the keyword and the sentence differ per question/answer pair.
+    """
+    q_keywords = [
+        w.strip(".,?!'\"").lower() for w in question.split()
+        if len(w.strip(".,?!'\"")) > 3 and w.strip(".,?!'\"").lower() not in _STOPWORDS_FOR_KEYWORD_OVERLAP
+    ]
+    for kw in q_keywords:
+        for s in sentences:
+            if kw in s.lower():
+                return kw, s
+    return None, None
+
+
+# Scene-specific dimension config: (dim_name, signal_key, good_description, missing_description).
+# These names/descriptions mirror the exact CQ dimensions shown at the top of the report page
+# for each scene, so fallback feedback stays consistent with the scored rubric the user sees.
+_FALLBACK_DIM_CONFIG = {
+    "thesis_defense": [
+        ("Directness", "first_person_or_data_open",
+         "led with a first-person or evidence-first stance instead of background padding — exactly "
+         "the Directness an examiner wants",
+         "your first sentence did not open with a direct claim (e.g. 'I found...', 'Our data shows...'); "
+         "it drifted into context before answering"),
+        ("Defensibility", "evidence",
+         "backed your claim with concrete evidence rather than a vague adjective — strong Defensibility",
+         "your answer leaned on subjective words instead of a number, percentage, or citation to defend "
+         "the claim"),
+        ("Tact", "acknowledgment",
+         "opened with a Carnegie-style acknowledgment before defending your position — excellent Tact",
+         "you responded to the challenge without first acknowledging the examiner's concern (e.g. "
+         "'That is a valid concern...')"),
+    ],
+    "case_pitch": [
+        ("Conclusion First", "verdict_open",
+         "led with a clear verdict instead of building up to your conclusion — textbook Conclusion First",
+         "your first sentence did not open with a direct Yes/No/We-believe verdict; it built up to the "
+         "point instead of leading with it"),
+        ("Persuasion Mix", "customer_or_metric",
+         "supported your point with a data metric or customer reference, giving it real persuasive weight",
+         "your answer had no data metric and no customer story to back up the pitch"),
+        ("Command Presence", "no_hedge",
+         "answered with confident, assertive language and no hedging words like 'maybe' or 'I think'",
+         "your answer used hedging language, which weakens your authority under challenge"),
+    ],
+    "class_presentation": [
+        ("Rule of Three", "three_point_structure",
+         "explicitly structured your answer into first/second/third-style points",
+         "your answer was not explicitly structured into three named points (first / second / third)"),
+        ("Conversational Sense", "oral_marker",
+         "used a natural spoken connector instead of sounding like you were reading a script",
+         "your answer sounded formal or scripted, without natural spoken connectors like 'you know' or "
+         "'the thing is'"),
+        ("Illustrative Support", "example_marker",
+         "grounded your point in a concrete example instead of an abstract statement",
+         "your answer gave a conceptual explanation with no concrete example (no 'for example', no "
+         "specific who/when/where)"),
+    ],
+}
+
+
+def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=None):
     """
     Local, English, IELTS 5.5-6.0-level per-question analysis used whenever the
     LLM call fails, times out, or returns malformed JSON. Guarantees the
     frontend always receives a non-empty communication_quality_report so the
     per-question card layout never breaks.
 
-    Even without the LLM, this still grounds feedback in the ACTUAL user
-    answer (quoted verbatim) and the nearest matching slide's real content,
-    instead of a single interchangeable canned message for every question.
+    IMPORTANT: this is NOT a single canned template reused for every question.
+    Each answer is scanned for the scene's own dimension signals (see
+    _FALLBACK_DIM_CONFIG, which mirrors the dimensions shown at the top of the
+    CQ report for this scene) and the specific point in THIS answer that hits
+    or misses a dimension is what gets quoted and explained — so two different
+    answers produce genuinely different, content-grounded feedback.
     """
+    dim_config = _FALLBACK_DIM_CONFIG.get(scene_slug, _FALLBACK_DIM_CONFIG["class_presentation"])
     items = []
     for t in comm_transcripts:
         answer = t.get("answer", "").strip()
@@ -2029,40 +2152,85 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None):
         # can never bleed in words from a different question.
         quoted_fragment = answer
 
-        slide = _nearest_slide_for_text(slides, question, answer)
-        slide_title   = (slide or {}).get("title", "")
-        slide_content = (slide or {}).get("content", "")
+        sig = _cq_signal_scan(answer)
+        dims_evaluated = []
+        for dim_name, key, good_desc, missing_desc in dim_config:
+            hit, sentence = _dim_hit_and_sentence(sig, key)
+            dims_evaluated.append({
+                "dim": dim_name, "hit": hit, "sentence": sentence,
+                "good_desc": good_desc, "missing_desc": missing_desc,
+            })
+
+        hit_dim = next((d for d in dims_evaluated if d["hit"]), None)
+        miss_dim = next(
+            (d for d in dims_evaluated if not d["hit"] and (not hit_dim or d["dim"] != hit_dim["dim"])),
+            None,
+        )
+        if miss_dim is None:
+            miss_dim = next((d for d in dims_evaluated if not d["hit"]), None)
 
         if short_answer:
             what_good = (
                 f"You said '{quoted_fragment}', which correctly names the core keyword the question "
-                "was asking about. That shows you understood what was being asked."
+                "was asking about. That shows you understood what was being asked, though there is not "
+                "enough here yet to judge the deeper communication dimensions."
+            )
+        elif hit_dim:
+            quote_bit = f" — you said '{hit_dim['sentence'].strip()}'" if hit_dim["sentence"] else ""
+            what_good = f"On {hit_dim['dim']}: you {hit_dim['good_desc']}{quote_bit}."
+        else:
+            # No scene dimension signal fired at all — still ground the praise in a
+            # specific point from THIS answer instead of a repeated generic line, by
+            # finding a keyword from THIS question that the user actually echoed.
+            kw, kw_sentence = _keyword_overlap_highlight(question, sig["sentences"])
+            if kw and kw_sentence:
+                what_good = (
+                    f"You directly engaged with the question's focus on '{kw}' by saying "
+                    f"'{kw_sentence.strip()}', which kept your answer anchored to what was actually asked."
+                )
+            else:
+                what_good = (
+                    f"When you said '{quoted_fragment}', you gave a real, on-topic answer instead of "
+                    "avoiding the question."
+                )
+
+        slide = _nearest_slide_for_text(slides, question, answer)
+        slide_title   = (slide or {}).get("title", "")
+        slide_content = (slide or {}).get("content", "")
+
+        if miss_dim:
+            # Always anchor the gap in a concrete sentence from THIS answer — either the
+            # exact sentence that failed the check, or (if the miss is structural, e.g. the
+            # dimension is absent everywhere) the longest sentence in the answer, so the same
+            # missed dimension across different answers still points at different real text.
+            gap_quote = miss_dim["sentence"] or max(sig["sentences"], key=len)
+            gap_line = (
+                f"On {miss_dim['dim']}: {miss_dim['missing_desc']}. For example, you said "
+                f"'{gap_quote.strip()}', which still doesn't show it."
             )
         else:
-            what_good = (
-                f"When you said '{quoted_fragment}', you gave a real answer instead of avoiding the "
-                "question, and it stayed on the same topic the question raised."
-            )
+            gap_line = "Your answer already covers all three dimensions well for this exchange."
+        fix_dim_name = (miss_dim or hit_dim or {}).get("dim", "structure")
 
         if slide_title or slide_content:
             areas_improve = (
-                f"Your slide on '{slide_title}' has more specific content ({slide_content[:140].strip()}"
-                f"{'…' if len(slide_content) > 140 else ''}) that you did not use in your answer. "
-                "Naming that specific detail would make your answer much stronger."
+                f"{gap_line} On top of that, your slide on '{slide_title}' has more specific content "
+                f"({slide_content[:120].strip()}{'…' if len(slide_content) > 120 else ''}) that you did "
+                "not use — naming it would make your answer even stronger."
             )
             # NOTE: how_to_fix must be a clean, ready-to-use rewritten answer — never a
             # quote of the user's own (possibly garbled or incomplete) original words.
             how_fix = (
-                f"Say this instead: 'To directly answer the question, {slide_content[:160].strip()}"
+                f"Say this instead: 'To show clearer {fix_dim_name}, {slide_content[:160].strip()}"
                 f"{'…' if len(slide_content) > 160 else ''} — that is why this matters for my presentation.'"
             )
         else:
             areas_improve = (
-                f"Your answer '{quoted_fragment}' is too short to fully answer the question. "
-                "Add one concrete number, name, or fact to back it up."
+                f"{gap_line} Your answer is also too short to fully cover the question — add one "
+                "concrete number, name, or fact to back it up."
             )
             how_fix = (
-                "Say this instead: 'To directly answer the question, [state your core point clearly], "
+                f"Say this instead: 'To show clearer {fix_dim_name}, [state your core point clearly], "
                 "and to be specific, the key evidence is [name one exact fact, number, or example from "
                 "your own presentation].'"
             )
@@ -2557,7 +2725,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         cqr = result.get("communication_quality_report") or {}
         pqa = cqr.get("per_question_analysis")
         if not pqa or not isinstance(pqa, list):
-            pqa = _fallback_per_question_analysis(comm_transcripts, slides=slides)
+            pqa = _fallback_per_question_analysis(comm_transcripts, slides=slides, scene_slug=scene_slug)
         pqa = _dedupe_pqa(pqa)
         result["communication_quality_report"] = {
             "overall_cq_score":     int(cqr.get("overall_cq_score", result["cq_total"]) or result["cq_total"]),
@@ -2606,7 +2774,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                 cqr = repaired.get("communication_quality_report") or {}
                 pqa = cqr.get("per_question_analysis")
                 if not pqa or not isinstance(pqa, list):
-                    pqa = _fallback_per_question_analysis(comm_transcripts, slides=slides)
+                    pqa = _fallback_per_question_analysis(comm_transcripts, slides=slides, scene_slug=scene_slug)
                 pqa = _dedupe_pqa(pqa)
                 repaired["communication_quality_report"] = {
                     "overall_cq_score":      int(cqr.get("overall_cq_score", repaired["cq_total"]) or repaired["cq_total"]),
@@ -2630,7 +2798,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(
             scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
             good_override=good_items, fix_override=fix_items,
-            per_question_override=_fallback_per_question_analysis(comm_transcripts, slides=slides),
+            per_question_override=_fallback_per_question_analysis(comm_transcripts, slides=slides, scene_slug=scene_slug),
         )
 
     except Exception as e:
@@ -2642,7 +2810,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return _cq_mock_result(
             scene_slug, heuristic_scores, cq_total_heuristic, dim_names, exchange_count,
             good_override=good_items, fix_override=fix_items,
-            per_question_override=_fallback_per_question_analysis(comm_transcripts, slides=slides),
+            per_question_override=_fallback_per_question_analysis(comm_transcripts, slides=slides, scene_slug=scene_slug),
         )
 
 
@@ -2756,7 +2924,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
             universal_total_h, exchange_count, free_texts, target_dim,
-            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides),
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides, scene_slug=scene_slug),
         )
 
     def _label_sentences(text):
@@ -2976,7 +3144,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         cqr = result.get("communication_quality_report") or {}
         pqa = cqr.get("per_question_analysis")
         if not pqa or not isinstance(pqa, list):
-            pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides)
+            pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides, scene_slug=scene_slug)
         pqa = _dedupe_pqa(pqa)
 
         return {
@@ -3025,7 +3193,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
                 cqr = repaired.get("communication_quality_report") or {}
                 pqa = cqr.get("per_question_analysis")
                 if not pqa or not isinstance(pqa, list):
-                    pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides)
+                    pqa = _fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides, scene_slug=scene_slug)
                 pqa = _dedupe_pqa(pqa)
                 return {
                     "has_data": True, "scene_slug": scene_slug, "scene_label": scene_label,
@@ -3046,7 +3214,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
             universal_total_h, exchange_count, free_texts, target_dim,
-            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides),
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides, scene_slug=scene_slug),
         )
 
     except Exception as e:
@@ -3056,7 +3224,7 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
             universal_heuristic, anchor_passed_h, anchor_score_h,
             anchor_type, anchor_text, scene_slug, scene_label,
             universal_total_h, exchange_count, free_texts, target_dim,
-            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides),
+            per_question_override=_fallback_per_question_analysis(free_transcripts + anchor_transcripts, slides=slides, scene_slug=scene_slug),
         )
 
 
