@@ -2076,49 +2076,57 @@ def _keyword_overlap_highlight(question, sentences):
     return None, None
 
 
-# Scene-specific dimension config: (dim_name, signal_key, good_description, missing_description).
-# These names/descriptions mirror the exact CQ dimensions shown at the top of the report page
-# for each scene, so fallback feedback stays consistent with the scored rubric the user sees.
+# Scene-specific content-signal config used ONLY to pick which real point in the
+# user's own answer to highlight — the rubric dimension names themselves are never
+# printed in the generated text (feedback must read as a plain observation about
+# what was actually said, not a citation of the scored framework).
 _FALLBACK_DIM_CONFIG = {
+    # Each rule is (internal_key, signal_key, good_desc, missing_desc, fix_hint).
+    # internal_key is ONLY used to pick between rules and is never surfaced in the
+    # generated text — feedback must read as a direct observation about what the
+    # user said, not as a label pulled from the scored rubric.
     "thesis_defense": [
-        ("Directness", "first_person_or_data_open",
-         "led with a first-person or evidence-first stance instead of background padding — exactly "
-         "the Directness an examiner wants",
-         "your first sentence did not open with a direct claim (e.g. 'I found...', 'Our data shows...'); "
-         "it drifted into context before answering"),
-        ("Defensibility", "evidence",
-         "backed your claim with concrete evidence rather than a vague adjective — strong Defensibility",
-         "your answer leaned on subjective words instead of a number, percentage, or citation to defend "
-         "the claim"),
-        ("Tact", "acknowledgment",
-         "opened with a Carnegie-style acknowledgment before defending your position — excellent Tact",
-         "you responded to the challenge without first acknowledging the examiner's concern (e.g. "
-         "'That is a valid concern...')"),
+        ("directness", "first_person_or_data_open",
+         "you led straight in with your own stance instead of padding with background",
+         "your first sentence didn't open with a direct claim — it drifted into context before answering",
+         "open with your actual position in the first sentence"),
+        ("defensibility", "evidence",
+         "you backed your claim with a concrete number or fact instead of a vague adjective",
+         "your answer leaned on subjective words instead of a number, percentage, or citation",
+         "add one hard number or fact to back the claim"),
+        ("tact", "acknowledgment",
+         "you acknowledged the concern before pushing back on it",
+         "you responded to the challenge without first acknowledging the concern raised",
+         "acknowledge the concern first, then defend your position"),
     ],
     "case_pitch": [
-        ("Conclusion First", "verdict_open",
-         "led with a clear verdict instead of building up to your conclusion — textbook Conclusion First",
-         "your first sentence did not open with a direct Yes/No/We-believe verdict; it built up to the "
-         "point instead of leading with it"),
-        ("Persuasion Mix", "customer_or_metric",
-         "supported your point with a data metric or customer reference, giving it real persuasive weight",
-         "your answer had no data metric and no customer story to back up the pitch"),
-        ("Command Presence", "no_hedge",
-         "answered with confident, assertive language and no hedging words like 'maybe' or 'I think'",
-         "your answer used hedging language, which weakens your authority under challenge"),
+        ("conclusion_first", "verdict_open",
+         "you gave your verdict right away instead of building up to it",
+         "your first sentence didn't open with a direct yes/no/verdict — it built up to the point instead "
+         "of leading with it",
+         "state your verdict in the very first sentence"),
+        ("persuasion_mix", "customer_or_metric",
+         "you backed your point with a data point or a customer reference, giving it real weight",
+         "your answer had no data point and no customer story to back up the pitch",
+         "add a data point or a short customer story"),
+        ("command_presence", "no_hedge",
+         "you answered with confident, assertive language and no hedging",
+         "your answer used hedging language, which weakens your authority under challenge",
+         "cut the hedging words and state it plainly"),
     ],
     "class_presentation": [
-        ("Rule of Three", "three_point_structure",
-         "explicitly structured your answer into first/second/third-style points",
-         "your answer was not explicitly structured into three named points (first / second / third)"),
-        ("Conversational Sense", "oral_marker",
-         "used a natural spoken connector instead of sounding like you were reading a script",
-         "your answer sounded formal or scripted, without natural spoken connectors like 'you know' or "
-         "'the thing is'"),
-        ("Illustrative Support", "example_marker",
-         "grounded your point in a concrete example instead of an abstract statement",
-         "your answer gave a conceptual explanation with no concrete example (no 'for example', no "
-         "specific who/when/where)"),
+        ("rule_of_three", "three_point_structure",
+         "you structured your answer into clear first/second/third-style points",
+         "your answer wasn't structured into clear points (first / second / third)",
+         "break your answer into three clearly labeled points"),
+        ("conversational_sense", "oral_marker",
+         "you spoke naturally instead of sounding like you were reading a script",
+         "your answer sounded formal or scripted, without natural spoken connectors",
+         "add a natural spoken connector like 'you know' or 'the thing is'"),
+        ("illustrative_support", "example_marker",
+         "you grounded your point in a concrete example instead of an abstract statement",
+         "your answer gave a conceptual explanation with no concrete example",
+         "add a specific example with a who/when/where detail"),
     ],
 }
 
@@ -2131,11 +2139,11 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
     per-question card layout never breaks.
 
     IMPORTANT: this is NOT a single canned template reused for every question.
-    Each answer is scanned for the scene's own dimension signals (see
-    _FALLBACK_DIM_CONFIG, which mirrors the dimensions shown at the top of the
-    CQ report for this scene) and the specific point in THIS answer that hits
-    or misses a dimension is what gets quoted and explained — so two different
-    answers produce genuinely different, content-grounded feedback.
+    Each answer is scanned for content signals (see _FALLBACK_DIM_CONFIG) and
+    the specific point in THIS answer that satisfies or misses one of those
+    signals is what gets quoted and explained in plain language — never by
+    naming the underlying rubric dimension — so two different answers produce
+    genuinely different, content-grounded feedback.
     """
     dim_config = _FALLBACK_DIM_CONFIG.get(scene_slug, _FALLBACK_DIM_CONFIG["class_presentation"])
     items = []
@@ -2153,35 +2161,35 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
         quoted_fragment = answer
 
         sig = _cq_signal_scan(answer)
-        dims_evaluated = []
-        for dim_name, key, good_desc, missing_desc in dim_config:
-            hit, sentence = _dim_hit_and_sentence(sig, key)
-            dims_evaluated.append({
-                "dim": dim_name, "hit": hit, "sentence": sentence,
-                "good_desc": good_desc, "missing_desc": missing_desc,
+        rules_evaluated = []
+        for key, signal_key, good_desc, missing_desc, fix_hint in dim_config:
+            hit, sentence = _dim_hit_and_sentence(sig, signal_key)
+            rules_evaluated.append({
+                "key": key, "hit": hit, "sentence": sentence,
+                "good_desc": good_desc, "missing_desc": missing_desc, "fix_hint": fix_hint,
             })
 
-        hit_dim = next((d for d in dims_evaluated if d["hit"]), None)
-        miss_dim = next(
-            (d for d in dims_evaluated if not d["hit"] and (not hit_dim or d["dim"] != hit_dim["dim"])),
+        hit_rule = next((d for d in rules_evaluated if d["hit"]), None)
+        miss_rule = next(
+            (d for d in rules_evaluated if not d["hit"] and (not hit_rule or d["key"] != hit_rule["key"])),
             None,
         )
-        if miss_dim is None:
-            miss_dim = next((d for d in dims_evaluated if not d["hit"]), None)
+        if miss_rule is None:
+            miss_rule = next((d for d in rules_evaluated if not d["hit"]), None)
 
         if short_answer:
             what_good = (
                 f"You said '{quoted_fragment}', which correctly names the core keyword the question "
                 "was asking about. That shows you understood what was being asked, though there is not "
-                "enough here yet to judge the deeper communication dimensions."
+                "enough here yet to judge the answer in depth."
             )
-        elif hit_dim:
-            quote_bit = f" — you said '{hit_dim['sentence'].strip()}'" if hit_dim["sentence"] else ""
-            what_good = f"On {hit_dim['dim']}: you {hit_dim['good_desc']}{quote_bit}."
+        elif hit_rule:
+            quote_bit = f" — you said '{hit_rule['sentence'].strip()}'" if hit_rule["sentence"] else ""
+            what_good = f"{hit_rule['good_desc'][0].upper()}{hit_rule['good_desc'][1:]}{quote_bit}."
         else:
-            # No scene dimension signal fired at all — still ground the praise in a
-            # specific point from THIS answer instead of a repeated generic line, by
-            # finding a keyword from THIS question that the user actually echoed.
+            # No content signal fired at all — still ground the praise in a specific
+            # point from THIS answer instead of a repeated generic line, by finding a
+            # keyword from THIS question that the user actually echoed.
             kw, kw_sentence = _keyword_overlap_highlight(question, sig["sentences"])
             if kw and kw_sentence:
                 what_good = (
@@ -2198,19 +2206,19 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
         slide_title   = (slide or {}).get("title", "")
         slide_content = (slide or {}).get("content", "")
 
-        if miss_dim:
+        if miss_rule:
             # Always anchor the gap in a concrete sentence from THIS answer — either the
-            # exact sentence that failed the check, or (if the miss is structural, e.g. the
-            # dimension is absent everywhere) the longest sentence in the answer, so the same
-            # missed dimension across different answers still points at different real text.
-            gap_quote = miss_dim["sentence"] or max(sig["sentences"], key=len)
+            # exact sentence that failed the check, or (if the gap is structural, i.e. the
+            # signal is absent everywhere) the longest sentence in the answer, so the same
+            # kind of gap across different answers still points at different real text.
+            gap_quote = miss_rule["sentence"] or max(sig["sentences"], key=len)
             gap_line = (
-                f"On {miss_dim['dim']}: {miss_dim['missing_desc']}. For example, you said "
-                f"'{gap_quote.strip()}', which still doesn't show it."
+                f"{miss_rule['missing_desc'][0].upper()}{miss_rule['missing_desc'][1:]}. For example, "
+                f"you said '{gap_quote.strip()}', which still doesn't show it."
             )
         else:
-            gap_line = "Your answer already covers all three dimensions well for this exchange."
-        fix_dim_name = (miss_dim or hit_dim or {}).get("dim", "structure")
+            gap_line = "Your answer already covers the key things this question was looking for."
+        fix_hint = (miss_rule or hit_rule or {}).get("fix_hint", "make your core point more concrete")
 
         if slide_title or slide_content:
             areas_improve = (
@@ -2221,7 +2229,7 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
             # NOTE: how_to_fix must be a clean, ready-to-use rewritten answer — never a
             # quote of the user's own (possibly garbled or incomplete) original words.
             how_fix = (
-                f"Say this instead: 'To show clearer {fix_dim_name}, {slide_content[:160].strip()}"
+                f"Say this instead: 'To {fix_hint}, {slide_content[:160].strip()}"
                 f"{'…' if len(slide_content) > 160 else ''} — that is why this matters for my presentation.'"
             )
         else:
@@ -2230,7 +2238,7 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
                 "concrete number, name, or fact to back it up."
             )
             how_fix = (
-                f"Say this instead: 'To show clearer {fix_dim_name}, [state your core point clearly], "
+                f"Say this instead: 'To {fix_hint}, [state your core point clearly], "
                 "and to be specific, the key evidence is [name one exact fact, number, or example from "
                 "your own presentation].'"
             )
