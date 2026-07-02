@@ -32,6 +32,13 @@ Each recorded answer includes: `question_type` ("free"|"anchor"), `anchor_type`,
 - `what_i_did_good`: 2 universal cards + 1 anchor card (【ANCHOR PASS】prefix if passed)
 - `areas_for_improvement`: universal improvement cards + anchor card with dynamic "Say this instead:" rewrite if failed
 
+### Audience-based language level (IELTS tone)
+`ANCHOR_QUESTION_POOL` entries can carry a `question_by_audience` dict (`{"classmate":..., "professor":...}`) instead of a flat `question` string; `build_dual_track_qa` resolves it by audience before appending to the bank. `TED_QA_MATRIX` (separate, legacy pool used by `build_class_presentation_qa`, not currently wired into the live finish flow) already had per-track text — don't assume editing one pool covers the other, they are independent sources of "the same" class-presentation questions.
+
+**Why:** `ANCHOR_QUESTION_POOL`'s class_presentation questions were originally audience-agnostic (identical text for Classmates/Professor), unlike `TED_QA_MATRIX` which was already split by track — easy to edit the wrong pool and see no effect end-to-end.
+
+**How to apply:** when changing question wording/tone by audience for Class Presentation, check both `ANCHOR_QUESTION_POOL["class_presentation"]` (anchor Q2, used in the live `/x/finish-presentation` flow) and `TED_QA_MATRIX` (used only by the unused-in-flow `build_class_presentation_qa`) — verify via an actual curl round-trip + inspecting `uploads/reports/*.json` `qa_bank`, not just a code read.
+
 ### Key functions added
 - `generate_free_qa_question(slides, audience, scene_slug)` — GPT-4o, 120 tokens, no scaffold
 - `build_dual_track_qa(slides, audience, scene_slug, difficulty)` — combines free + anchor

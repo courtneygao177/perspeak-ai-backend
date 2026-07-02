@@ -179,6 +179,31 @@ AUDIENCE_PERSONA = {
     ),
 }
 
+# ─────────────────────────────────────────────
+# AUDIENCE-BASED QUESTION LANGUAGE LEVEL
+# Controls the English proficiency level/register of the QUESTION TEXT itself
+# (not the feedback). Applied to every AI-generated question prompt.
+# ─────────────────────────────────────────────
+AUDIENCE_LANGUAGE_LEVEL = {
+    "Classmates": (
+        "Phrase the question in casual, friendly, everyday English at an IELTS 5.5-6.0 level. "
+        "Use simple, common vocabulary and short, straightforward sentence structures — the way a "
+        "warm, approachable classmate would casually ask something. Avoid academic jargon or formal register."
+    ),
+    "Professor": (
+        "Phrase the question in professional, academic English at an IELTS 6.5 level. "
+        "Use precise scholarly vocabulary and a formal academic register appropriate for a professor, "
+        "but keep sentences clear and readable — avoid needlessly obscure words, overly convoluted syntax, "
+        "or excessive jargon that would make the question hard to parse."
+    ),
+}
+
+
+def audience_language_directive(audience):
+    """Return the language-level instruction for a given audience, or '' if none defined (e.g. VC)."""
+    return AUDIENCE_LANGUAGE_LEVEL.get(audience, "")
+
+
 DIFFICULTY_INSTRUCTIONS = {
     "Easy": (
         "You are SUPPORTIVE. Ask only 1 gentle clarifying question per slide. "
@@ -277,12 +302,12 @@ TED_QA_MATRIX = {
     "novelty_challenge": {
         "logic": "Tests whether the talk delivers a fresh perspective — new knowledge feeling over Google-level facts",
         "classmate": (
-            "To be fair, most of this information can be easily found on Google. "
-            "What is the most surprising or unexpected insight your project brings to the table?"
+            "Honestly, I could just Google most of this. "
+            "What's the one surprising thing your project found that I wouldn't expect?"
         ),
         "professor": (
-            "To be fair, most of this information can be easily found on Google. "
-            "What is the most surprising or unexpected insight your project brings to the table?"
+            "Much of this information is readily accessible through a basic literature search. "
+            "What is the most novel or unexpected insight that your research specifically contributes?"
         ),
     },
     # ── Dimension 3: Rule of Three ─────────────────────────────────────────────
@@ -316,9 +341,8 @@ TED_QA_MATRIX = {
     "audience_benefit": {
         "logic": "Tests whether the speaker connects the topic to the audience's operational benefit",
         "classmate": (
-            "As an audience, how does this topic relate to us? "
-            "To keep it structurally clear for the class, could you summarize your core operational benefits "
-            "in exactly THREE distinct points? "
+            "How does this actually affect us as students? "
+            "Can you break it down into just THREE simple points so it's easy to follow? "
             "(引导：Rule of Three。不要长篇大论，强制用【第一、第二、第三】的结构来数数回答)"
         ),
         "professor": (
@@ -368,11 +392,18 @@ ANCHOR_QUESTION_POOL = {
         {
             "id": "anchor_cp_twitter",
             "anchor_type": "Twitter Headline",
-            "question": (
-                "You shared a lot of cool details. "
-                "If you had to tweet your main point in less than 140 characters right now, what would it be? "
-                "(引导：Twitter化核心提炼。不要展开细节，用一句像社交媒体文案一样短小精悍的话总结)"
-            ),
+            "question_by_audience": {
+                "classmate": (
+                    "Okay, cool story, but if you had to tweet your main point in like one line, "
+                    "what would it be? "
+                    "(引导：Twitter化核心提炼。不要展开细节，用一句像社交媒体文案一样短小精悍的话总结)"
+                ),
+                "professor": (
+                    "You shared a lot of detail there. "
+                    "If you had to condense your main point into a single tweet-length sentence, what would it be? "
+                    "(引导：Twitter化核心提炼。不要展开细节，用一句像社交媒体文案一样短小精悍的话总结)"
+                ),
+            },
             "question_type": "anchor",
             "category": "Class Presentation — Anchor",
             "challenge_type": "Twitter Headline",
@@ -382,12 +413,18 @@ ANCHOR_QUESTION_POOL = {
         {
             "id": "anchor_cp_rule3",
             "anchor_type": "Audience Benefit",
-            "question": (
-                "As an audience, how does this topic relate to us? "
-                "To keep it structurally clear for the class, could you summarize your core operational benefits "
-                "in exactly THREE distinct points? "
-                "(引导：Rule of Three。不要长篇大论，强制用【第一、第二、第三】的结构来数数回答)"
-            ),
+            "question_by_audience": {
+                "classmate": (
+                    "How does this actually affect us as students? "
+                    "Can you break it down into just THREE simple points so it's easy to follow? "
+                    "(引导：Rule of Three。不要长篇大论，强制用【第一、第二、第三】的结构来数数回答)"
+                ),
+                "professor": (
+                    "From the audience's perspective, how does this topic connect to broader relevance? "
+                    "Could you summarize the core benefits in exactly THREE distinct points? "
+                    "(引导：Rule of Three。不要长篇大论，强制用【第一、第二、第三】的结构来数数回答)"
+                ),
+            },
             "question_type": "anchor",
             "category": "Class Presentation — Anchor",
             "challenge_type": "Audience Benefit",
@@ -397,11 +434,18 @@ ANCHOR_QUESTION_POOL = {
         {
             "id": "anchor_cp_5w",
             "anchor_type": "5-W Detail",
-            "question": (
-                "About the specific case study you mentioned, don't just give us abstract theories. "
-                "Can you pinpoint the concrete details — specifically WHO was involved and WHEN this happened? "
-                "(引导：Illustrative Support。不要讲空话，讲讲具体的时间、人物和发生的事情)"
-            ),
+            "question_by_audience": {
+                "classmate": (
+                    "Wait, can you give a real example? "
+                    "Like, who was actually involved and when did this happen? "
+                    "(引导：Illustrative Support。不要讲空话，讲讲具体的时间、人物和发生的事情)"
+                ),
+                "professor": (
+                    "Regarding the case study you mentioned, rather than abstract theory, "
+                    "can you specify the concrete details — specifically WHO was involved and WHEN this occurred? "
+                    "(引导：Illustrative Support。不要讲空话，讲讲具体的时间、人物和发生的事情)"
+                ),
+            },
             "question_type": "anchor",
             "category": "Class Presentation — Anchor",
             "challenge_type": "5-W Detail",
@@ -800,6 +844,8 @@ def build_master_engine(slides, audience, scenario, difficulty):
 
     audience_persona_text = AUDIENCE_PERSONA.get(audience, AUDIENCE_PERSONA["Professor"])
     difficulty_text = DIFFICULTY_INSTRUCTIONS.get(difficulty, DIFFICULTY_INSTRUCTIONS["Medium"])
+    _lang_directive = audience_language_directive(audience)
+    language_block = f"\nQUESTION LANGUAGE LEVEL:\n{_lang_directive}\n" if _lang_directive else ""
 
     prompt = f"""You are a world-class presentation examiner AI.
 
@@ -808,7 +854,7 @@ AUDIENCE PERSONA:
 
 DIFFICULTY MODE:
 {difficulty_text}
-
+{language_block}
 {challenge_dict_name.upper()} CHALLENGE TYPE DICTIONARY (you MUST pick from these):
 {challenge_dict_text}
 
@@ -900,7 +946,7 @@ def generate_custom_defense_question(base_question_obj, thesis_context):
         "[Rules for Generating the Question]:\n"
         "- DO NOT just read the template question verbatim. You MUST mention specific terms, "
         "methods, or markets from the user's thesis context.\n"
-        "- The question wording must remain highly professional and academic (IELTS 7.0+ level).\n"
+        f"- {audience_language_directive('Professor')}\n"
         "- Ensure the user can easily recognize that you have genuinely reviewed their specific slides.\n"
         "- Preserve the template question's underlying intent/challenge type — change only how it "
         "is phrased, never what is fundamentally being asked.\n"
@@ -991,6 +1037,9 @@ def generate_followup_question(
     current_slide = next((s for s in slides if s["page"] == current_page), slides[0])
     persona = AUDIENCE_PERSONA.get(audience, AUDIENCE_PERSONA["Professor"])
     difficulty_inst = DIFFICULTY_INSTRUCTIONS.get(difficulty, DIFFICULTY_INSTRUCTIONS["Medium"])
+    _lang_directive = audience_language_directive(audience) or (
+        "Phrase the question in clear, professional English appropriate for the persona."
+    )
 
     history_text = "\n".join(
         f"{'EXAMINER' if h['role'] == 'assistant' else 'PRESENTER'}: {h['content']}"
@@ -1047,6 +1096,7 @@ TASK: Generate your NEXT follow-up question. You must:
 3. Stay strictly in character as the {audience} persona
 4. Be {difficulty} in intensity
 5. {_scaffolding_hint}
+6. {_lang_directive}
 
 Return ONLY the question text with the coaching hint appended. No preamble, no labels, no markdown."""
 
@@ -1134,6 +1184,10 @@ def generate_free_qa_question(slides, audience, scene_slug):
             "question_type": "free", "category": f"{scene_slug.replace('_',' ').title()} — AI Free Question",
             "difficulty": "Medium", "challenge_type": "Contextual",
         }
+    # thesis_defense is always the Professor persona; case_pitch (VC) has no mandated IELTS level yet.
+    _effective_audience = "Professor" if scene_slug == "thesis_defense" else audience
+    _lang_directive = audience_language_directive(_effective_audience)
+    _lang_line = f"- {_lang_directive}\n" if _lang_directive else ""
     prompt = (
         f"You are {persona}.\n\n"
         f"Presentation content:\n{slide_text}\n\n"
@@ -1141,6 +1195,7 @@ def generate_free_qa_question(slides, audience, scene_slug):
         "- Directly references something specific from the slides above\n"
         "- Is appropriate for the setting\n"
         "- Has NO scaffolding hints, guidance notes, or Chinese text\n"
+        f"{_lang_line}"
         "- Is 1-2 sentences maximum\n\n"
         "Return ONLY the question text — no labels, no explanations."
     )
@@ -1184,6 +1239,10 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
         anchor_pool = ANCHOR_QUESTION_POOL.get(scene_slug, [])
         if anchor_pool:
             q2 = dict(random.choice(anchor_pool))
+            by_audience = q2.pop("question_by_audience", None)
+            if by_audience:
+                track = "professor" if audience.lower() == "professor" else "classmate"
+                q2["question"] = by_audience.get(track, by_audience.get("professor"))
             q2["questioner"] = audience
             result.append(q2)
         else:
