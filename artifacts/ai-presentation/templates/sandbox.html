@@ -1055,21 +1055,48 @@
   }
 
   // QA voice button (mid-session interrupt)
+  // NOTE: continuous recognition periodically "finalizes" a chunk of speech (e.g. on a
+  // pause), which resets e.resultIndex forward. We MUST accumulate every finalized chunk
+  // into a persistent variable — rebuilding only from e.resultIndex each time silently
+  // drops all earlier finalized speech and keeps only the last fragment.
   function toggleVoice() {
     if (audioMode === 'qa') { _stopAllRecording(); return; }
     _stopAllRecording();
     const rec = _makeSR(); if (!rec) return;
-    rec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('answerInput').value=t; };
+    let finalText = document.getElementById('answerInput').value.trim();
+    rec.onresult = e => {
+      let newFinal = '', interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) newFinal += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      if (newFinal.trim()) finalText += (finalText ? ' ' : '') + newFinal.trim();
+      const el = document.getElementById('answerInput');
+      el.value = finalText + (interim ? ' ' + interim : '');
+      el.scrollTop = el.scrollHeight;
+    };
     rec.onend    = () => { if (audioMode==='qa') { audioMode='idle'; _syncAudioButtons(); } };
     _qaRec = rec; rec.start(); audioMode = 'qa'; _syncAudioButtons();
   }
 
   // Academic QA voice button (post-session)
+  // Same accumulation fix as toggleVoice() above — see note there.
   function toggleAcqVoice() {
     if (audioMode === 'acq') { _stopAllRecording(); return; }
     _stopAllRecording();
     const rec = _makeSR(); if (!rec) return;
-    rec.onresult = e => { let t=''; for(let i=e.resultIndex;i<e.results.length;i++) t+=e.results[i][0].transcript; document.getElementById('acqInput').value=t; };
+    let finalText = document.getElementById('acqInput').value.trim();
+    rec.onresult = e => {
+      let newFinal = '', interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) newFinal += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      if (newFinal.trim()) finalText += (finalText ? ' ' : '') + newFinal.trim();
+      const el = document.getElementById('acqInput');
+      el.value = finalText + (interim ? ' ' + interim : '');
+      el.scrollTop = el.scrollHeight;
+    };
     rec.onend    = () => { if (audioMode==='acq') { audioMode='idle'; _syncAudioButtons(); } };
     _acqRec = rec; rec.start(); audioMode = 'acq'; _syncAudioButtons();
   }
