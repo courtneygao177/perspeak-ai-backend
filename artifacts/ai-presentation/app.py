@@ -2050,10 +2050,11 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None):
                 f"{'…' if len(slide_content) > 140 else ''}) that you did not use in your answer. "
                 "Naming that specific detail would make your answer much stronger."
             )
+            # NOTE: how_to_fix must be a clean, ready-to-use rewritten answer — never a
+            # quote of the user's own (possibly garbled or incomplete) original words.
             how_fix = (
-                f"Say this instead: '{quoted_fragment}' — and here is the specific point from my slide "
-                f"on {slide_title or 'this topic'}: {slide_content[:160].strip()}"
-                f"{'…' if len(slide_content) > 160 else ''}. That is why this matters for my presentation."
+                f"Say this instead: 'To directly answer the question, {slide_content[:160].strip()}"
+                f"{'…' if len(slide_content) > 160 else ''} — that is why this matters for my presentation.'"
             )
         else:
             areas_improve = (
@@ -2061,8 +2062,9 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None):
                 "Add one concrete number, name, or fact to back it up."
             )
             how_fix = (
-                f"Say this instead: '{quoted_fragment}, and to be specific, the key evidence is [name one "
-                "exact fact, number, or example from your own presentation here].'"
+                "Say this instead: 'To directly answer the question, [state your core point clearly], "
+                "and to be specific, the key evidence is [name one exact fact, number, or example from "
+                "your own presentation].'"
             )
 
         items.append({
@@ -2484,9 +2486,12 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "answer instead (still concrete, never generic).\n"
         "  - how_to_fix: MUST start with the exact phrase 'Say this instead:' followed by a FULL, "
         "ready-to-recite paragraph of 2-4 complete sentences that the student could literally read aloud. "
-        "It must blend the user's own AXIS 3 wording with the specific AXIS 1 slide vocabulary/data, in "
-        "flat IELTS 5.5-6.0 sentence structure. NEVER give generic methodology advice like 'state your "
-        "conclusion first, then give evidence' — always write the actual answer content itself.\n"
+        "Write a CLEAN, OPTIMIZED answer built from the specific AXIS 1 slide vocabulary/data — in flat "
+        "IELTS 5.5-6.0 sentence structure. Do NOT quote or reuse the user's own AXIS 3 wording here (their "
+        "original words may be garbled, incomplete, or an incorrect answer); write a fresh, correct, "
+        "well-formed answer as if speaking it for the first time. NEVER give generic methodology advice "
+        "like 'state your conclusion first, then give evidence' — always write the actual answer content "
+        "itself.\n"
         "  Every field must be pure English — no Chinese.\n\n"
         "Return ONLY valid JSON. No markdown fences. No text outside JSON.\n\n"
         "{\n"
@@ -2900,10 +2905,12 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "generic advice like 'add more evidence' — always name the exact missing slide detail. If no "
         "matching slide exists, name the specific gap in the user's own answer instead.\n"
         "  - how_to_fix: MUST start with 'Say this instead:' followed by a FULL, ready-to-recite paragraph "
-        "of 2-4 complete sentences the student could literally read aloud, blending their own AXIS 3 "
-        "wording with the specific AXIS 1 slide vocabulary/data, in flat IELTS 5.5-6.0 sentence structure. "
-        "NEVER give generic methodology advice (e.g. 'state your conclusion first') — write the actual "
-        "answer content itself.\n"
+        "of 2-4 complete sentences the student could literally read aloud. Write a CLEAN, OPTIMIZED answer "
+        "built from the specific AXIS 1 slide vocabulary/data, in flat IELTS 5.5-6.0 sentence structure. Do "
+        "NOT quote or reuse the user's own AXIS 3 wording here (their original words may be garbled, "
+        "incomplete, or an incorrect answer); write a fresh, correct, well-formed answer as if speaking it "
+        "for the first time. NEVER give generic methodology advice (e.g. 'state your conclusion first') — "
+        "write the actual answer content itself.\n"
         "No Chinese anywhere.\n"
         "Return ONLY valid JSON. No markdown. No text outside JSON. Double quotes only:\n"
         "{\n"
