@@ -2023,7 +2023,11 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None):
         question = t.get("question", "") or "(question not recorded)"
         words = answer.split()
         short_answer = len(words) <= 4
-        quoted_fragment = answer if short_answer else " ".join(words[:14]) + ("…" if len(words) > 14 else "")
+        # Always quote the user's COMPLETE answer for THIS question, never a
+        # truncated fragment — `answer` comes from a single isolated
+        # comm_transcripts entry (one question -> one answer), so this quote
+        # can never bleed in words from a different question.
+        quoted_fragment = answer
 
         slide = _nearest_slide_for_text(slides, question, answer)
         slide_title   = (slide or {}).get("title", "")
@@ -2467,9 +2471,12 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "  - question_id: copy the exact [id=...] value shown next to that Qn.\n"
         "  - question_text: copy the question text verbatim.\n"
         "  - user_actual_answer: copy the user's full answer verbatim (remove the [n] sentence labels).\n"
-        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. You MUST quote the user's exact "
-        "words verbatim, even if the answer is only one or two words — if it is that short, praise that they "
-        "captured the right keyword and note it needs expansion; do not invent a longer quote.\n"
+        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. You MUST quote the user's COMPLETE "
+        "AXIS 3 answer word-for-word in full — the ENTIRE text of user_actual_answer for THIS question only, "
+        "never a truncated fragment, never a partial excerpt, and never words borrowed from a different "
+        "question's answer. If the answer is only one or two words, quote those one or two words in full and "
+        "praise that they captured the right keyword, noting it needs expansion — do not invent a longer "
+        "quote or add words the user did not say.\n"
         "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0. Name the SPECIFIC fact, "
         "number, named concept, or term from the AXIS 1 slide content that the user's AXIS 3 answer left "
         "out. NEVER write generic advice such as 'add more evidence' or 'be clearer' — always name the "
@@ -2882,9 +2889,12 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "  - question_id (copy the [id=...] if shown, else use 'anchor' for the anchor exchange)\n"
         "  - question_text (verbatim)\n"
         "  - user_actual_answer (verbatim, no [n] labels)\n"
-        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. Quote the user's exact words "
-        "verbatim, even if the answer is only one or two words — if that short, praise the correct keyword "
-        "and note it needs expanding; never invent a longer quote.\n"
+        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. Quote the user's COMPLETE AXIS 3 "
+        "answer word-for-word in full — the ENTIRE text of user_actual_answer for THIS exchange only, never "
+        "a truncated fragment, never a partial excerpt, and never words borrowed from a different exchange "
+        "(free vs anchor). If the answer is only one or two words, quote those one or two words in full and "
+        "praise the correct keyword, noting it needs expanding — never invent a longer quote or add words "
+        "the user did not say.\n"
         "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0. Name the SPECIFIC fact, "
         "number, or named concept from the AXIS 1 slide that the AXIS 3 answer left out. NEVER write "
         "generic advice like 'add more evidence' — always name the exact missing slide detail. If no "
