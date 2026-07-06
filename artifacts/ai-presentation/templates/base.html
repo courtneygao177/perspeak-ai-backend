@@ -6,7 +6,7 @@
   <title>{% block title %}PerspeakAI — AI Presentation Coach{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = {
+    if (typeof tailwind !== 'undefined') tailwind.config = {
       theme: {
         extend: {
           colors: {
