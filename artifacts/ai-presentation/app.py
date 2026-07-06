@@ -976,6 +976,79 @@ def generate_custom_defense_question(base_question_obj, thesis_context):
         return base_text
 
 
+def _build_presentation_context(slides):
+    """
+    Compress parsed slides into a compact topic + keyword block for prompt injection
+    in generate_custom_anchor_question(). Parallel to _build_thesis_context().
+    """
+    if not slides:
+        return "No slide content available — the user's PPT/PDF could not be parsed."
+    titles = [s.get("title", "") for s in slides if s.get("title")]
+    topic = titles[0] if titles else "Untitled Presentation"
+    lines = [f"Presentation Topic (inferred from slide 1): {topic}"]
+    for s in slides[:6]:
+        line = f"Slide {s.get('page')}: {s.get('title', '')} — {s.get('content', '')[:180]}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def generate_custom_anchor_question(anchor_template, slides, audience):
+    """
+    Rewrite a class_presentation anchor question so that the question BODY
+    references the user's actual slide content/topic, while preserving the
+    (引导：...) scaffold hint verbatim — that hint is what the CQ engine scores.
+
+    Falls back to the static template text on AI failure or when AI is off.
+    """
+    import re as _re
+    track = "professor" if audience.lower() == "professor" else "classmate"
+    by_audience = anchor_template.get("question_by_audience", {})
+    base_text = (
+        by_audience.get(track)
+        or by_audience.get("professor")
+        or anchor_template.get("question", "")
+    )
+
+    if not AI_ENABLED or not slides:
+        return base_text
+
+    # Peel off the 引导 hint so we can re-attach it unchanged after rewriting.
+    hint_match = _re.search(r'(\(引导[：:][^)]+\))', base_text)
+    scaffold_hint = hint_match.group(1) if hint_match else ""
+    body_only     = base_text[:hint_match.start()].strip() if hint_match else base_text
+
+    anchor_type          = anchor_template.get("anchor_type", "")
+    presentation_context = _build_presentation_context(slides)
+    track_persona        = "a professor" if track == "professor" else "a classmate"
+
+    prompt = (
+        f"You are {track_persona} in a university classroom. A student just finished presenting.\n\n"
+        f"Presentation content:\n{presentation_context}\n\n"
+        f"Question challenge type: {anchor_type}\n"
+        f"Original question template: {body_only}\n\n"
+        "Task: Rewrite the original question template so it references specific content from the "
+        "presentation above — mention the actual topic, a specific finding, slide detail, or key claim. "
+        "Keep the same challenge intent and tone as the original template. "
+        "Return ONLY the rewritten question body — no labels, no quotes, no explanations, "
+        "and do NOT include any 引导 hint text (that will be appended separately)."
+    )
+    try:
+        resp = _ai_client.chat.completions.create(
+            model=TEXT_MODEL,
+            max_tokens=160,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        new_body = (resp.choices[0].message.content or "").strip().strip('"')
+        if not new_body:
+            return base_text
+        return f"{new_body} {scaffold_hint}".strip() if scaffold_hint else new_body
+    except Exception as e:
+        app.logger.error(
+            f"[ANCHOR QA] Custom anchor generation failed for {anchor_template.get('id')}: {e}"
+        )
+        return base_text
+
+
 def customize_defense_qa_bank(pool, slides):
     """
     Apply generate_custom_defense_question() to every sampled template question,
@@ -1238,12 +1311,19 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
     if qa_count >= 2:
         anchor_pool = ANCHOR_QUESTION_POOL.get(scene_slug, [])
         if anchor_pool:
-            q2 = dict(random.choice(anchor_pool))
+            anchor_template = random.choice(anchor_pool)
+            q2 = dict(anchor_template)
             by_audience = q2.pop("question_by_audience", None)
             if by_audience:
                 track = "professor" if audience.lower() == "professor" else "classmate"
                 q2["question"] = by_audience.get(track, by_audience.get("professor"))
             q2["questioner"] = audience
+            # Class Presentation: dynamically rewrite the anchor question body to
+            # reference the user's actual slide content, while preserving the
+            # (引导：...) scaffold hint verbatim for CQ scoring.
+            if scene_slug == "class_presentation" and slides:
+                q2["template_question"] = q2["question"]   # keep original for debugging
+                q2["question"] = generate_custom_anchor_question(anchor_template, slides, audience)
             result.append(q2)
         else:
             track = "professor" if audience.lower() == "professor" else "classmate"
