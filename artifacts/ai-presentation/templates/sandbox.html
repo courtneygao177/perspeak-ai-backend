@@ -883,30 +883,87 @@
 
   let _finishLock = false;
 
-  // ── Survey gate state ────────────────────────────────────────────────────
+  // ── Survey gate: dual-condition lock (backend ready AND survey submitted) ──
   let _surveyRedirectUrl = '/report';
+  let _backendReady      = false;   // true once /x/finish-presentation returns OK
+  let _surveySubmitted   = false;   // true once user submits the survey form
+  let _simProgressTimer  = null;    // interval ticking the simulated AI progress
+  let _simPct            = 5;       // current simulated AI progress %
   const _surveyAnswers   = { q1: '', q2: '', q3: '', q4: '' };
   const _surveyRequired  = ['q1', 'q2', 'q3'];
 
-  function setSurveyAnswer(qKey, value, labelEl) {
-    _surveyAnswers[qKey] = value;
-    // Highlight selected option, clear siblings
-    const group = labelEl.closest('.space-y-2');
-    if (group) group.querySelectorAll('.survey-opt').forEach(l => l.classList.remove('selected'));
-    labelEl.classList.add('selected');
-    // Advance progress bar: 35% + 15% per completed required question (max 80%)
-    const filled = _surveyRequired.filter(k => _surveyAnswers[k]).length;
-    const pct    = 35 + filled * 15;
+  // How far the survey fill alone contributes to the bar (35–80 %)
+  function _surveyFillPct() {
+    const n = _surveyRequired.filter(k => _surveyAnswers[k]).length;
+    return 35 + n * 15;
+  }
+
+  // Render the progress bar at whatever is higher: simulated AI or survey fill
+  function _refreshSurveyBar() {
+    const pct = Math.min(Math.max(_simPct, _surveyFillPct()), 100);
     document.getElementById('surveyBar').style.width = pct + '%';
-    document.getElementById('surveyPct').textContent = pct + '%';
+    document.getElementById('surveyPct').textContent = Math.round(pct) + '%';
     if (pct >= 80) {
       document.getElementById('surveyProgressLabel').textContent =
         '✨ Calibrating your personalized coach report…';
     }
-    // Disable Q4 email box if user said "no friends"
+  }
+
+  // Start the slow simulated AI tick (runs until backend returns or is cleared)
+  function _startSurveyAiProgress() {
+    _simPct = 5;
+    _refreshSurveyBar();
+    _simProgressTimer = setInterval(() => {
+      _simPct = Math.min(_simPct + 1.2, 38);
+      _refreshSurveyBar();
+    }, 1400);
+  }
+
+  // Perform the final 100 % animation and navigate to report
+  function _doFinalRedirect() {
+    clearInterval(_simProgressTimer);
+    document.getElementById('surveyBar').style.width  = '100%';
+    document.getElementById('surveyPct').textContent  = '100%';
+    document.getElementById('surveyProgressLabel').textContent =
+      '✅ Report ready! Opening…';
+    setTimeout(() => { window.location.href = _surveyRedirectUrl; }, 700);
+  }
+
+  // Called when /x/finish-presentation returns OK — check if we can redirect now
+  function _onBackendReady() {
+    clearInterval(_simProgressTimer);
+    _backendReady = true;
+    // Snap bar to ≥90 %
+    const cur = parseFloat(document.getElementById('surveyBar').style.width) || 0;
+    document.getElementById('surveyBar').style.width = Math.max(cur, 90) + '%';
+    document.getElementById('surveyPct').textContent = Math.max(Math.round(cur), 90) + '%';
+    document.getElementById('surveyProgressLabel').textContent =
+      '✅ Analysis complete — submit your answers to unlock the report!';
+
+    if (_surveySubmitted) {
+      // Survey was already submitted while backend was running → redirect now
+      _doFinalRedirect();
+      return;
+    }
+    // Survey still in progress — update submit button if it's in "waiting" state
+    const btn = document.getElementById('surveySubmitBtn');
+    if (btn && btn.dataset.waitingAi === 'true') {
+      _doFinalRedirect();
+    }
+  }
+
+  function setSurveyAnswer(qKey, value, labelEl) {
+    _surveyAnswers[qKey] = value;
+    // Visually highlight selected option, clear siblings
+    const group = labelEl.closest('.space-y-2');
+    if (group) group.querySelectorAll('.survey-opt').forEach(l => l.classList.remove('selected'));
+    labelEl.classList.add('selected');
+    // Refresh combined progress bar
+    _refreshSurveyBar();
+    // Disable Q4 email box when user chose "no friends"
     const q4 = document.getElementById('sq4Input');
     if (q4) q4.disabled = (_surveyAnswers.q3 === 'no');
-    // Unlock submit button when all required questions answered
+    // Unlock submit button once all three required questions are answered
     const allFilled = _surveyRequired.every(k => _surveyAnswers[k]);
     const btn = document.getElementById('surveySubmitBtn');
     btn.disabled = !allFilled;
@@ -925,13 +982,8 @@
 
     const btn = document.getElementById('surveySubmitBtn');
     btn.disabled = true;
-    btn.textContent = '🚀 Unlocking Report… / 正在解锁报告…';
 
-    // Animate progress bar to 95% while POSTing survey
-    document.getElementById('surveyBar').style.width = '95%';
-    document.getElementById('surveyPct').textContent = '95%';
-
-    // POST survey data — non-blocking: don't let a network hiccup stop the redirect
+    // POST survey data — network failure must never block redirect
     try {
       await fetch('/x/submit-survey', {
         method:  'POST',
@@ -943,13 +995,22 @@
           q4_emails:         _surveyAnswers.q4,
         }),
       });
-    } catch (e) { /* survey POST failure must never block the report redirect */ }
+    } catch (e) { /* intentionally silent */ }
 
-    setTimeout(() => {
-      document.getElementById('surveyBar').style.width = '100%';
-      document.getElementById('surveyPct').textContent = '100%';
-      setTimeout(() => { window.location.href = _surveyRedirectUrl; }, 600);
-    }, 1200);
+    _surveySubmitted = true;
+
+    if (_backendReady) {
+      // Backend already finished → navigate immediately
+      btn.textContent = '🚀 Unlocking Report… / 正在解锁报告…';
+      _doFinalRedirect();
+    } else {
+      // Backend still running → wait; _onBackendReady() will trigger redirect
+      btn.textContent = '⏳ AI is still working… sit tight! / AI 分析中，请稍候…';
+      btn.dataset.waitingAi = 'true';
+      btn.className =
+        'w-full py-3.5 rounded-xl text-base font-bold transition-all duration-300 ' +
+        'bg-slate-700 text-slate-400 cursor-not-allowed select-none';
+    }
   }
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -973,83 +1034,71 @@
         new Promise(r => setTimeout(r, 10000)),
       ]);
     }
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 300));
 
-    const overlay = document.getElementById('reportLoading');
-    const status  = document.getElementById('reportLoadingStatus');
-    const bar     = document.getElementById('reportLoadingBar');
-    overlay.classList.remove('hidden');
-
-    const msgs = [
-      { delay: 0,     pct:  6, text: `Launching 3 AI evaluators in parallel for ${presentationTranscripts.length} slide(s)…` },
-      { delay: 6000,  pct: 22, text: 'Analysing Structure · Fluency · Relevance · Delivery…' },
-      { delay: 18000, pct: 44, text: 'Evaluating Q&A performance + per-slide content audit…' },
-      { delay: 35000, pct: 66, text: 'Writing personalised feedback and training plan…' },
-      { delay: 55000, pct: 82, text: 'Almost ready — finalising your report…' },
-      { delay: 80000, pct: 92, text: 'Still working… complex sessions can take up to 120s' },
-    ];
-    const timers = msgs.map(m => setTimeout(() => {
-      status.textContent = m.text;
-      bar.style.width    = m.pct + '%';
-    }, m.delay));
+    // ── Show the survey overlay IMMEDIATELY so the user can fill it while
+    //    the AI analysis runs in the background.  The old reportLoading
+    //    spinner is never shown; the survey's own progress bar takes its place.
+    document.getElementById('surveyOverlay').classList.remove('hidden');
+    _startSurveyAiProgress();
 
     addLog(`🔄 Sending ${presentationTranscripts.length} transcript(s) + ${qaChatHistory.length} Q&A exchange(s) to AI (parallel eval)…`);
 
     const controller = new AbortController();
     const abortTimer = setTimeout(() => controller.abort(), 170000);
 
-    try {
-      const res  = await fetch('/x/finish-presentation', {
-        method:  'POST',
-        signal:  controller.signal,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          presentation_transcripts: presentationTranscripts,
-          qa_chat_history:          qaChatHistory,
-          slide_logic_tree:         slides,
-          total_time_seconds:       timerSeconds,
-          pronunciation_data:       _pronunciationCache,
-          scene: ({
-            'Thesis Defense':       'thesis_defense',
-            'MBA Case Pitch':       'case_pitch',
-            'Class Presentation':   'class_presentation',
-            'Academic Presentation':'class_presentation',
-          })[scenarioType] || 'class_presentation',
-          audience: ({
-            'Professor':  'professor',
-            'Classmates': 'classmate',
-            'VC':         'vc',
-          })[audienceRole] || 'professor',
-        }),
-      });
+    // Fire the backend fetch WITHOUT awaiting — it runs concurrently with the
+    // survey form.  _onBackendReady() / _doFinalRedirect() handle completion.
+    fetch('/x/finish-presentation', {
+      method:  'POST',
+      signal:  controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        presentation_transcripts: presentationTranscripts,
+        qa_chat_history:          qaChatHistory,
+        slide_logic_tree:         slides,
+        total_time_seconds:       timerSeconds,
+        pronunciation_data:       _pronunciationCache,
+        scene: ({
+          'Thesis Defense':       'thesis_defense',
+          'MBA Case Pitch':       'case_pitch',
+          'Class Presentation':   'class_presentation',
+          'Academic Presentation':'class_presentation',
+        })[scenarioType] || 'class_presentation',
+        audience: ({
+          'Professor':  'professor',
+          'Classmates': 'classmate',
+          'VC':         'vc',
+        })[audienceRole] || 'professor',
+      }),
+    }).then(async res => {
       clearTimeout(abortTimer);
-      timers.forEach(clearTimeout);
-
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
       }
-
       const data = await res.json();
-      bar.style.width    = '100%';
-      status.textContent = 'Report ready!';
-      // Store the redirect URL and hand off to the survey gate instead of
-      // navigating immediately — the user must complete the survey first.
       _surveyRedirectUrl = data.redirect || '/report';
-      setTimeout(() => {
-        overlay.classList.add('hidden');
-        document.getElementById('surveyOverlay').classList.remove('hidden');
-      }, 600);
-    } catch(err) {
+      _onBackendReady();   // checks _surveySubmitted and redirects if both done
+    }).catch(err => {
       clearTimeout(abortTimer);
-      timers.forEach(clearTimeout);
-      overlay.classList.add('hidden');
+      clearInterval(_simProgressTimer);
       const msg = err.name === 'AbortError'
         ? '⏱ Report timed out (>100s) — please reload and try again'
         : `❌ Report generation failed — ${err.message}`;
       addLog(msg);
       console.error('finishPresentation error:', err.name, err.message, err);
-    }
+      // Surface the error inside the survey overlay so the user sees it
+      const errEl = document.getElementById('surveyError');
+      if (errEl) {
+        errEl.textContent = msg;
+        errEl.classList.remove('hidden');
+      }
+      // Re-enable the finish button so the user can retry
+      _finishLock = false;
+      const fb = document.getElementById('finishSlideBtn');
+      if (fb) fb.disabled = false;
+    });
   }
 
   // ── UI helpers ────────────────────────────────────────────────────────────
