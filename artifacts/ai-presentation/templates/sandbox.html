@@ -386,6 +386,206 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     SURVEY OVERLAY — shown after AI report is ready, gates /report
+     User must complete Q1–Q3 (radio, required) before redirect.
+     Q4 (email referral) is optional.
+     ═══════════════════════════════════════════════════════════════ -->
+<style>
+  .survey-opt {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    background: rgba(30,41,59,0.7); padding: 10px 12px; border-radius: 10px;
+    border: 1px solid rgb(51,65,85); transition: border-color .2s, background .2s;
+  }
+  .survey-opt:hover { border-color: #059669; background: rgba(5,150,105,0.09); }
+  .survey-opt.selected { border-color: #34d399; background: rgba(5,150,105,0.14); }
+</style>
+
+<div id="surveyOverlay"
+     class="hidden fixed inset-0 z-50 bg-gray-950/98 backdrop-blur-sm overflow-y-auto">
+  <div class="min-h-full flex flex-col items-center justify-start py-8 px-4">
+    <div class="w-full max-w-xl">
+
+      <!-- ── AI Progress bar ── -->
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3"
+             style="background:rgba(5,150,105,0.15);border:1px solid rgba(5,150,105,0.3)">
+          <span style="font-size:1.4rem">🤖</span>
+        </div>
+        <h3 id="surveyProgressLabel" class="text-white font-semibold text-sm">
+          AI Professor is analyzing your speech…
+        </h3>
+        <p class="text-slate-500 text-xs mt-0.5">AI 教授正在深度分析您的对答表现…</p>
+        <div class="mt-3 h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="surveyBar"
+               class="h-full rounded-full transition-all duration-500"
+               style="background:linear-gradient(90deg,#047857,#34d399);width:35%"></div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-600 mt-1 px-0.5">
+          <span>Analyzing…</span>
+          <span id="surveyPct" class="text-emerald-400 font-bold">35%</span>
+        </div>
+      </div>
+
+      <!-- ── Survey card ── -->
+      <div class="bg-slate-900 border border-slate-700/60 rounded-2xl p-6 shadow-2xl">
+
+        <!-- Header -->
+        <div class="border-b border-slate-700/50 pb-4 mb-5">
+          <h4 class="text-white font-bold text-base mb-1">💡 Final Step: Calibrate Your Report</h4>
+          <p class="text-slate-400 text-sm">最后一步：请协助完成以下调研以校准并解锁您的专属分析报告。</p>
+        </div>
+
+        <!-- Q1 -->
+        <div class="mb-6">
+          <p class="text-white font-semibold text-sm mb-0.5">
+            1. Which language barrier did you find most challenging today?
+            <span class="text-red-400">*</span>
+          </p>
+          <p class="text-slate-500 text-xs mb-3">在今天的演练中，你觉得哪一个语言障碍最具挑战性？</p>
+          <div class="space-y-2">
+            <label class="survey-opt" onclick="setSurveyAnswer('q1','vocabulary',this)">
+              <input type="radio" name="sq1" value="vocabulary" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Lack of professional / academic vocabulary</span>
+                <span class="block text-slate-500 text-xs">缺乏专业/学术词汇</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q1','logic',this)">
+              <input type="radio" name="sq1" value="logic" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Difficulties organizing clear logical structures</span>
+                <span class="block text-slate-500 text-xs">难以组织清晰的逻辑框架</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q1','anxiety',this)">
+              <input type="radio" name="sq1" value="anxiety" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Extreme anxiety and nervousness during live Q&amp;A</span>
+                <span class="block text-slate-500 text-xs">在Q&amp;A环节过度紧张、大脑卡壳</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q1','pronunciation',this)">
+              <input type="radio" name="sq1" value="pronunciation" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Pronunciation, pacing, or intonation issues</span>
+                <span class="block text-slate-500 text-xs">发音、语速或语调问题</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="mb-6">
+          <p class="text-white font-semibold text-sm mb-0.5">
+            2. What is the main objective of your upcoming real-world presentation?
+            <span class="text-red-400">*</span>
+          </p>
+          <p class="text-slate-500 text-xs mb-3">你近期在现实生活中最主要的演讲/答辩目标是什么？</p>
+          <div class="space-y-2">
+            <label class="survey-opt" onclick="setSurveyAnswer('q2','class',this)">
+              <input type="radio" name="sq2" value="class" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">University Final / Class Presentation</span>
+                <span class="block text-slate-500 text-xs">大学期末 / 课堂演讲</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q2','defense',this)">
+              <input type="radio" name="sq2" value="defense" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Graduation Thesis Defense</span>
+                <span class="block text-slate-500 text-xs">毕业论文答辩</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q2','pitch',this)">
+              <input type="radio" name="sq2" value="pitch" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Business Case Pitch / Competition</span>
+                <span class="block text-slate-500 text-xs">商业路演 / 创业比赛</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q2','interview',this)">
+              <input type="radio" name="sq2" value="interview" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Job / Academic Interview Preparation</span>
+                <span class="block text-slate-500 text-xs">求职或升学面试准备</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="mb-6">
+          <p class="text-white font-semibold text-sm mb-0.5">
+            3. Do you have friends or classmates preparing for similar presentations right now?
+            <span class="text-red-400">*</span>
+          </p>
+          <p class="text-slate-500 text-xs mb-3">你身边的同学或朋友中，目前有人也在准备类似的演讲或答辩吗？</p>
+          <div class="space-y-2">
+            <label class="survey-opt" onclick="setSurveyAnswer('q3','yes_many',this)">
+              <input type="radio" name="sq3" value="yes_many" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Yes, a lot of my classmates are struggling with this!</span>
+                <span class="block text-slate-500 text-xs">有的，周围很多同学都在为此焦虑</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q3','yes_few',this)">
+              <input type="radio" name="sq3" value="yes_few" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Maybe one or two friends.</span>
+                <span class="block text-slate-500 text-xs">可能有一两个朋友需要</span>
+              </div>
+            </label>
+            <label class="survey-opt" onclick="setSurveyAnswer('q3','no',this)">
+              <input type="radio" name="sq3" value="no" class="mt-0.5 shrink-0 accent-emerald-500">
+              <div>
+                <span class="block text-slate-200 text-sm">Not right now.</span>
+                <span class="block text-slate-500 text-xs">暂时没有</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Q4 (optional) -->
+        <div class="mb-6" id="sq4Wrapper">
+          <p class="text-white font-semibold text-sm mb-0.5">
+            4. We want to support your friends too!
+            <span class="text-slate-500 font-normal text-xs ml-1">Optional / 选填</span>
+          </p>
+          <p class="text-slate-500 text-xs mb-3">
+            在下方输入他们的邮箱，我们将以你的名义为他们送出 1 周免费高级会员卡。<br>
+            Type their emails below and we'll send them a 1-Week Free Premium Pass in your name.
+          </p>
+          <input id="sq4Input" type="text"
+                 placeholder="Enter emails separated by commas / 多个邮箱请用逗号隔开"
+                 class="w-full bg-slate-800 border border-slate-600/70 rounded-xl px-4 py-3
+                        text-slate-200 text-sm placeholder-slate-600
+                        focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+                        disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        </div>
+
+        <!-- Validation error message -->
+        <p id="surveyError"
+           class="hidden text-red-400 text-sm text-center mb-3 bg-red-900/20 rounded-lg py-2">
+          Please answer all required questions (1–3) before unlocking your report.<br>
+          <span class="text-xs text-red-300">请先回答所有必填问题（第1–3题）。</span>
+        </p>
+
+        <!-- Submit button -->
+        <button id="surveySubmitBtn" onclick="submitSurvey()" disabled
+                class="w-full py-3.5 rounded-xl text-base font-bold transition-all duration-300
+                       bg-slate-700 text-slate-500 cursor-not-allowed select-none">
+          🔒 Submit &amp; Unlock My Report / 提交并解锁我的报告
+        </button>
+        <p class="text-center text-xs text-slate-600 mt-2">
+          Your answers are used only to personalise your coaching experience.
+        </p>
+      </div><!-- /survey card -->
+
+    </div>
+  </div>
+</div><!-- /surveyOverlay -->
+
 {% endblock %}
 
 {% block scripts %}
@@ -683,6 +883,76 @@
 
   let _finishLock = false;
 
+  // ── Survey gate state ────────────────────────────────────────────────────
+  let _surveyRedirectUrl = '/report';
+  const _surveyAnswers   = { q1: '', q2: '', q3: '', q4: '' };
+  const _surveyRequired  = ['q1', 'q2', 'q3'];
+
+  function setSurveyAnswer(qKey, value, labelEl) {
+    _surveyAnswers[qKey] = value;
+    // Highlight selected option, clear siblings
+    const group = labelEl.closest('.space-y-2');
+    if (group) group.querySelectorAll('.survey-opt').forEach(l => l.classList.remove('selected'));
+    labelEl.classList.add('selected');
+    // Advance progress bar: 35% + 15% per completed required question (max 80%)
+    const filled = _surveyRequired.filter(k => _surveyAnswers[k]).length;
+    const pct    = 35 + filled * 15;
+    document.getElementById('surveyBar').style.width = pct + '%';
+    document.getElementById('surveyPct').textContent = pct + '%';
+    if (pct >= 80) {
+      document.getElementById('surveyProgressLabel').textContent =
+        '✨ Calibrating your personalized coach report…';
+    }
+    // Disable Q4 email box if user said "no friends"
+    const q4 = document.getElementById('sq4Input');
+    if (q4) q4.disabled = (_surveyAnswers.q3 === 'no');
+    // Unlock submit button when all required questions answered
+    const allFilled = _surveyRequired.every(k => _surveyAnswers[k]);
+    const btn = document.getElementById('surveySubmitBtn');
+    btn.disabled = !allFilled;
+    btn.className = allFilled
+      ? 'w-full py-3.5 rounded-xl text-base font-bold transition-all duration-300 bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer select-none'
+      : 'w-full py-3.5 rounded-xl text-base font-bold transition-all duration-300 bg-slate-700 text-slate-500 cursor-not-allowed select-none';
+    document.getElementById('surveyError').classList.add('hidden');
+  }
+
+  async function submitSurvey() {
+    if (!_surveyRequired.every(k => _surveyAnswers[k])) {
+      document.getElementById('surveyError').classList.remove('hidden');
+      return;
+    }
+    _surveyAnswers.q4 = (document.getElementById('sq4Input').value || '').trim();
+
+    const btn = document.getElementById('surveySubmitBtn');
+    btn.disabled = true;
+    btn.textContent = '🚀 Unlocking Report… / 正在解锁报告…';
+
+    // Animate progress bar to 95% while POSTing survey
+    document.getElementById('surveyBar').style.width = '95%';
+    document.getElementById('surveyPct').textContent = '95%';
+
+    // POST survey data — non-blocking: don't let a network hiccup stop the redirect
+    try {
+      await fetch('/x/submit-survey', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          q1_barrier:        _surveyAnswers.q1,
+          q2_segment:        _surveyAnswers.q2,
+          q3_referral_check: _surveyAnswers.q3,
+          q4_emails:         _surveyAnswers.q4,
+        }),
+      });
+    } catch (e) { /* survey POST failure must never block the report redirect */ }
+
+    setTimeout(() => {
+      document.getElementById('surveyBar').style.width = '100%';
+      document.getElementById('surveyPct').textContent = '100%';
+      setTimeout(() => { window.location.href = _surveyRedirectUrl; }, 600);
+    }, 1200);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   async function finishPresentation() {
     if (_finishLock) { console.warn('finishPresentation() already in progress — ignored'); return; }
     _finishLock = true;
@@ -762,8 +1032,14 @@
 
       const data = await res.json();
       bar.style.width    = '100%';
-      status.textContent = 'Report ready! Loading…';
-      setTimeout(() => { if (data.redirect) window.location.href = data.redirect; }, 500);
+      status.textContent = 'Report ready!';
+      // Store the redirect URL and hand off to the survey gate instead of
+      // navigating immediately — the user must complete the survey first.
+      _surveyRedirectUrl = data.redirect || '/report';
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+        document.getElementById('surveyOverlay').classList.remove('hidden');
+      }, 600);
     } catch(err) {
       clearTimeout(abortTimer);
       timers.forEach(clearTimeout);

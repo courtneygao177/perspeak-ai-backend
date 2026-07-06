@@ -5112,6 +5112,33 @@ def api_finish_presentation():
     return jsonify({"success": True, "redirect": "/report"})
 
 
+@app.route("/x/submit-survey", methods=["POST"])
+def api_submit_survey():
+    """
+    Receive and store post-session bilingual survey responses.
+    Called by the survey gate overlay in sandbox.html after the user fills in
+    Q1–Q3 (required) and optionally Q4 (email referral) before navigating to /report.
+    Non-blocking on the client: a 200 or any error here must never prevent the redirect.
+    """
+    data = request.get_json(silent=True) or {}
+    import datetime as _dt
+    session["survey_response"] = {
+        "q1_barrier":        data.get("q1_barrier", ""),
+        "q2_segment":        data.get("q2_segment", ""),
+        "q3_referral_check": data.get("q3_referral_check", ""),
+        "q4_emails":         data.get("q4_emails", ""),
+        "submitted_at":      _dt.datetime.utcnow().isoformat(),
+    }
+    app.logger.info(
+        f"[SURVEY] response recorded — "
+        f"q1={session['survey_response']['q1_barrier']} | "
+        f"q2={session['survey_response']['q2_segment']} | "
+        f"q3={session['survey_response']['q3_referral_check']} | "
+        f"q4_len={len(session['survey_response']['q4_emails'])}"
+    )
+    return jsonify({"ok": True})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=True)

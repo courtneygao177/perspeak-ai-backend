@@ -1,0 +1,41 @@
+<form onSubmit={handleSubmit}>
+          {SURVEY_QUESTIONS.map((q) => (
+            <div key={q.id} style={{ marginBottom: '22px', textAlign: 'left' }}>
+              <label style={{ display: 'block', fontWeight: '600', fontSize: '15px', color: '#2D3748', marginBottom: '4px' }}>{q.question_en}</label>
+              <label style={{ display: 'block', fontSize: '13px', color: '#4A5568', marginBottom: '10px', marginTop: '-2px' }}>{q.question_zh}</label>
+              
+              {q.type === 'radio' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {q.options.map((opt) => (
+                    <label key={opt.value} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px', cursor: 'pointer', background: '#FFF', padding: '10px', borderRadius: '8px', border: '1px solid #EDF2F7' }}>
+                      <input 
+                        type="radio" 
+                        name={q.id} 
+                        value={opt.value} 
+                        checked={answers[q.id] === opt.value}
+                        onChange={() => handleRadioChange(q.id, opt.value)}
+                        disabled={isSubmitted}
+                        style={{ marginTop: '4px' }}
+                      />
+                      <div>
+                        <span style={{ display: 'block', color: '#2D3748' }}>{opt.en}</span>
+                        <span style={{ display: 'block', fontSize: '12px', color: '#718096' }}>{opt.zh}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginTop: '5px' }}>
+                  <input 
+                    type="text" 
+                    placeholder={answers.q3_referral_check === 'no' ? "Thank you! You can leave this blank. / 谢谢！此处可留空。" : q.placeholder_en}
+                    value={answers[q.id]}
+                    onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                    disabled={isSubmitted || answers.q3_referral_check === 'no'}
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #CBD5E0', boxSizing: 'border-box', fontSize: '14px' }}
+                  />
+                  <p style={{ fontSize: '11px', color: '#A0AEC0', margin: '4px 0 0 2px' }}>{q.placeholder_zh}</p>
+                </div>
+              )}
+            </div>
+          ))}
