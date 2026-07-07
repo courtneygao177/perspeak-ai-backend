@@ -1,0 +1,21 @@
+kind = "api"
+previewPath = "/"
+title = "PerspeakAI"
+
+[[services]]
+localPort = 8000
+name = "PerspeakAI"
+paths = ["/"]
+
+[services.development]
+run = "python artifacts/ai-presentation/app.py"
+
+[services.production.run]
+args = ["python", "artifacts/ai-presentation/app.py"]
+
+[services.production.run.env]
+PORT = "8000"
+FLASK_ENV = "production"
+
+[services.production.health.startup]
+path = "/"
