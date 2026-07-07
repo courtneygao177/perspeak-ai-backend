@@ -10,6 +10,8 @@ paths = ["/"]
 [services.development]
 run = "python artifacts/ai-presentation/app.py"
 
+[services.production]
+
 [services.production.run]
 args = ["python", "artifacts/ai-presentation/app.py"]
 
