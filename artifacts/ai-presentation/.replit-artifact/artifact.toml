@@ -8,12 +8,12 @@ name = "PerspeakAI"
 paths = ["/"]
 
 [services.development]
-run = "python artifacts/ai-presentation/app.py"
+run = "python app.py"
 
 [services.production]
 
 [services.production.run]
-args = ["python", "artifacts/ai-presentation/app.py"]
+args = ["python", "app.py"]
 
 [services.production.run.env]
 PORT = "8000"
