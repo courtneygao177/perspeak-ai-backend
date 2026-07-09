@@ -4195,7 +4195,7 @@ def _render_pptx_page(filepath, page_num):
                 if y > H - 72:
                     break
                 body_els.append(
-                    f'<text x="68" y="{y}" font-size="19" fill="#acb2d8" '
+                    f'<text x="68" y="{y}" font-size="19" fill="#3A4045" '
                     f'font-family={CJK_FONTS!r}>'
                     f'&#9656;&#160;&#160;{esc(line[:115])}</text>'
                 )
@@ -4209,18 +4209,18 @@ def _render_pptx_page(filepath, page_num):
             f'width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
             f'<defs>'
             f'  <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">'
-            f'    <stop offset="0%" stop-color="#0c0c1c"/>'
-            f'    <stop offset="100%" stop-color="#10102a"/>'
+            f'    <stop offset="0%" stop-color="#FFFFFF"/>'
+            f'    <stop offset="100%" stop-color="#F6F5F0"/>'
             f'  </linearGradient>'
             f'</defs>'
             f'<rect width="{W}" height="{H}" fill="url(#bg)"/>'
-            f'<rect width="{W}" height="114" fill="#161638"/>'
-            f'<rect x="0" y="112" width="{W}" height="2" fill="#4848c8"/>'
-            f'<text x="52" y="76" font-size="32" font-weight="700" fill="#d8dcff" '
+            f'<rect width="{W}" height="114" fill="#191C1E"/>'
+            f'<rect x="0" y="112" width="{W}" height="2" fill="#D9481F"/>'
+            f'<text x="52" y="76" font-size="32" font-weight="700" fill="#F6F5F0" '
             f'font-family={CJK_FONTS!r}>{esc(title_text[:90])}</text>'
             + "".join(body_els)
-            + f'<rect x="{W - 188}" y="{H - 48}" width="166" height="28" rx="5" fill="#1c1c44"/>'
-            f'<text x="{W - 180}" y="{H - 28}" font-size="13" fill="#6870aa" '
+            + f'<rect x="{W - 188}" y="{H - 48}" width="166" height="28" rx="5" fill="#EEECE5"/>'
+            f'<text x="{W - 180}" y="{H - 28}" font-size="13" fill="#6B7075" '
             f'font-family="monospace,sans-serif">{esc(badge)}</text>'
             f"</svg>"
         )
@@ -4421,10 +4421,10 @@ def slide_image(page):
     if not filepath:
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500">'
-            f'<rect width="800" height="500" fill="#12121f"/>'
-            f'<text x="400" y="240" text-anchor="middle" fill="#6366f1" '
+            f'<rect width="800" height="500" fill="#191C1E"/>'
+            f'<text x="400" y="240" text-anchor="middle" fill="#D9481F" '
             f'font-size="22" font-family="monospace">Slide {page}</text>'
-            f'<text x="400" y="275" text-anchor="middle" fill="#374151" '
+            f'<text x="400" y="275" text-anchor="middle" fill="#8A8F92" '
             f'font-size="14" font-family="sans-serif">No file uploaded — mock mode</text>'
             f'</svg>'
         )

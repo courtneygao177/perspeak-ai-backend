@@ -4,42 +4,42 @@
 {% block nav_steps %}
 <span class="text-slate-400">Upload</span>
 <span class="text-slate-300 mx-1">→</span>
-<span class="font-semibold" style="color:#059669">Step 2 of 4 — Configure</span>
+<span class="font-semibold" style="color:#D9481F">Step 2 of 4 — Configure</span>
 {% endblock %}
 
 {% block content %}
 <div class="relative min-h-screen px-6 py-16 overflow-hidden">
-  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(5,150,105,0.06)"></div>
-  <div class="orb w-64 h-64 bottom-0 left-0" style="background:rgba(59,130,246,0.05)"></div>
+  <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(217,72,31,0.05)"></div>
+  <div class="orb w-64 h-64 bottom-0 left-0" style="background:rgba(70,98,111,0.05)"></div>
 
   <div class="relative z-10 max-w-4xl mx-auto animate-fade-in">
-    <div class="text-center mb-10">
-      <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full mb-5 border"
-           style="color:#059669;background:#E6F4EA;border-color:#bbf7d0">
-        <span class="w-1.5 h-1.5 rounded-full" style="background:#059669"></span>
+    <div class="mb-10">
+      <div class="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-wider px-3 py-1.5 mb-5 border"
+           style="border-radius:3px;color:#B93C18;background:#FDF3ED;border-color:#F3CDB9">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:#D9481F"></span>
         {{ slides|length }} slides ready
-        {% if ai_enabled %} · AI Engine Active{% endif %}
+        {% if ai_enabled %} · AI engine live{% endif %}
       </div>
-      <h2 class="text-4xl font-bold text-[#0F172A] mb-3">Set Up Your Practice</h2>
-      <p class="text-slate-400 text-base">Choose your audience, scenario, and pressure level.</p>
+      <h2 class="text-4xl font-extrabold uppercase tracking-tight text-[#191C1E] mb-3">Set up your drill</h2>
+      <p class="text-base" style="color:#6B7075">Choose your audience, scenario, and pressure level.</p>
     </div>
 
     <!-- PPT Logic Tree Panel -->
     <details id="logicTree" open
-             class="mb-8 rounded-2xl overflow-hidden"
-             style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(15,23,42,0.06)"
+             class="mb-8 rounded-md overflow-hidden"
+             style="background:#ffffff;border:1px solid #DAD7CE;box-shadow:0 1px 4px rgba(25,28,30,0.05)"
       <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none select-none
                       hover:bg-slate-50 transition-colors" style="display:flex;list-style:none">
         <div class="flex items-center gap-3">
           <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-               style="background:#E6F4EA">
-            <svg class="w-3.5 h-3.5" style="color:#059669" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               style="background:#FAE5D9">
+            <svg class="w-3.5 h-3.5" style="color:#D9481F" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M4 6h16M4 10h16M4 14h8"/>
             </svg>
           </div>
           <div>
-            <p class="text-sm font-semibold text-[#0F172A]">PPT 逻辑树</p>
+            <p class="text-sm font-semibold text-[#191C1E]">PPT 逻辑树</p>
             <p class="text-xs text-gray-600">共 {{ slides|length }} 张幻灯片 · 点击收起</p>
           </div>
         </div>
@@ -53,33 +53,33 @@
         <div class="relative">
           <!-- Vertical connecting spine -->
           <div class="absolute left-[1.375rem] top-6 w-px"
-               style="bottom:1.75rem;background:linear-gradient(180deg,rgba(5,150,105,.35),rgba(5,150,105,.04))">
+               style="bottom:1.75rem;background:linear-gradient(180deg,rgba(217,72,31,.35),rgba(217,72,31,.04))">
           </div>
 
           <div class="space-y-2.5">
             {% for slide in slides %}
             <div class="relative flex gap-3 items-start">
               <!-- Node badge -->
-              <div class="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center z-10
+              <div class="flex-shrink-0 w-11 h-11 rounded-md flex items-center justify-center z-10
                           text-xs font-bold font-mono
                           {% if loop.first %}
-                            text-white" style="background:#059669"
+                            text-white" style="background:#D9481F"
                           {% elif loop.last %}
-                            text-white" style="background:#34d399"
+                            text-white" style="background:#E8734A"
                           {% else %}
-                            border" style="color:#059669;border-color:#bbf7d0;background:#f0fdf6"
+                            border" style="color:#D9481F;border-color:#F3CDB9;background:#FDF3ED"
                           {% endif %}>
                 {{ slide.page }}
               </div>
               <!-- Content card -->
-              <div class="flex-1 min-w-0 rounded-xl px-4 py-2.5
-                          {% if loop.first %}border" style="border-color:#bbf7d0;background:#f0fdf6"
-                          {% else %}border" style="border-color:#e2e8f0;background:#ffffff"{% endif %}>
-                <p class="text-sm font-semibold text-[#0F172A] leading-snug mb-0.5 truncate">
+              <div class="flex-1 min-w-0 rounded-md px-4 py-2.5
+                          {% if loop.first %}border" style="border-color:#F3CDB9;background:#FDF3ED"
+                          {% else %}border" style="border-color:#DAD7CE;background:#ffffff"{% endif %}>
+                <p class="text-sm font-semibold text-[#191C1E] leading-snug mb-0.5 truncate">
                   {{ slide.title or ('Slide ' ~ slide.page) }}
                 </p>
                 {% if slide.content %}
-                <p class="text-xs leading-relaxed" style="color:#6b7280;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+                <p class="text-xs leading-relaxed" style="color:#6B7075;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
                   {{ slide.content[:180] }}{% if slide.content|length > 180 %}…{% endif %}
                 </p>
                 {% endif %}
@@ -95,24 +95,24 @@
 
       <!-- AUDIENCE -->
       <div>
-        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#B93C18]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
-                style="background:#059669">1</span>
+                style="background:#D9481F">1</span>
           选择听众角色
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set audiences = [
-            ('Professor', '🎓', [
+            ('Professor', 'Rigorous · Detail-first', [
               '提问冗长且注重细节',
               '极度看重逻辑与数据论据',
               '要求学术严谨性，直击论文痛点',
             ]),
-            ('Classmates', '👥', [
+            ('Classmates', 'Friendly · Curious', [
               '态度友善，充满好奇心',
               '倾向于提出应用层面的实际问题',
               '渴望听到生动的现实案例',
             ]),
-            ('VC', '💼', [
+            ('VC', 'Cold · Results-only', [
               '冷静务实，结果导向',
               '提问短促、言辞犀利',
               '只关心核心数据与商业变现',
@@ -121,14 +121,14 @@
           {% for val, icon, bullets in audiences %}
           <label class="config-card cursor-pointer group" data-group="audience" data-value="{{ val }}">
             <input type="radio" name="audience" value="{{ val }}" class="sr-only" {% if val == 'Professor' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 transition-all duration-200 h-full"
+            <div class="glass rounded-md p-5 border-2 transition-all duration-200 h-full"
                  style="border-color:transparent">
-              <div class="text-2xl mb-3">{{ icon }}</div>
-              <div class="font-semibold text-[#0F172A] mb-3">{{ val }}</div>
+              <div class="font-mono text-[0.62rem] uppercase tracking-widest mb-2" style="color:#D9481F">{{ icon }}</div>
+              <div class="font-bold text-[#191C1E] mb-3 uppercase tracking-wide">{{ val }}</div>
               <ul class="space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#D9481F;opacity:.7">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -140,24 +140,24 @@
 
       <!-- SCENARIO -->
       <div>
-        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#B93C18]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
-                style="background:#059669">2</span>
+                style="background:#D9481F">2</span>
           选择演练场景
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set scenarios = [
-            ('Class Presentation', '📖', 'smooth', [
+            ('Class Presentation', 'Uninterrupted + Q&A after', 'smooth', [
               '展示过程中无突然打断',
               '演讲结束后由同学或教授提问',
               '进入标准会后 Q&A 答辩环节',
             ]),
-            ('Thesis Defense', '🔬', 'qa', [
+            ('Thesis Defense', 'Structured defense panel', 'qa', [
               '演讲结束后进入结构化论文答辩问答环节',
               '针对研究动机、方法论、理论框架等核心维度提问',
               '题目数量依难度调整（简单3题 / 中等5题 / 困难8题）',
             ]),
-            ('MBA Case Pitch', '📈', 'hard_interrupt', [
+            ('MBA Case Pitch', 'Live interrupts, no mercy', 'hard_interrupt', [
               '模拟挑剔投资人的随时对抗式打断',
               '直击商业模式、市场壁垒等硬核挑战',
               '全程高压，没有客套，直面利益核心',
@@ -166,23 +166,23 @@
           {% for val, icon, interrupt_type, bullets in scenarios %}
           <label class="config-card cursor-pointer group" data-group="scenario" data-value="{{ val }}">
             <input type="radio" name="scenario" value="{{ val }}" class="sr-only" {% if val == 'Class Presentation' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 transition-all duration-200 h-full"
+            <div class="glass rounded-md p-5 border-2 transition-all duration-200 h-full"
                  style="border-color:transparent">
-              <div class="text-2xl mb-3">{{ icon }}</div>
+              <div class="font-mono text-[0.62rem] uppercase tracking-widest mb-2" style="color:#D9481F">{{ icon }}</div>
               <div class="flex items-start justify-between mb-3">
-                <div class="font-semibold text-[#0F172A] leading-tight">{{ val }}</div>
+                <div class="font-bold text-[#191C1E] leading-tight uppercase tracking-wide">{{ val }}</div>
                 {% if interrupt_type == 'smooth' %}
-                <span class="text-xs bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">✓ 温和互动</span>
+                <span class="text-xs bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-sm ml-2 flex-shrink-0">温和互动</span>
                 {% elif interrupt_type == 'qa' %}
-                <span class="text-xs bg-blue-100 text-blue-700 border border-blue-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">📋 学术问答</span>
+                <span class="text-xs bg-blue-100 text-blue-700 border border-blue-300 px-1.5 py-0.5 rounded-sm ml-2 flex-shrink-0">学术问答</span>
                 {% else %}
-                <span class="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">⚡ 高压打断</span>
+                <span class="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded-sm ml-2 flex-shrink-0">高压打断</span>
                 {% endif %}
               </div>
               <ul class="space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span>{{ b }}
+                  <span class="mt-0.5 flex-shrink-0" style="color:#D9481F;opacity:.7">·</span>{{ b }}
                 </li>
                 {% endfor %}
               </ul>
@@ -194,24 +194,24 @@
 
       <!-- DIFFICULTY -->
       <div>
-        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#047857]">
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#B93C18]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
-                style="background:rgba(5,150,105,0.25)">3</span>
+                style="background:#D9481F">3</span>
           选择高压等级
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% set difficulties = [
-            ('Easy',   '🟢', '温和支持', [
+            ('Easy',   1, '温和支持', [
               '听众全程表现支持与鼓励',
               '仅包含 1 个简单的澄清性问题',
               '无攻击性追问，体验轻松',
             ]),
-            ('Medium', '🟡', '正常互动', [
+            ('Medium', 2, '正常互动', [
               '标准的日常演讲/答辩环境',
               '包含 1-2 个层层深入的连环追问',
               '难度均衡，兼顾展示与适度对抗',
             ]),
-            ('Hard',   '🔴', '高压死磕', [
+            ('Hard',   3, '高压死磕', [
               '听众立场挑剔，充满质疑',
               '连珠炮式的持续对抗追问',
               '全程没有任何客套夸奖，纯压力测试',
@@ -220,17 +220,21 @@
           {% for val, dot, zh, bullets in difficulties %}
           <label class="config-card cursor-pointer group" data-group="difficulty" data-value="{{ val }}">
             <input type="radio" name="difficulty" value="{{ val }}" class="sr-only" {% if val == 'Medium' %}checked{% endif %}>
-            <div class="glass rounded-xl p-5 border-2 transition-all duration-200 h-full"
+            <div class="glass rounded-md p-5 border-2 transition-all duration-200 h-full"
                  style="border-color:transparent">
-              <div class="text-2xl mb-3">{{ dot }}</div>
-              <div class="font-semibold text-[#0F172A] mb-0.5">
+              <div class="flex gap-1 mb-3" aria-hidden="true">
+                {% for i in range(3) %}
+                <span class="h-1.5 w-7" style="background:{% if i < dot %}#D9481F{% else %}#DAD7CE{% endif %}"></span>
+                {% endfor %}
+              </div>
+              <div class="font-bold text-[#191C1E] mb-0.5 uppercase tracking-wide">
                 {{ val }}
-                <span class="text-xs font-normal ml-1.5" style="color:#059669;opacity:.8">{{ zh }}</span>
+                <span class="text-xs font-normal ml-1.5" style="color:#D9481F;opacity:.8">{{ zh }}</span>
               </div>
               <ul class="mt-3 space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#059669;opacity:.7">·</span><span class="bullet-text">{{ b }}</span>
+                  <span class="mt-0.5 flex-shrink-0" style="color:#D9481F;opacity:.7">·</span><span class="bullet-text">{{ b }}</span>
                 </li>
                 {% endfor %}
               </ul>
@@ -243,20 +247,20 @@
       <!-- Submit -->
       <div class="pt-2">
         <button type="submit"
-                class="w-full btn-primary text-white font-semibold py-4 rounded-xl text-base
-                       flex items-center justify-center gap-3">
+                class="w-full btn-primary font-bold py-4 text-sm uppercase tracking-widest
+                       flex items-center justify-center gap-3" style="border-radius:4px">
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          <span id="submitText">Start Rehearsal</span>
+          <span id="submitText">Start drill</span>
           <svg id="submitSpinner" class="hidden w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
           </svg>
         </button>
-        <p id="engineStatus" class="hidden text-center text-xs mt-3 animate-pulse" style="color:#059669">
+        <p id="engineStatus" class="hidden text-center text-xs mt-3 animate-pulse" style="color:#D9481F">
           AI is reading your slides…
         </p>
       </div>
@@ -276,7 +280,7 @@
         d.style.borderColor = 'transparent';
         d.style.background = '';
       });
-      if (radio.checked) { inner.style.borderColor = '#059669'; inner.style.background = 'rgba(5,150,105,0.06)'; }
+      if (radio.checked) { inner.style.borderColor = '#D9481F'; inner.style.background = 'rgba(217,72,31,0.05)'; }
     }
     card.addEventListener('click', () => {
       if (card.dataset.disabled === 'true') return;   // block disabled cards
@@ -322,7 +326,7 @@
           d.style.background = '';
         });
         const profGlass = profCard?.querySelector('.glass');
-        if (profGlass) { profGlass.style.borderColor = '#059669'; profGlass.style.background = 'rgba(5,150,105,0.06)'; }
+        if (profGlass) { profGlass.style.borderColor = '#D9481F'; profGlass.style.background = 'rgba(217,72,31,0.05)'; }
       }
     }
   }
@@ -414,7 +418,7 @@
       const msg = err.name === 'AbortError'
         ? 'Request timed out (90 sec). Please check your API connection and try again.'
         : `Network error: ${err.message}`;
-      document.getElementById('engineStatus').textContent = '❌ ' + msg;
+      document.getElementById('engineStatus').textContent = 'ERROR — ' + msg;
       document.getElementById('engineStatus').classList.add('text-red-400');
       document.getElementById('submitText').textContent = 'Try Again';
       document.getElementById('submitSpinner').classList.add('hidden');
