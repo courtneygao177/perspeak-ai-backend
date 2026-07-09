@@ -1,0 +1,26 @@
+# Node/monorepo scaffolding — not needed by the Python function
+node_modules
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+tsconfig.json
+tsconfig.base.json
+lib
+scripts
+artifacts/api-server
+artifacts/mockup-sandbox
+
+# Python project files that would confuse the runtime's dependency detection
+pyproject.toml
+uv.lock
+main.py
+.venv
+
+# Replit leftovers, agent notes, local data — keep the bundle small (<250MB)
+.replit
+.replitignore
+replit.md
+.agents
+attached_assets
+artifacts/ai-presentation/uploads
+.npmrc

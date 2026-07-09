@@ -15,6 +15,8 @@ except ImportError:
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from werkzeug.utils import secure_filename
 import audio_engine
+import server_store
+from server_store import store
 from config.defense_knowledge_base import (
     DEFENSE_QUESTION_BANK,
     INTERRUPT_STRATEGIES,
@@ -23,55 +25,59 @@ from config.defense_knowledge_base import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "ai-presentation-dev-secret-2024")
-app.config["UPLOAD_FOLDER"] = os.path.join(os.path.dirname(__file__), "uploads")
+# Server-side sessions: the whole session dict lives in the Store (local disk
+# in dev, Vercel Blob in prod); the cookie carries only a UUID. This removes
+# the 4KB cookie ceiling that silently rolled back session state mid-run.
+app.session_interface = server_store.StoreSessionInterface()
+if os.environ.get("VERCEL") == "1":
+    app.config["SESSION_COOKIE_SECURE"] = True
+app.config["UPLOAD_FOLDER"] = os.path.join(server_store.local_data_dir(), "files")
 
-# ── Server-side report store (avoids 4KB cookie overflow) ─────────────────────
-# Large blobs (evaluation, qa_bank, answers) are written to disk as JSON files
-# keyed by a UUID. Only the 36-char key is stored in the session cookie.
-_REPORT_DIR = os.path.join(os.path.dirname(__file__), "uploads", "reports")
+# ── Server-side report store ──────────────────────────────────────────────────
+# Large blobs (evaluation, qa_bank, answers) are stored as JSON in the Store,
+# keyed by a UUID. Only the 36-char key is kept in the session.
 
 def _save_report(evaluation, qa_bank, answers):
-    """Persist report blobs to disk; return key to store in session."""
-    os.makedirs(_REPORT_DIR, exist_ok=True)
+    """Persist report blobs to the store; return key to store in session."""
     key = str(uuid.uuid4())
     payload = {"evaluation": evaluation, "qa_bank": qa_bank, "answers": answers}
-    with open(os.path.join(_REPORT_DIR, f"{key}.json"), "w") as fh:
-        json.dump(payload, fh)
+    store.put_json(f"reports/{key}.json", payload)
     return key
 
 def _load_report(key):
-    """Load report blobs from disk; returns None if missing/corrupt."""
+    """Load report blobs from the store; returns None if missing/corrupt."""
     if not key:
         return None
-    path = os.path.join(_REPORT_DIR, f"{key}.json")
-    try:
-        with open(path) as fh:
-            return json.load(fh)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
+    return store.get_json(f"reports/{key}.json")
 
-# ── Server-side slides store (avoids 4KB cookie overflow on large decks) ──────
-_SLIDES_DIR = os.path.join(os.path.dirname(__file__), "uploads", "slide_store")
+# ── Server-side slides store ──────────────────────────────────────────────────
 
 def _save_slides(slides):
-    """Write slides list to disk; return the UUID key to store in session."""
-    os.makedirs(_SLIDES_DIR, exist_ok=True)
+    """Write slides list to the store; return the UUID key for the session."""
     key = str(uuid.uuid4())
-    with open(os.path.join(_SLIDES_DIR, f"{key}.json"), "w", encoding="utf-8") as fh:
-        json.dump(slides, fh, ensure_ascii=False)
+    store.put_json(f"slide_store/{key}.json", slides)
     return key
 
 def _load_slides(session_obj):
-    """Load slides from disk using session's slide_key. Falls back to MOCK_SLIDES."""
+    """Load slides from the store using session's slide_key. Falls back to MOCK_SLIDES."""
     key = session_obj.get("slide_key", "")
     if not key:
         return MOCK_SLIDES
-    path = os.path.join(_SLIDES_DIR, f"{key}.json")
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return MOCK_SLIDES
+    return store.get_json(f"slide_store/{key}.json", default=MOCK_SLIDES)
+
+def _local_source_file(session_obj):
+    """Local path of the uploaded deck, re-fetched from Blob if this instance
+    never saw it (serverless instances don't share /tmp). None if unavailable."""
+    file_key = session_obj.get("file_key", "")
+    if file_key:
+        path = store.ensure_local_file(f"files/{file_key}")
+        if path:
+            return path
+    # dev fallback: legacy filepath written by older sessions
+    filepath = session_obj.get("filepath", "")
+    if filepath and os.path.exists(filepath):
+        return filepath
+    return None
 
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
@@ -4094,7 +4100,7 @@ def sandbox():
     slides = _load_slides(session)
     cfg = session.get("config", {})
     current_slide = next((s for s in slides if s["page"] == state["current_page"]), slides[0])
-    has_file = bool(session.get("filepath") and os.path.exists(session.get("filepath", "")))
+    has_file = bool(_local_source_file(session))
     return render_template(
         "sandbox.html",
         state=state,
@@ -4411,8 +4417,8 @@ Return ONLY a valid JSON object — no markdown, no code fences, no comments:
 def slide_image(page):
     """Serve a specific slide page as PNG — PDF via fitz, PPTX via Pillow."""
     from flask import Response as _R
-    filepath = session.get("filepath", "")
-    if not filepath or not os.path.exists(filepath):
+    filepath = _local_source_file(session)
+    if not filepath:
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500">'
             f'<rect width="800" height="500" fill="#12121f"/>'
@@ -4445,9 +4451,11 @@ def slide_image(page):
         p   = doc[page - 1]
         mat = fitz.Matrix(2.0, 2.0)
         pix = p.get_pixmap(matrix=mat)
-        img_bytes = pix.tobytes("png")
+        # JPEG, not PNG: photo-heavy pages rendered at 2x can exceed the
+        # 4.5MB response cap of Vercel serverless functions as PNG
+        img_bytes = pix.tobytes("jpg", jpg_quality=82)
         doc.close()
-        return _R(img_bytes, mimetype="image/png",
+        return _R(img_bytes, mimetype="image/jpeg",
                   headers={"Cache-Control": "max-age=3600"})
     except Exception as e:
         app.logger.error(f"slide_image page={page} failed: {e}")
@@ -4504,46 +4512,91 @@ def api_upload():
         else:
             filename = safe_stem
 
-        os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        file.save(save_path)
-        app.logger.info(f"File saved: {save_path}")
-
-        ext = orig_ext
-
-        # Step 1a: PDF image extraction happens later in /x/start-session for Vision.
-        # We only do text extraction here so the config page shows the real page count fast.
-
-        # Build real (text-extracted) slide previews immediately — no AI call.
-        # These give the config page the REAL page count + titles.
-        # Vision analysis in /x/start-session will REPLACE these with richer AI output.
-        # We NEVER store base64 images in the Flask session (4 KB cookie limit).
-        if ext == "pdf":
-            slides_preview = extract_pdf_text_slides(save_path)
-        elif ext in ("ppt", "pptx"):
-            ppt_data = extract_ppt_images_as_base64(save_path)
-            slides_preview = pptx_to_slides(ppt_data) if ppt_data else MOCK_SLIDES
-        else:
-            slides_preview = MOCK_SLIDES
-
-        session["slide_key"] = _save_slides(slides_preview)   # real page count, real text
-        session["filename"] = filename
-        session["filepath"] = save_path        # start-session re-reads from disk
-        session["answers"]  = []
-        session["qa_bank"]  = []
-
-        page_count = len(slides_preview)
-        return jsonify({
-            "success":    True,
-            "filename":   filename,
-            "page_count": page_count,
-            "ai_pending": AI_ENABLED and ext == "pdf",
-            "message":    f"File uploaded. {page_count} page(s) ready for AI analysis.",
-        })
+        file_key = f"{uuid.uuid4()}.{orig_ext}"
+        store.put(f"files/{file_key}", file.read())
+        return _ingest_uploaded_file(file_key, orig_ext, filename)
 
     except Exception as e:
         traceback.print_exc()   # Full stack trace visible in Replit workflow logs
         app.logger.error(f"Upload failed: {e}")
+        return jsonify({"error": str(e), "status": "error"}), 500
+
+
+def _ingest_uploaded_file(file_key, ext, filename):
+    """Shared tail of the upload flow: build text-extracted slide previews and
+    initialise the session. `file_key` must already exist in the store."""
+    save_path = store.ensure_local_file(f"files/{file_key}")
+    app.logger.info(f"File ingested: {file_key} → {save_path}")
+
+    # Step 1a: PDF image extraction happens later in /x/start-session for Vision.
+    # We only do text extraction here so the config page shows the real page count fast.
+
+    # Build real (text-extracted) slide previews immediately — no AI call.
+    # These give the config page the REAL page count + titles.
+    # Vision analysis in /x/start-session will REPLACE these with richer AI output.
+    if ext == "pdf":
+        slides_preview = extract_pdf_text_slides(save_path)
+    elif ext in ("ppt", "pptx"):
+        ppt_data = extract_ppt_images_as_base64(save_path)
+        slides_preview = pptx_to_slides(ppt_data) if ppt_data else MOCK_SLIDES
+    else:
+        slides_preview = MOCK_SLIDES
+
+    session["slide_key"] = _save_slides(slides_preview)   # real page count, real text
+    session["filename"] = filename
+    session["file_key"] = file_key         # start-session re-reads via the store
+    session["answers"]  = []
+    session["qa_bank"]  = []
+
+    page_count = len(slides_preview)
+    return jsonify({
+        "success":    True,
+        "filename":   filename,
+        "page_count": page_count,
+        "ai_pending": AI_ENABLED and ext == "pdf",
+        "message":    f"File uploaded. {page_count} page(s) ready for AI analysis.",
+    })
+
+
+@app.route("/x/blob-token", methods=["POST"])
+def api_blob_token():
+    """Issue a short-lived client token so the browser can PUT the deck
+    straight to Vercel Blob — bypasses the 4.5MB serverless body limit."""
+    if not store.blob_enabled:
+        return jsonify({"enabled": False})
+    data = request.get_json(silent=True) or {}
+    orig_name = data.get("filename", "")
+    ext = os.path.splitext(orig_name)[1].lstrip(".").lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({"error": "Invalid file type. Please upload PDF, PPT, or PPTX."}), 400
+    file_key = f"{uuid.uuid4()}.{ext}"
+    token = store.client_upload_token(f"files/{file_key}")
+    return jsonify({"enabled": True, "clientToken": token, "fileKey": file_key})
+
+
+@app.route("/x/upload-blob", methods=["POST"])
+def api_upload_blob():
+    """Finish a browser→Blob direct upload: client reports the fileKey it was
+    granted by /x/blob-token; we verify the blob exists and ingest it."""
+    try:
+        data = request.get_json(silent=True) or {}
+        file_key  = data.get("file_key", "")
+        orig_name = data.get("filename", "upload")
+        ext = os.path.splitext(file_key)[1].lstrip(".").lower()
+        # file_key must look exactly like what /x/blob-token issues
+        stem = file_key[: -(len(ext) + 1)] if ext else ""
+        try:
+            uuid.UUID(stem)
+        except ValueError:
+            return jsonify({"error": "Invalid file key"}), 400
+        if ext not in ALLOWED_EXTENSIONS:
+            return jsonify({"error": "Invalid file type"}), 400
+        if store.ensure_local_file(f"files/{file_key}") is None:
+            return jsonify({"error": "Uploaded file not found in blob store"}), 400
+        return _ingest_uploaded_file(file_key, ext, secure_filename(orig_name) or f"upload.{ext}")
+    except Exception as e:
+        traceback.print_exc()
+        app.logger.error(f"Blob upload ingest failed: {e}")
         return jsonify({"error": str(e), "status": "error"}), 500
 
 
@@ -4559,12 +4612,12 @@ def api_start_session():
     difficulty = data.get("difficulty", "Medium")
 
     # ── Step 2: Vision analysis — re-read file from disk (images never stored in cookie) ──
-    filepath = session.get("filepath", "")
+    filepath = _local_source_file(session)
     filename = session.get("filename", "")
     # Start with whatever text-extracted slides were stored during upload (real page count)
     slides   = _load_slides(session)
     try:
-        if filepath and os.path.exists(filepath) and AI_ENABLED:
+        if filepath and AI_ENABLED:
             ext = filepath.rsplit(".", 1)[-1].lower()
             if ext == "pdf":
                 app.logger.info(f"Re-extracting PDF images from {filepath}…")
@@ -4901,7 +4954,7 @@ def api_speechace_score():
         return jsonify({"error": "No audio provided"}), 400
 
     # ── Resolve authoritative reference text from slide content ──────────────
-    slides = _load_slides()
+    slides = _load_slides(session)
     slide_ref = ""
     for s in slides:
         if s.get("page") == page:
@@ -5141,5 +5194,7 @@ def api_submit_survey():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    debug = os.environ.get("FLASK_ENV", "development") != "production"
+    # debug only when explicitly requested — the Werkzeug debugger allows
+    # arbitrary code execution and must never be exposed on a public host
+    debug = os.environ.get("FLASK_ENV", "") == "development"
     app.run(host="0.0.0.0", port=port, debug=debug)

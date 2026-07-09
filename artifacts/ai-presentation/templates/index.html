@@ -252,14 +252,47 @@
     ];
     const timers = steps.map(s => setTimeout(() => setProgress(s.pct, s.text), s.delay));
 
-    const fd = new FormData();
-    fd.append('file', selectedFile);
-
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
 
     try {
-      const res = await fetch('/x/upload', { method: 'POST', body: fd, signal: controller.signal });
+      // Direct-to-Blob upload when available (bypasses the 4.5MB request
+      // body limit of Vercel serverless functions); falls back to classic
+      // multipart POST for local/dev deployments without a blob store.
+      let res = null;
+      const tokRes = await fetch('/x/blob-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: selectedFile.name }),
+        signal: controller.signal,
+      });
+      const tok = tokRes.ok ? await tokRes.json() : { enabled: false };
+      if (tok.enabled && tok.clientToken) {
+        const blobRes = await fetch(
+          'https://vercel.com/api/blob/?pathname=' + encodeURIComponent('perspeak/files/' + tok.fileKey),
+          {
+            method: 'PUT',
+            body: selectedFile,
+            headers: {
+              'authorization': 'Bearer ' + tok.clientToken,
+              'x-api-version': '12',
+              'x-content-type': 'application/octet-stream',
+            },
+            signal: controller.signal,
+          }
+        );
+        if (!blobRes.ok) throw new Error('Blob upload failed (HTTP ' + blobRes.status + ')');
+        res = await fetch('/x/upload-blob', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_key: tok.fileKey, filename: selectedFile.name }),
+          signal: controller.signal,
+        });
+      } else {
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        res = await fetch('/x/upload', { method: 'POST', body: fd, signal: controller.signal });
+      }
       clearTimeout(timeoutId);
       timers.forEach(clearTimeout);
       let data;
@@ -274,7 +307,7 @@
       clearTimeout(timeoutId);
       timers.forEach(clearTimeout);
       if (err.name === 'AbortError') {
-        showError('Request timed out (60s). AI Vision is slow — check relay speed and retry.');
+        showError('Request timed out (180s). Slow network or oversized file — please retry.');
       } else {
         showError(`Network error: ${err.message || 'Check your connection and retry.'}`);
       }
