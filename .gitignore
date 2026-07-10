@@ -47,3 +47,14 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Vercel
+.vercel
+
+# Runtime data — user uploads and generated reports must never be committed
+artifacts/ai-presentation/uploads/
