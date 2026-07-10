@@ -655,40 +655,6 @@
             </div>
           </div>
           {% endfor %}
-
-          <!-- ── Speechace Pronunciation Diagnostic ─────────────────────── -->
-          {% set pd = slide.get('pronunciation_diagnostic') %}
-          {% if pd and (pd.get('overall_score', 0) > 0 or pd.get('summary_text') or pd.get('error_list')) %}
-          <div class="mt-4 rounded-xl border border-indigo-200/70 bg-indigo-50/50 overflow-hidden">
-            <div class="flex items-center justify-between px-3 py-2 bg-indigo-100/60">
-              <span class="text-xs font-bold text-indigo-800">️ Speechace 发音诊断</span>
-              <span class="text-xs font-semibold px-2 py-0.5 rounded-full
-                           {% if pd.overall_score >= 80 %}bg-emerald-100 text-emerald-700
-                           {% elif pd.overall_score >= 60 %}bg-amber-100 text-amber-700
-                           {% else %}bg-red-100 text-red-700{% endif %}">
-                {{ pd.overall_score }}/100
-              </span>
-            </div>
-            <div class="px-3 py-2.5">
-              <p class="text-xs text-indigo-700 leading-relaxed mb-2">{{ pd.summary_text }}</p>
-              {% if pd.get('error_list') %}
-              <div class="flex flex-wrap gap-1.5">
-                {% for err in pd.error_list %}
-                <span class="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5
-                             rounded-full border border-red-200 bg-red-50 text-red-700">
-                  {{ err.word }}
-                  <span class="text-red-400 text-[10px]">({{ err.score }})</span>
-                  <button
-                    onclick="playTTS('{{ err.word | e }}')"
-                    title="收听标准发音"
-                    class="ml-0.5 text-indigo-500 hover:text-indigo-700 transition-colors">Play</button>
-                </span>
-                {% endfor %}
-              </div>
-              {% endif %}
-            </div>
-          </div>
-          {% endif %}
         </div>
 
         <!-- RIGHT: Optimized Script -->
@@ -719,7 +685,7 @@
 
   <!-- CTA -->
   <div class="relative z-10 flex gap-4 pb-10">
-    <a href="/" class="flex-1 btn-primary text-[#0F172A] font-semibold py-4 rounded-xl text-sm
+    <a href="/" class="flex-1 btn-primary font-semibold py-4 rounded-xl text-sm
                        flex items-center justify-center gap-2">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -987,16 +953,6 @@
         reasonEl.textContent = `得分：${score}/100 (${tag})`;
       }
     }
-  }
-
-  // ── Pronunciation TTS demo (Qwen CosyVoice) ─────────────────────────────
-  let _ttsAudio = null;
-  function playTTS(word) {
-    if (!word) return;
-    if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
-    const audio = new Audio('/x/tts-demo?word=' + encodeURIComponent(word));
-    _ttsAudio = audio;
-    audio.play().catch(e => console.warn('[TTS] playback error:', e));
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
