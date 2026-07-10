@@ -2246,6 +2246,12 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
         # can never bleed in words from a different question.
         quoted_fragment = answer
 
+        is_refusal = bool(re.fullmatch(
+            r"(i\s*)?(don'?t know|dont know|have no clue|no clue|not sure|no idea|"
+            r"idk|i\s*pass|skip|no comment|i'?m not sure|can'?t answer|no answer)\.?",
+            answer.strip(), re.I,
+        ))
+
         sig = _cq_signal_scan(answer)
         rules_evaluated = []
         for key, signal_key, good_desc, missing_desc, fix_hint in dim_config:
@@ -2263,7 +2269,15 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
         if miss_rule is None:
             miss_rule = next((d for d in rules_evaluated if not d["hit"]), None)
 
-        if short_answer:
+        if is_refusal:
+            # A flat refusal ("i don't know" / "no clue") has zero content —
+            # there is nothing to praise. Say so plainly instead of pretending
+            # the refusal "named a keyword".
+            what_good = (
+                f"You did stay on the mic and respond rather than staying silent, but '{quoted_fragment}' "
+                "gives no actual content to credit — there is nothing substantive here yet."
+            )
+        elif short_answer:
             what_good = (
                 f"You said '{quoted_fragment}', which correctly names the core keyword the question "
                 "was asking about. That shows you understood what was being asked, though there is not "
@@ -2292,7 +2306,15 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
         slide_title   = (slide or {}).get("title", "")
         slide_content = (slide or {}).get("content", "")
 
-        if miss_rule:
+        if is_refusal:
+            # There is no sentence in the answer to quote as a "gap" — the gap
+            # IS the refusal itself. Ground it in the question's own wording so
+            # two different refused questions still read as distinct.
+            gap_line = (
+                f"You answered '{quoted_fragment}' instead of attempting the question at all — "
+                f"specifically: \"{question.strip()}\""
+            )
+        elif miss_rule:
             # Always anchor the gap in a concrete sentence from THIS answer — either the
             # exact sentence that failed the check, or (if the gap is structural, i.e. the
             # signal is absent everywhere) the longest sentence in the answer, so the same
@@ -2306,7 +2328,34 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
             gap_line = "Your answer already covers the key things this question was looking for."
         fix_hint = (miss_rule or hit_rule or {}).get("fix_hint", "make your core point more concrete")
 
-        if slide_title or slide_content:
+        if is_refusal and (slide_title or slide_content):
+            areas_improve = (
+                f"{gap_line} Your own slide '{slide_title}' already has the material you needed "
+                f"({slide_content[:120].strip()}{'…' if len(slide_content) > 120 else ''}) — saying "
+                "'I don't know' skips content you actually have."
+            )
+            how_fix = (
+                f"Say this instead: 'Looking at my slide on {slide_title.lower() if slide_title else 'this'}, "
+                f"{slide_content[:160].strip()}{'…' if len(slide_content) > 160 else ''} — that directly "
+                f"answers what you asked about {question.strip().rstrip('?').split()[-1] if question.strip() else 'this'}.'"
+            )
+        elif is_refusal:
+            _q_words = [
+                w.strip(".,?!:;\"'()").lower() for w in question.split()
+                if len(w.strip(".,?!:;\"'()")) > 3
+            ]
+            _q_stop = {"what", "your", "does", "this", "that", "with", "about", "have", "from", "were", "would", "could", "should"}
+            _q_words = [w for w in _q_words if w not in _q_stop]
+            _focus = _q_words[-1] if _q_words else "this question"
+            areas_improve = (
+                f"{gap_line} Even a partial guess grounded in {_focus} would score higher than a flat refusal."
+            )
+            how_fix = (
+                f"Say this instead: 'I'm not fully certain, but based on my presentation, here is my best "
+                f"attempt at connecting it to {_focus} — that is closer to what you asked than saying "
+                "I don't know.'"
+            )
+        elif slide_title or slide_content:
             areas_improve = (
                 f"{gap_line} On top of that, your slide on '{slide_title}' has more specific content "
                 f"({slide_content[:120].strip()}{'…' if len(slide_content) > 120 else ''}) that you did "
