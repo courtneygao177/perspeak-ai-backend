@@ -813,9 +813,17 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="application/json" id="report-data-blob">{{ {"scores": evaluation.pillar.scores, "pitchData": evaluation.pillar.pitch_data or [], "cqData": cq or {}} | tojson }}</script>
 <script>
-  const scores    = {{ evaluation.pillar.scores | tojson }};
-  const pitchData = {{ (evaluation.pillar.pitch_data or []) | tojson }};
+  // Data is parsed from a non-executable JSON blob (not spliced directly into
+  // JS source) so that arbitrary LLM-generated text — which can legitimately
+  // contain a literal "</script>" substring or stray unicode line-separator
+  // characters — can never break out of this <script> tag and silently kill
+  // every function declared below it (this is what caused "switchTab is not
+  // defined": the whole script tag failed to parse past that point).
+  const __REPORT_DATA = JSON.parse(document.getElementById('report-data-blob').textContent);
+  const scores    = __REPORT_DATA.scores;
+  const pitchData = __REPORT_DATA.pitchData;
 
   // ── Radar chart ────────────────────────────────────────────────────────────
   new Chart(document.getElementById('radarChart'), {
@@ -922,7 +930,7 @@
   };
 
   // Build score-reason index from what_i_did_good + areas_for_improvement
-  const CQ_DATA = {{ (cq or {}) | tojson }};
+  const CQ_DATA = __REPORT_DATA.cqData;
   const _dimReason = {};
   (CQ_DATA.what_i_did_good || []).forEach(s => {
     const m = s.match(/\[Metric:\s*([^\]]+)\]/);

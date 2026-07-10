@@ -589,7 +589,15 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="application/json" id="sandbox-data-blob">{{ {"slides": slides, "audienceRole": config.audience, "scenarioType": config.scenario} | tojson }}</script>
 <script>
+  // Parsed from a non-executable JSON blob rather than spliced straight into
+  // JS source: slide content comes from user-uploaded PPT/PDF text and can
+  // legitimately contain "</script>" or unicode line-separator characters,
+  // either of which would otherwise break out of this <script> tag and kill
+  // every function declared below it.
+  const __SANDBOX_DATA = JSON.parse(document.getElementById('sandbox-data-blob').textContent);
+
   // ── State ─────────────────────────────────────────────────────────────────
   let state = {
     current_page:       {{ state.current_page }},
@@ -599,10 +607,10 @@
     total_interruptions:{{ state.total_interruptions }},
     challenge_type:     '',
   };
-  let slides      = {{ slides | tojson }};
+  let slides      = __SANDBOX_DATA.slides;
   let hasFile     = {{ 'true' if has_file else 'false' }};
-  const audienceRole = {{ config.audience | tojson }};
-  const scenarioType = {{ config.scenario | tojson }};
+  const audienceRole = __SANDBOX_DATA.audienceRole;
+  const scenarioType = __SANDBOX_DATA.scenarioType;
 
   // ── Real data pipeline accumulators ──────────────────────────────────────
   let presentationTranscripts = [];
