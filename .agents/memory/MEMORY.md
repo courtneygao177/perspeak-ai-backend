@@ -9,3 +9,4 @@
 - [ai-presentation deployment config](ai-presentation-deployment.md) — artifact.toml must be committed (not untracked) for publish detection; Reserved VM required (not Autoscale) due to local file uploads/slide_store.
 - [Transcript merge dedup pitfall](transcript-merge-dedup.md) — merging two answer-source lists must dedupe against the already-built combined list, not just one source, or entries silently double.
 - [Non-templated fallback feedback](fallback-feedback-heuristics.md) — heuristic (non-LLM) fallback text generators must vary per item via content signals, and quote something concrete even in the "nothing matched" branch.
+- [Artifact port conflict](artifact-port-conflict.md) — dev workflow and its auto-generated artifact-managed twin fight over the same localPort; env var overrides in artifact.toml don't change it.

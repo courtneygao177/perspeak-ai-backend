@@ -4,53 +4,53 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  .section-card { background:#ffffff; border:1px solid #DAD7CE; border-radius:1rem; box-shadow:0 1px 4px rgba(15,23,42,0.06); }
-  .dim-card { cursor:pointer; transition:all .2s; border:1px solid #DAD7CE; border-radius:.875rem;
+  .section-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:1rem; box-shadow:0 1px 4px rgba(15,23,42,0.06); }
+  .dim-card { cursor:pointer; transition:all .2s; border:1px solid #E2E8F0; border-radius:.875rem;
               background:#ffffff; box-shadow:0 1px 3px rgba(15,23,42,0.05); }
-  .dim-card:hover { border-color:#D9481F; background:#FDF3ED; transform:translateY(-2px); box-shadow:0 4px 16px rgba(217,72,31,0.1); }
-  .score-bar { background:#D9481F; border-radius:9999px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+  .dim-card:hover { border-color:#16A34A; background:#ECFDF5; transform:translateY(-2px); box-shadow:0 4px 16px rgba(217,72,31,0.1); }
+  .score-bar { background:#16A34A; border-radius:9999px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
   .modal-bg { display:none; position:fixed; inset:0; background:rgba(15,23,42,.4); z-index:100;
               align-items:center; justify-content:center; backdrop-filter:blur(4px); }
   .modal-bg.open { display:flex; }
-  .modal-box { background:#ffffff; border:1px solid #DAD7CE; border-radius:1.25rem; box-shadow:0 20px 60px rgba(15,23,42,0.15);
+  .modal-box { background:#ffffff; border:1px solid #E2E8F0; border-radius:1.25rem; box-shadow:0 20px 60px rgba(15,23,42,0.15);
                max-width:480px; width:90%; padding:1.75rem; position:relative; animation:modalIn .2s ease; }
   @keyframes modalIn { from { opacity:0; transform:scale(.95) translateY(8px); } to { opacity:1; transform:none; } }
-  .tp h2 { font-size:1.05rem;font-weight:700;color:#B93C18;margin:1.25rem 0 .5rem; }
-  .tp h3 { font-size:.875rem;font-weight:600;color:#D9481F;margin:1rem 0 .4rem; }
-  .tp p  { color:#4E555B;font-size:.85rem;line-height:1.65;margin-bottom:.5rem; }
-  .tp strong { color:#191C1E; }
+  .tp h2 { font-size:1.05rem;font-weight:700;color:#15803D;margin:1.25rem 0 .5rem; }
+  .tp h3 { font-size:.875rem;font-weight:600;color:#16A34A;margin:1rem 0 .4rem; }
+  .tp p  { color:#475569;font-size:.85rem;line-height:1.65;margin-bottom:.5rem; }
+  .tp strong { color:#0F172A; }
   .tp ul { list-style:none;padding:0; }
-  .tp li { color:#4E555B;font-size:.85rem;line-height:1.7;padding-left:1rem;position:relative; }
-  .tp li::before { content:'›';position:absolute;left:0;color:#D9481F; }
+  .tp li { color:#475569;font-size:.85rem;line-height:1.7;padding-left:1rem;position:relative; }
+  .tp li::before { content:'›';position:absolute;left:0;color:#16A34A; }
   canvas { max-height:260px; }
-  .good-item { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem; background:#FDF3ED;
-               border:1px solid #F3CDB9; border-radius:.625rem; }
+  .good-item { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem; background:#ECFDF5;
+               border:1px solid #BBF7D0; border-radius:.625rem; }
   .fix-item  { background:#fff; border:1px solid #E5BE7E; border-radius:.75rem; overflow:hidden; }
   .fix-header{ padding:.75rem 1rem; background:#F5E7CE; border-bottom:1px solid #E5BE7E; }
   .fix-body  { padding:.875rem 1rem; display:grid; gap:.5rem; background:#FDFCF8; }
   .fix-label { font-size:.65rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
-  .say-instead { background:#FDF3ED; border:1px solid #F3CDB9; border-radius:.5rem;
+  .say-instead { background:#ECFDF5; border:1px solid #BBF7D0; border-radius:.5rem;
                  padding:.5rem .75rem; margin-top:.25rem; }
-  .say-instead-arrow { color:#D9481F; font-weight:700; margin-right:.35rem; }
+  .say-instead-arrow { color:#16A34A; font-weight:700; margin-right:.35rem; }
   .pillar-tag { display:inline-block; font-size:.6rem; font-weight:700; letter-spacing:.06em;
                 text-transform:uppercase; padding:.15rem .45rem; border-radius:.25rem; margin-right:.35rem; }
   .pillar-structure { background:#F2F0F5; color:#413A49; }
-  .pillar-fluency   { background:#F2F0F5; color:#973112; }
+  .pillar-fluency   { background:#F2F0F5; color:#166534; }
   .pillar-relevance { background:#E2E8EA; color:#2F4450; }
   .pillar-delivery  { background:#F5E7CE; color:#8A5C13; }
   /* CQ section */
   .cq-dim-bar { background:linear-gradient(90deg,#46626F,#6F8C96); border-radius:9999px;
                 transition:width 1.2s cubic-bezier(.4,0,.2,1); }
   .cq-fix-header { padding:.75rem 1rem; background:#FAF3E3; border-bottom:1px solid #EDD4A6; }
-  .cq-fix-item   { background:#F6F5F0; border:1px solid #DAD7CE; border-radius:.75rem; overflow:hidden; }
+  .cq-fix-item   { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:.75rem; overflow:hidden; }
   .cq-good-item  { display:flex; align-items:flex-start; gap:.625rem; padding:.75rem;
-                   background:#FDF3ED; border:1px solid #F3CDB9; border-radius:.625rem; }
+                   background:#ECFDF5; border:1px solid #BBF7D0; border-radius:.625rem; }
   .cq-tag { display:inline-block; font-size:.6rem; font-weight:700; letter-spacing:.06em;
             text-transform:uppercase; padding:.15rem .45rem; border-radius:.25rem;
             margin-right:.35rem; background:#E2E8EA; color:#2F4450; }
   .cq-quote-box { background:#FAF3E3; border:1px solid #EDD4A6; border-left:3px solid #C98A2D;
                   border-radius:.375rem; padding:.5rem .75rem; }
-  .cq-fix-panel { background:#FDF3ED; border:1px solid #F3CDB9; border-left:3px solid #3E7A4E;
+  .cq-fix-panel { background:#ECFDF5; border:1px solid #BBF7D0; border-left:3px solid #3E7A4E;
                   border-radius:.375rem; padding:.5rem .75rem; }
   /* Clickable CQ dimension rows */
   .cq-dim-row { cursor:pointer; border-radius:.5rem; padding:.375rem .5rem; margin:.25rem -.5rem;
@@ -65,23 +65,23 @@
                    background:#F2F0F5; color:#413A49; }
   /* ── Tab navigation ───────────────────────────────────────────────────── */
   .tab-btn {
-    padding:.75rem 1.4rem; font-size:.8rem; font-weight:600; color:#6B7075;
+    padding:.75rem 1.4rem; font-size:.8rem; font-weight:600; color:#64748B;
     border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .18s;
     white-space:nowrap; background:none; cursor:pointer; border-top:none;
     border-left:none; border-right:none; display:flex; align-items:center; gap:.4rem;
   }
-  .tab-btn:hover { color:#191C1E; }
-  .tab-btn.active { color:#D9481F; border-bottom-color:#D9481F; }
+  .tab-btn:hover { color:#0F172A; }
+  .tab-btn.active { color:#16A34A; border-bottom-color:#16A34A; }
   .tab-btn .tab-badge {
     font-size:.6rem; padding:.1rem .4rem; border-radius:.25rem;
-    background:rgba(217,72,31,.1); color:#D9481F; font-weight:700; letter-spacing:.05em;
+    background:rgba(217,72,31,.1); color:#16A34A; font-weight:700; letter-spacing:.05em;
   }
   .tab-btn.active-cq   { color:#46626F; border-bottom-color:#46626F; }
   .tab-btn.active-cq .tab-badge { background:#F1F4F5; color:#46626F; }
   .tab-btn.active-cqual { color:#5D5468; border-bottom-color:#5D5468; }
   .tab-btn.active-cqual .tab-badge { background:#F2F0F5; color:#5D5468; }
   /* Content Quality card styles */
-  .cqual-card { background:#fff; border:1px solid #DAD7CE; border-radius:1rem;
+  .cqual-card { background:#fff; border:1px solid #E2E8F0; border-radius:1rem;
                 box-shadow:0 1px 4px rgba(15,23,42,.06); overflow:hidden; }
   .cqual-dim-badge {
     display:inline-flex; align-items:center; gap:.25rem; font-size:.6rem; font-weight:700;
@@ -89,7 +89,7 @@
     border-radius:.3rem; margin-right:.3rem;
   }
   .cqual-left  { background:#FAF3E3; border-right:1px solid #EDD4A6; }
-  .cqual-right { background:#FDF3ED; }
+  .cqual-right { background:#ECFDF5; }
 </style>
 {% endblock %}
 
@@ -97,7 +97,7 @@
 <span class="text-slate-400">Upload</span><span class="text-slate-300 mx-1">→</span>
 <span class="text-slate-400">Configure</span><span class="text-slate-300 mx-1">→</span>
 <span class="text-slate-400">Rehearsal</span><span class="text-slate-300 mx-1">→</span>
-<span class="font-semibold" style="color:#D9481F">Step 4 of 4 — Report</span>
+<span class="font-semibold" style="color:#16A34A">Step 4 of 4 — Report</span>
 {% endblock %}
 
 {% block content %}
@@ -118,14 +118,14 @@
   <div class="relative z-10 mb-8">
     <div class="flex flex-wrap items-center gap-2 mb-4">
       <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border"
-           style="color:#D9481F;background:rgba(217,72,31,0.07);border-color:rgba(217,72,31,0.2)">
-        <span class="w-1.5 h-1.5 rounded-full animate-pulse" style="background:#D9481F"></span>
+           style="color:#16A34A;background:rgba(217,72,31,0.07);border-color:rgba(217,72,31,0.2)">
+        <span class="w-1.5 h-1.5 rounded-full animate-pulse" style="background:#16A34A"></span>
         {{ evaluation.scenario }} · {{ evaluation.audience }} · {{ evaluation.difficulty }}
       </div>
       {% if evaluation.ai_powered %}
       <div class="inline-flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border"
-           style="color:#B93C18;background:#FAE5D9;border-color:#F3CDB9">
-        <span class="w-1.5 h-1.5 rounded-full" style="background:#D9481F"></span>
+           style="color:#15803D;background:#FAE5D9;border-color:#BBF7D0">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:#16A34A"></span>
         AI-Powered
       </div>
       {% endif %}
@@ -136,7 +136,7 @@
       </div>
       {% endif %}
     </div>
-    <h1 class="text-4xl font-bold text-[#191C1E] mb-2">Rehearsal Report</h1>
+    <h1 class="text-4xl font-bold text-[#0F172A] mb-2">Rehearsal Report</h1>
     <p class="text-slate-500 text-sm">4-pillar precision audit · AAC&amp;U + Toastmasters rubric</p>
   </div>
 
@@ -144,21 +144,21 @@
   {% if jaw_drop %}
   <div class="relative z-10 mb-6 animate-slide-up">
     <div class="flex items-center gap-4 rounded-2xl px-6 py-4 border"
-         style="background:linear-gradient(135deg,#FDF3ED,#fff);border-color:#F3CDB9;box-shadow:0 4px 24px rgba(217,72,31,0.1)">
+         style="background:linear-gradient(135deg,#ECFDF5,#fff);border-color:#BBF7D0;box-shadow:0 4px 24px rgba(217,72,31,0.1)">
       
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-bold tracking-wide uppercase mb-0.5" style="color:#B93C18">
+        <p class="text-sm font-bold tracking-wide uppercase mb-0.5" style="color:#15803D">
           Jaw-Dropping Moment Achieved!
         </p>
         <p class="text-slate-600 text-sm leading-snug">
           The AI detected a powerful, high-impact moment in your presentation — a striking statistic,
           vivid story, or compelling conclusion delivered with emphasis. This is the hallmark of a
-          <span class="font-semibold text-[#B93C18]">Talk Like TED</span> presenter.
+          <span class="font-semibold text-[#15803D]">Talk Like TED</span> presenter.
         </p>
       </div>
       <div class="flex-shrink-0 hidden sm:flex flex-col items-center gap-1">
         <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-full border"
-              style="color:#B93C18;background:#FAE5D9;border-color:#F3CDB9">TED Technique</span>
+              style="color:#15803D;background:#FAE5D9;border-color:#BBF7D0">TED Technique</span>
       </div>
     </div>
   </div>
@@ -176,7 +176,7 @@
       {% if cq and cq.has_data %}
       <span class="tab-badge" style="background:#F1F4F5;color:#46626F">CQ {{ cq.cq_total }}</span>
       {% else %}
-      <span class="tab-badge" style="background:#EEECE5;color:#8A8F92">No Q&amp;A</span>
+      <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">No Q&amp;A</span>
       {% endif %}
     </button>
     <button id="tab-btn-cqual" onclick="switchTab('cqual')" class="tab-btn">
@@ -184,7 +184,7 @@
       {% if cqual and cqual.has_data %}
       <span class="tab-badge" style="background:#F2F0F5;color:#5D5468">{{ cqual.slide_transcripts_report | length }} slides</span>
       {% else %}
-      <span class="tab-badge" style="background:#EEECE5;color:#8A8F92">No data</span>
+      <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">No data</span>
       {% endif %}
     </button>
   </div>
@@ -204,18 +204,18 @@
       <div class="section-card p-6 flex items-center gap-5">
         <div class="relative w-20 h-20 flex-shrink-0">
           <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#DAD7CE" stroke-width="3.5"/>
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#D9481F" stroke-width="3.5"
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E2E8F0" stroke-width="3.5"/>
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#16A34A" stroke-width="3.5"
                     stroke-dasharray="{{ avg_score }} {{ 100 - avg_score }}"
                     stroke-linecap="round"/>
           </svg>
           <div class="absolute inset-0 flex items-center justify-center">
-            <span class="text-lg font-bold text-[#191C1E]">{{ avg_score }}</span>
+            <span class="text-lg font-bold text-[#0F172A]">{{ avg_score }}</span>
           </div>
         </div>
         <div>
           <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">Overall Score</p>
-          <p class="text-3xl font-bold text-[#191C1E]">{{ avg_score }}<span class="text-gray-600 text-xl">/100</span></p>
+          <p class="text-3xl font-bold text-[#0F172A]">{{ avg_score }}<span class="text-gray-600 text-xl">/100</span></p>
           <p class="text-xs text-slate-500 mt-1">Click any pillar card to see details</p>
         </div>
       </div>
@@ -240,7 +240,7 @@
         </div>
         <div class="flex items-end justify-between">
           <div>
-            <span class="text-2xl font-bold text-[#191C1E]">{{ sc }}</span>
+            <span class="text-2xl font-bold text-[#0F172A]">{{ sc }}</span>
             <span class="text-xs text-slate-500 ml-2">{{ tag }}</span>
           </div>
           <svg class="w-4 h-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -256,7 +256,7 @@
 
     <!-- Right: Radar chart -->
     <div class="lg:col-span-3 section-card p-6 flex flex-col">
-      <h2 class="text-sm font-semibold text-[#191C1E] mb-1">Performance Radar</h2>
+      <h2 class="text-sm font-semibold text-[#0F172A] mb-1">Performance Radar</h2>
       <p class="text-xs text-gray-600 mb-4">4-pillar breakdown (0–100)</p>
       <div class="flex-1 flex items-center justify-center">
         <canvas id="radarChart"></canvas>
@@ -267,7 +267,7 @@
   <!-- Filler Word Log -->
   {% if pillar.filler_log %}
   <div class="relative z-10 section-card p-6 mb-6">
-    <h2 class="text-sm font-semibold text-[#191C1E] mb-1">Filler Word Log</h2>
+    <h2 class="text-sm font-semibold text-[#0F172A] mb-1">Filler Word Log</h2>
     <p class="text-xs text-gray-600 mb-4">Words that slowed your speech down</p>
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
@@ -281,7 +281,7 @@
         <tbody class="divide-y divide-gray-800/30">
           {% for f in pillar.filler_log %}
           <tr>
-            <td class="py-2 pr-4 font-mono text-[#191C1E]">"{{ f.word }}"</td>
+            <td class="py-2 pr-4 font-mono text-[#0F172A]">"{{ f.word }}"</td>
             <td class="py-2 pr-4 text-slate-400">{{ f.timestamp }}</td>
             <td class="py-2">
               {% if f.type == 'Disruptive' %}
@@ -300,8 +300,8 @@
 
   <!-- Performance Analysis (dual column) -->
   <div class="relative z-10 mb-8">
-    <h2 class="text-sm font-semibold text-[#191C1E] mb-5 flex items-center gap-2">
-      <svg class="w-4 h-4" style="color:#D9481F" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <h2 class="text-sm font-semibold text-[#0F172A] mb-5 flex items-center gap-2">
+      <svg class="w-4 h-4" style="color:#16A34A" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
       </svg>
       表现分析
@@ -314,7 +314,7 @@
           <svg class="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
           </svg>
-          <h3 class="text-sm font-semibold text-[#191C1E]">What I did well</h3>
+          <h3 class="text-sm font-semibold text-[#0F172A]">What I did well</h3>
         </div>
         <div class="space-y-2.5">
           {% for item in pillar.what_i_did_good %}
@@ -348,7 +348,7 @@
           <svg class="w-4 h-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
-          <h3 class="text-sm font-semibold text-[#191C1E]">⚠️ Areas for Improvement</h3>
+          <h3 class="text-sm font-semibold text-[#0F172A]">⚠️ Areas for Improvement</h3>
         </div>
         <div class="space-y-3">
           {% for item in pillar.areas_for_improvement %}
@@ -412,7 +412,7 @@
   <div class="relative z-10 mb-8">
 
     <!-- Section header -->
-    <h2 class="text-sm font-semibold text-[#191C1E] mb-5 flex items-center gap-2">
+    <h2 class="text-sm font-semibold text-[#0F172A] mb-5 flex items-center gap-2">
       <svg class="w-4 h-4" style="color:#46626F" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
@@ -424,7 +424,7 @@
       </span>
       {% if evaluation.ai_powered %}
       <span class="text-xs font-mono px-2 py-0.5 rounded-full border"
-            style="color:#B93C18;background:#FAE5D9;border-color:#F3CDB9">AI-Powered</span>
+            style="color:#15803D;background:#FAE5D9;border-color:#BBF7D0">AI-Powered</span>
       {% endif %}
     </h2>
 
@@ -435,19 +435,19 @@
         <!-- CQ total score ring -->
         <div class="relative w-20 h-20 flex-shrink-0">
           <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#DAD7CE" stroke-width="3.5"/>
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E2E8F0" stroke-width="3.5"/>
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="#46626F" stroke-width="3.5"
                     stroke-dasharray="{{ cq.cq_total }} {{ 100 - cq.cq_total }}"
                     stroke-linecap="round"/>
           </svg>
           <div class="absolute inset-0 flex items-center justify-center">
-            <span class="text-lg font-bold text-[#191C1E]">{{ cq.cq_total }}</span>
+            <span class="text-lg font-bold text-[#0F172A]">{{ cq.cq_total }}</span>
           </div>
         </div>
 
         <div>
           <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">CQ Overall</p>
-          <p class="text-3xl font-bold text-[#191C1E]">{{ cq.cq_total }}<span class="text-gray-500 text-xl">/100</span></p>
+          <p class="text-3xl font-bold text-[#0F172A]">{{ cq.cq_total }}<span class="text-gray-500 text-xl">/100</span></p>
           <p class="text-xs text-slate-500 mt-1">Evaluated from {{ cq.exchange_count }} Q&amp;A exchange{{ 's' if cq.exchange_count != 1 }}</p>
         </div>
 
@@ -458,13 +458,13 @@
           {% elif cq.scene_slug == 'case_pitch' %}
           <span class="text-xs px-2 py-1 rounded-full border font-mono" style="color:#2F4450;background:#E2E8EA;border-color:#C5D1D5">Pyramid · Aristotle · Presence</span>
           {% else %}
-          <span class="text-xs px-2 py-1 rounded-full border font-mono" style="color:#B93C18;background:#FAE5D9;border-color:#F3CDB9"> Rule of 3 · TED · Carnegie</span>
+          <span class="text-xs px-2 py-1 rounded-full border font-mono" style="color:#15803D;background:#FAE5D9;border-color:#BBF7D0"> Rule of 3 · TED · Carnegie</span>
           {% endif %}
         </div>
       </div>
 
       <!-- Dimension score bars (clickable — shows detail card) -->
-      {% set cq_bar_colors = ['#46626F', '#D9481F', '#C98A2D'] %}
+      {% set cq_bar_colors = ['#46626F', '#16A34A', '#C98A2D'] %}
       {% set cq_dim_list = cq.dim_names if cq.dim_names else [] %}
       {% for dn in cq_dim_list %}
         {% set dc = cq.cq_scores.get(dn, 0) %}
@@ -489,7 +489,7 @@
             </span>
             <div class="flex items-center gap-2">
               <span class="text-xs text-slate-500">{{ dtag }}</span>
-              <span class="text-sm font-bold text-[#191C1E]">{{ dc }}<span class="text-xs font-normal text-slate-400">/100</span></span>
+              <span class="text-sm font-bold text-[#0F172A]">{{ dc }}<span class="text-xs font-normal text-slate-400">/100</span></span>
             </div>
           </div>
           <div class="h-2 bg-slate-100 rounded-full overflow-hidden mb-1">
@@ -499,7 +499,7 @@
           </div>
           <!-- Expandable detail card -->
           <div class="cq-dim-detail hidden rounded-lg border p-3 mt-2 text-xs leading-relaxed"
-               style="background:color-mix(in srgb,{{ dcolor }} 6%,white);border-color:color-mix(in srgb,{{ dcolor }} 30%,#DAD7CE)">
+               style="background:color-mix(in srgb,{{ dcolor }} 6%,white);border-color:color-mix(in srgb,{{ dcolor }} 30%,#E2E8F0)">
             <p class="font-semibold mb-1" style="color:{{ dcolor }}" data-dim-detail-title></p>
             <p class="text-slate-500 mb-2" data-dim-detail-body></p>
             <p class="text-slate-700 font-medium" data-dim-detail-reason></p>
@@ -511,7 +511,7 @@
     <!-- CQ Feedback: per-question cards -->
     {% set pqa_list = (cq.communication_quality_report.per_question_analysis if cq.communication_quality_report is defined and cq.communication_quality_report else []) %}
     <div class="space-y-4">
-      <h3 class="text-sm font-semibold text-[#191C1E] flex items-center gap-2">
+      <h3 class="text-sm font-semibold text-[#0F172A] flex items-center gap-2">
         <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-3.5 4L9 16z"/>
         </svg>
@@ -521,7 +521,7 @@
       {% for q in pqa_list %}
       <div class="section-card p-5">
         <div class="flex items-start justify-between gap-3 mb-3">
-          <p class="text-sm font-semibold text-[#191C1E] leading-snug">
+          <p class="text-sm font-semibold text-[#0F172A] leading-snug">
             <span class="cq-tag" style="background:#E6E2EB;color:#413A49">Q{{ loop.index }}</span>
             {{ q.question_text }}
           </p>
@@ -580,7 +580,7 @@
     <!-- Section header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-sm font-semibold text-[#191C1E]">Per-Slide Content Audit</h2>
+        <h2 class="text-sm font-semibold text-[#0F172A]">Per-Slide Content Audit</h2>
         <p class="text-xs text-gray-500">5-dimension analysis · AI-generated · {{ cqual.scene_label }}</p>
       </div>
       <span class="text-xs px-3 py-1.5 rounded-full border font-mono"
@@ -598,7 +598,7 @@
       <div class="flex items-center gap-3 px-5 py-3 border-b border-slate-100">
         <span class="font-mono text-xs px-2 py-1 rounded-lg border"
               style="color:#5D5468;background:#F2F0F5;border-color:#CFC9D8">S{{ slide.slide_id }}</span>
-        <span class="font-semibold text-[#191C1E] text-sm">{{ slide.slide_title }}</span>
+        <span class="font-semibold text-[#0F172A] text-sm">{{ slide.slide_title }}</span>
       </div>
 
       <!-- 5-dimension score bar row -->
@@ -613,10 +613,10 @@
           ] %}
           {% set dim = analysis.get(dim_key, {}) %}
           {% set sc  = dim.get('score', 0) | int %}
-          {% set bar_color = '#ef4444' if sc < 55 else ('#C98A2D' if sc < 75 else '#D9481F') %}
+          {% set bar_color = '#ef4444' if sc < 55 else ('#C98A2D' if sc < 75 else '#16A34A') %}
           <div class="text-center">
             <div class="text-xs font-bold mb-1" style="color:{{ bar_color }}">{{ sc }}</div>
-            <div class="h-1.5 rounded-full overflow-hidden" style="background:#DAD7CE">
+            <div class="h-1.5 rounded-full overflow-hidden" style="background:#E2E8F0">
               <div class="h-full rounded-full" style="width:{{ sc }}%;background:{{ bar_color }}"></div>
             </div>
             <div class="text-[10px] text-slate-400 mt-1 leading-tight">{{ dim_label }}</div>
@@ -643,7 +643,7 @@
           ] %}
           {% set dim = analysis.get(dim_key, {}) %}
           {% set sc  = dim.get('score', 0) | int %}
-          {% set bar_color = '#ef4444' if sc < 55 else ('#C98A2D' if sc < 75 else '#D9481F') %}
+          {% set bar_color = '#ef4444' if sc < 55 else ('#C98A2D' if sc < 75 else '#16A34A') %}
           <div class="mb-2 rounded-lg border border-amber-200/60 overflow-hidden bg-white/50">
             <button class="w-full flex items-center justify-between px-3 py-2 text-left"
                     onclick="this.nextElementSibling.classList.toggle('hidden')">
@@ -719,7 +719,7 @@
 
   <!-- CTA -->
   <div class="relative z-10 flex gap-4 pb-10">
-    <a href="/" class="flex-1 btn-primary text-[#191C1E] font-semibold py-4 rounded-xl text-sm
+    <a href="/" class="flex-1 btn-primary text-[#0F172A] font-semibold py-4 rounded-xl text-sm
                        flex items-center justify-center gap-2">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -729,7 +729,7 @@
     </a>
     <button onclick="window.print()"
             class="px-8 glass text-slate-600 font-semibold py-4 rounded-xl text-sm
-                   flex items-center justify-center gap-2 transition-all hover:border-[#D9481F]/40">
+                   flex items-center justify-center gap-2 transition-all hover:border-[#16A34A]/40">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
@@ -755,14 +755,14 @@
 <div id="modal-{{ key }}" class="modal-bg" onclick="if(event.target===this)closeModal('{{ key }}')">
   <div class="modal-box" style="max-width:520px">
     <button onclick="closeModal('{{ key }}')"
-            class="absolute top-4 right-4 text-gray-600 hover:text-[#191C1E] transition-colors">
+            class="absolute top-4 right-4 text-gray-600 hover:text-[#0F172A] transition-colors">
       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
       </svg>
     </button>
     <p class="text-xs font-bold uppercase tracking-widest mb-2" style="color:{{ color }}">{{ label }}</p>
     <div class="flex items-baseline gap-3 mb-3">
-      <span class="text-5xl font-bold text-[#191C1E]">{{ sc }}</span>
+      <span class="text-5xl font-bold text-[#0F172A]">{{ sc }}</span>
       <span class="text-xl font-semibold" style="color:{{ color }}">{{ tag }}</span>
     </div>
     <p class="text-slate-400 text-sm leading-relaxed mb-4">{{ info.explanation if info else '' }}</p>
@@ -828,7 +828,7 @@
         backgroundColor: 'rgba(93,84,104,0.15)',
         borderColor: '#5D5468',
         pointBackgroundColor: ['#5D5468','#B0A9BA','#6F8C96','#C98A2D'],
-        pointBorderColor: '#191C1E',
+        pointBorderColor: '#0F172A',
         pointRadius: 5,
         borderWidth: 2,
       }]
@@ -839,9 +839,9 @@
       scales: {
         r: {
           min: 0, max: 100,
-          ticks: { color: '#4E555B', stepSize: 25, backdropColor: 'transparent', font: { size: 10 } },
+          ticks: { color: '#475569', stepSize: 25, backdropColor: 'transparent', font: { size: 10 } },
           grid: { color: 'rgba(93,84,104,0.1)' },
-          pointLabels: { color: '#8A8F92', font: { size: 12, weight: '500' } },
+          pointLabels: { color: '#94A3B8', font: { size: 12, weight: '500' } },
           angleLines: { color: 'rgba(93,84,104,0.1)' },
         }
       }
@@ -897,7 +897,7 @@
           x: { display: false },
           y: {
             min: 50, max: 250,
-            ticks: { color: '#6B7075', font: { size: 9 }, stepSize: 50 },
+            ticks: { color: '#64748B', font: { size: 9 }, stepSize: 50 },
             grid: { color: 'rgba(245,158,11,0.07)' },
           }
         }

@@ -2319,14 +2319,28 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
                 f"{'…' if len(slide_content) > 160 else ''} — that is why this matters for my presentation.'"
             )
         else:
+            # No slide match — ground the gap in this question's own topic
+            # words instead of a bracketed placeholder, so different
+            # questions never collapse into the same sentence.
+            topic_words = [
+                w.strip(".,?!:;\"'()").lower()
+                for w in question.split()
+                if len(w.strip(".,?!:;\"'()")) > 3
+            ]
+            _stop = {"what", "your", "does", "this", "that", "with", "about", "have", "from", "were", "would", "could", "should"}
+            topic_words = [w for w in topic_words if w not in _stop]
+            topic_focus = topic_words[-1] if topic_words else "the question's main point"
+            core_claim = (
+                sig["sentences"][0].strip() if sig.get("sentences") else quoted_fragment
+            )
             areas_improve = (
-                f"{gap_line} Your answer is also too short to fully cover the question — add one "
-                "concrete number, name, or fact to back it up."
+                f"{gap_line} Specifically, your answer never returns to '{topic_focus}', which is the "
+                "actual focus of this question — add one concrete number, name, or fact tied to it."
             )
             how_fix = (
-                f"Say this instead: 'To {fix_hint}, [state your core point clearly], "
-                "and to be specific, the key evidence is [name one exact fact, number, or example from "
-                "your own presentation].'"
+                f"Say this instead: '{core_claim.rstrip('.') if core_claim else 'To answer directly'}, "
+                f"and to prove the point on {topic_focus}, here is the specific number from my presentation "
+                f"that backs it up — one exact figure or named example tied to {topic_focus}.'"
             )
 
         items.append({
