@@ -10,3 +10,4 @@
 - [Transcript merge dedup pitfall](transcript-merge-dedup.md) — merging two answer-source lists must dedupe against the already-built combined list, not just one source, or entries silently double.
 - [Non-templated fallback feedback](fallback-feedback-heuristics.md) — heuristic (non-LLM) fallback text generators must vary per item via content signals, and quote something concrete even in the "nothing matched" branch.
 - [Artifact port conflict](artifact-port-conflict.md) — dev workflow and its auto-generated artifact-managed twin fight over the same localPort; env var overrides in artifact.toml don't change it.
+- [Slide image cache-busting](slide-image-cache-busting.md) — /x/slide-image/<page> is a stable URL across uploads; must append a per-file version query param or browser serves stale cached deck images.

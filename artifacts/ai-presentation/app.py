@@ -4164,6 +4164,10 @@ def sandbox():
     cfg = session.get("config", {})
     current_slide = next((s for s in slides if s["page"] == state["current_page"]), slides[0])
     has_file = bool(_local_source_file(session))
+    # Cache-busting key tied to THIS upload — /x/slide-image/<page> is a stable
+    # URL across sessions, so without a per-file query param the browser happily
+    # serves back a previous deck's cached image bytes for a brand-new upload.
+    deck_version = session.get("file_key", "") or "mock"
     return render_template(
         "sandbox.html",
         state=state,
@@ -4173,6 +4177,7 @@ def sandbox():
         total_pages=len(slides),
         ai_enabled=AI_ENABLED,
         has_file=has_file,
+        deck_version=deck_version,
     )
 
 

@@ -79,7 +79,7 @@
       <div class="sidebar-thumb relative {% if slide.page == state.current_page %}active{% endif %}"
            id="sthumb-{{ slide.page }}"
            data-page="{{ slide.page }}">
-        <img src="/x/slide-image/{{ slide.page }}"
+        <img src="/x/slide-image/{{ slide.page }}?v={{ deck_version }}"
              loading="lazy"
              alt="Slide {{ slide.page }}"
              onerror="this.style.opacity='0.3'">
@@ -106,7 +106,7 @@
         <div class="flex items-center justify-center px-4 pt-10 pb-2">
           <div id="slideImgWrap">
             <img id="slideImg"
-                 src="/x/slide-image/{{ state.current_page }}"
+                 src="/x/slide-image/{{ state.current_page }}?v={{ deck_version }}"
                  alt="Slide {{ state.current_page }}"
                  onerror="this.style.display='none'; document.getElementById('slideFallback').style.removeProperty('display');">
           </div>
@@ -597,6 +597,9 @@
   // characters, either of which would otherwise break out of this tag and
   // kill every function declared below it.
   const __SANDBOX_DATA = JSON.parse(document.getElementById('sandbox-data-blob').textContent);
+  // Cache-busting key tied to the current upload, so switching decks between
+  // sessions never serves back a previous deck's cached slide image bytes.
+  const DECK_VERSION = {{ deck_version | tojson }};
 
   // ── State ─────────────────────────────────────────────────────────────────
   let state = {
@@ -1164,7 +1167,7 @@
     img.style.display   = '';
     img.style.opacity   = '0';
     fallback.style.display = 'none';
-    img.src = `/x/slide-image/${slide.page}`;
+    img.src = `/x/slide-image/${slide.page}?v=${DECK_VERSION}`;
     img.onload  = () => { img.style.transition = 'opacity 0.3s'; img.style.opacity = '1'; };
     img.onerror = () => { img.style.display = 'none'; fallback.style.display = 'flex'; };
 
