@@ -817,10 +817,10 @@
 <script>
   // Data is parsed from a non-executable JSON blob (not spliced directly into
   // JS source) so that arbitrary LLM-generated text — which can legitimately
-  // contain a literal "</script>" substring or stray unicode line-separator
-  // characters — can never break out of this <script> tag and silently kill
-  // every function declared below it (this is what caused "switchTab is not
-  // defined": the whole script tag failed to parse past that point).
+  // contain a script-closing tag or stray unicode line-separator characters —
+  // can never break out of this tag and silently kill every function
+  // declared below it (this is what caused "switchTab is not defined": the
+  // whole script tag failed to parse past that point).
   const __REPORT_DATA = JSON.parse(document.getElementById('report-data-blob').textContent);
   const scores    = __REPORT_DATA.scores;
   const pitchData = __REPORT_DATA.pitchData;

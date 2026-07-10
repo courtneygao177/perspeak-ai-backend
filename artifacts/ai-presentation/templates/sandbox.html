@@ -593,9 +593,9 @@
 <script>
   // Parsed from a non-executable JSON blob rather than spliced straight into
   // JS source: slide content comes from user-uploaded PPT/PDF text and can
-  // legitimately contain "</script>" or unicode line-separator characters,
-  // either of which would otherwise break out of this <script> tag and kill
-  // every function declared below it.
+  // legitimately contain a script-closing tag or unicode line-separator
+  // characters, either of which would otherwise break out of this tag and
+  // kill every function declared below it.
   const __SANDBOX_DATA = JSON.parse(document.getElementById('sandbox-data-blob').textContent);
 
   // ── State ─────────────────────────────────────────────────────────────────
