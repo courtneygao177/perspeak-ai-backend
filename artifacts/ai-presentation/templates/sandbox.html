@@ -1317,7 +1317,28 @@
   function _makeSR() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert('Speech recognition is not supported in this browser. Please type instead.'); return null; }
+    if (!window.isSecureContext) {
+      showToast('⚠ Speech recognition needs HTTPS — this page is not on a secure connection. Please type instead.');
+      return null;
+    }
     const rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+    // Surface failures instead of failing silently — the browser's built-in
+    // recognizer gives no visible feedback on its own when it can't start
+    // (blocked mic permission, no network to Google's recognition service,
+    // or being denied mic access inside an embedded/iframed preview).
+    rec.onerror = (e) => {
+      const reasons = {
+        'not-allowed':      'Microphone access was blocked. Click the mic icon in your browser\'s address bar and allow it, then try again.',
+        'service-not-allowed': 'Microphone access was blocked by the browser or page permissions. Allow microphone access and try again.',
+        'no-speech':        'No speech detected — try speaking closer to the mic.',
+        'audio-capture':    'No microphone was found. Check that a mic is connected and try again.',
+        'network':          'Speech recognition needs an internet connection to Chrome\'s recognition service and it failed — check your connection.',
+        'aborted':          null,
+      };
+      const msg = reasons[e.error];
+      if (msg) showToast('🎤 ' + msg);
+      console.warn('[SpeechRecognition] error:', e.error);
+    };
     return rec;
   }
 
