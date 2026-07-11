@@ -3,12 +3,15 @@ previewPath = "/"
 title = "PerspeakAI"
 
 [[services]]
-localPort = 8000
+localPort = 8001
 name = "PerspeakAI"
 paths = ["/"]
 
 [services.development]
 run = "python app.py"
+
+[services.development.env]
+PORT = "8001"
 
 [services.production]
 
@@ -16,7 +19,7 @@ run = "python app.py"
 args = ["python", "app.py"]
 
 [services.production.run.env]
-PORT = "8000"
+PORT = "8001"
 FLASK_ENV = "production"
 
 [services.production.health.startup]
