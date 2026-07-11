@@ -6,3 +6,4 @@ python-pptx>=1.0
 Pillow>=10.0
 requests>=2.31
 json-repair>=0.25
+gunicorn>=21.0

@@ -14,11 +14,9 @@ run = "python app.py"
 PORT = "8001"
 
 [services.production]
+run = "gunicorn -w 2 -b 0.0.0.0:$PORT app:app"
 
-[services.production.run]
-args = ["python", "app.py"]
-
-[services.production.run.env]
+[services.production.env]
 PORT = "8001"
 FLASK_ENV = "production"
 
