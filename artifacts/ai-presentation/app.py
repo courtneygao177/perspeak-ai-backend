@@ -2278,28 +2278,64 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
                 "gives no actual content to credit — there is nothing substantive here yet."
             )
         elif short_answer:
-            what_good = (
-                f"You said '{quoted_fragment}', which correctly names the core keyword the question "
-                "was asking about. That shows you understood what was being asked, though there is not "
-                "enough here yet to judge the answer in depth."
+            # Short answer: only credit it if it actually matches a keyword from the slide
+            slide = _nearest_slide_for_text(slides, question, answer)
+            slide_content = (slide or {}).get("content", "")
+            slide_words = {
+                w.strip(".,?!:;\"'()").lower()
+                for w in slide_content.split()
+                if len(w.strip(".,?!:;\"'()")) > 3
+            }
+            answer_lower = answer.strip().lower()
+            matched_slide_kw = next(
+                (w for w in slide_words if w in answer_lower), None
             )
-        elif hit_rule:
-            quote_bit = f" — you said '{hit_rule['sentence'].strip()}'" if hit_rule["sentence"] else ""
-            what_good = f"{hit_rule['good_desc'][0].upper()}{hit_rule['good_desc'][1:]}{quote_bit}."
-        else:
-            # No content signal fired at all — still ground the praise in a specific
-            # point from THIS answer instead of a repeated generic line, by finding a
-            # keyword from THIS question that the user actually echoed.
-            kw, kw_sentence = _keyword_overlap_highlight(question, sig["sentences"])
-            if kw and kw_sentence:
+            if matched_slide_kw:
                 what_good = (
-                    f"You directly engaged with the question's focus on '{kw}' by saying "
-                    f"'{kw_sentence.strip()}', which kept your answer anchored to what was actually asked."
+                    f"You said \"{quoted_fragment}\" — that directly references "
+                    f"\"{matched_slide_kw}\", which is a key concept in this question. "
+                    "Good that you identified it, though you need to expand this into a full answer."
                 )
             else:
+                # Short answer with no slide keyword match — flag it
+                kw, _ = _keyword_overlap_highlight(question, [answer])
+                focus = kw or "the main concept"
                 what_good = (
-                    f"When you said '{quoted_fragment}', you gave a real, on-topic answer instead of "
-                    "avoiding the question."
+                    f"Your answer \"{quoted_fragment}\" is too short to judge, and it did not "
+                    f"reference any of the key terms the question was asking about (e.g. \"{focus}\"). "
+                    "There is nothing concrete here to credit."
+                )
+        elif hit_rule:
+            quote_bit = f" — you said \"{hit_rule['sentence'].strip()}\"" if hit_rule["sentence"] else ""
+            what_good = f"{hit_rule['good_desc'][0].upper()}{hit_rule['good_desc'][1:]}{quote_bit}."
+        else:
+            # No content signal fired — check if any question keyword appears in the answer.
+            # If not, explicitly say the answer missed the expected content.
+            kw, kw_sentence = _keyword_overlap_highlight(question, sig["sentences"])
+            slide = _nearest_slide_for_text(slides, question, answer)
+            slide_title = (slide or {}).get("title", "")
+            if kw and kw_sentence:
+                what_good = (
+                    f"You mentioned \"{kw_sentence.strip()}\" — that touches on "
+                    f"\"{kw}\", which the question was asking about. "
+                    "That is the one part of your answer that was on target."
+                )
+            else:
+                # Nothing matched — explicit wrong-answer feedback
+                q_words = [
+                    w.strip(".,?!:;\"'()").lower()
+                    for w in question.split()
+                    if len(w.strip(".,?!:;\"'()")) > 3
+                ]
+                _stop = {"what", "your", "does", "this", "that", "with", "about", "have",
+                         "from", "were", "would", "could", "should", "explain", "describe"}
+                q_kws = [w for w in q_words if w not in _stop]
+                focus_terms = ", ".join(f'"{w}"' for w in q_kws[-2:]) if q_kws else "the topic"
+                slide_hint = f" (see your slide \"{slide_title}\")" if slide_title else ""
+                what_good = (
+                    f"Your answer did not address {focus_terms}{slide_hint} — "
+                    "none of the expected key concepts from the question appeared in your response. "
+                    "There is nothing to credit here."
                 )
 
         slide = _nearest_slide_for_text(slides, question, answer)
@@ -2572,8 +2608,11 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         return " ".join(labeled) if labeled else text
 
     exchanges_text = "\n\n".join(
-        f"Q{i+1} [id={t.get('question_id', f'q{i+1}')}] [{t.get('type','qa')}]: {t['question']}\n"
-        f"A{i+1}: {_label_sentences(t['answer'])}"
+        (
+            f"Q{i+1} [id={t.get('question_id', f'q{i+1}')}] [{t.get('type','qa')}]: {t['question']}\n"
+            + (f"  [Expected key concepts: {t['answering_strategy'][:250]}]\n" if t.get("answering_strategy") else "")
+            + f"A{i+1}: {_label_sentences(t['answer'])}"
+        )
         for i, t in enumerate(comm_transcripts) if t["answer"].strip()
     ) or "(No Q&A answers recorded)"
 
@@ -2798,12 +2837,23 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "  - question_id: copy the exact [id=...] value shown next to that Qn.\n"
         "  - question_text: copy the question text verbatim.\n"
         "  - user_actual_answer: copy the user's full answer verbatim (remove the [n] sentence labels).\n"
-        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. You MUST quote the user's COMPLETE "
-        "AXIS 3 answer word-for-word in full — the ENTIRE text of user_actual_answer for THIS question only, "
-        "never a truncated fragment, never a partial excerpt, and never words borrowed from a different "
-        "question's answer. If the answer is only one or two words, quote those one or two words in full and "
-        "praise that they captured the right keyword, noting it needs expansion — do not invent a longer "
-        "quote or add words the user did not say.\n"
+        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0.\n"
+        "    MANDATORY — silently execute this process BEFORE writing anything:\n"
+        "    Step 1: From [Expected key concepts] and AXIS 1 slide content for THIS question, extract 3-5 "
+        "KEY TERMS (specific named concepts, numbers, phrases).\n"
+        "    Step 2: Check the user's AXIS 3 answer for verbatim or near-verbatim matches to those key terms.\n"
+        "    Step 3 — THREE possible outcomes, pick ONE:\n"
+        "      (A) REFUSAL detected ('I don't know' / 'no idea' / 'not sure' / 'I pass' / blank): "
+        "Write exactly: 'Your answer \"[user's exact words]\" did not engage with the question at all — "
+        "there is nothing here to credit. The question asked about [key term from Expected/slide].'\n"
+        "      (B) No key terms matched OR answer is clearly off-topic: Write exactly: "
+        "'Your answer did not address [list the 1-2 specific unmatched key terms from Expected/slide]. "
+        "The question specifically asked about [those terms], but your response did not mention them.'\n"
+        "      (C) At least one key term matched: Quote ONLY the specific matching phrase(s) — "
+        "e.g. 'You correctly mentioned \"[matched phrase]\" — that is the core concept this question "
+        "was asking about.' Do NOT quote the full answer. Do NOT invent praise for unmatched parts.\n"
+        "    NEVER write generic filler like 'You gave a real answer' or 'You stayed on topic' without "
+        "pointing to a specific matched or missing keyword.\n"
         "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0. Name the SPECIFIC fact, "
         "number, named concept, or term from the AXIS 1 slide content that the user's AXIS 3 answer left "
         "out. NEVER write generic advice such as 'add more evidence' or 'be clearer' — always name the "
@@ -3090,7 +3140,11 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         return " ".join(labeled) if labeled else text
 
     free_exchanges_text = "\n\n".join(
-        f"Q{i+1} [free]: {t['question']}\nA{i+1}: {_label_sentences(t['answer'])}"
+        (
+            f"Q{i+1} [free]: {t['question']}\n"
+            + (f"  [Expected key concepts: {t['answering_strategy'][:250]}]\n" if t.get("answering_strategy") else "")
+            + f"A{i+1}: {_label_sentences(t['answer'])}"
+        )
         for i, t in enumerate(free_transcripts) if t["answer"].strip()
     ) or "(No free Q&A answers recorded)"
 
@@ -3219,12 +3273,23 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "  - question_id (copy the [id=...] if shown, else use 'anchor' for the anchor exchange)\n"
         "  - question_text (verbatim)\n"
         "  - user_actual_answer (verbatim, no [n] labels)\n"
-        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0. Quote the user's COMPLETE AXIS 3 "
-        "answer word-for-word in full — the ENTIRE text of user_actual_answer for THIS exchange only, never "
-        "a truncated fragment, never a partial excerpt, and never words borrowed from a different exchange "
-        "(free vs anchor). If the answer is only one or two words, quote those one or two words in full and "
-        "praise the correct keyword, noting it needs expanding — never invent a longer quote or add words "
-        "the user did not say.\n"
+        "  - what_i_did_good: 1-2 sentences, pure English, IELTS 5.5-6.0.\n"
+        "    MANDATORY — silently execute this process BEFORE writing anything:\n"
+        "    Step 1: From [Expected key concepts] (if shown) and AXIS 1 slide content for THIS question, "
+        "extract 3-5 KEY TERMS (specific named concepts, numbers, phrases).\n"
+        "    Step 2: Check the user's AXIS 3 answer for verbatim or near-verbatim matches to those key terms.\n"
+        "    Step 3 — THREE possible outcomes, pick ONE:\n"
+        "      (A) REFUSAL detected ('I don't know' / 'no idea' / 'not sure' / 'I pass' / blank): "
+        "Write: 'Your answer \"[user's exact words]\" did not engage with the question at all — "
+        "there is nothing here to credit. The question asked about [key term from Expected/slide].'\n"
+        "      (B) No key terms matched OR answer is clearly off-topic: Write: "
+        "'Your answer did not address [list 1-2 specific unmatched key terms from Expected/slide]. "
+        "The question specifically asked about [those terms], but your response did not mention them.'\n"
+        "      (C) At least one key term matched: Quote ONLY the specific matching phrase(s) from the user's "
+        "answer — e.g. 'You correctly mentioned \"[matched phrase]\" — that is the core concept this "
+        "question was asking about.' Do NOT quote the full answer.\n"
+        "    NEVER write generic filler ('You gave a real answer', 'You stayed on topic') without naming "
+        "a specific matched or missing keyword from the slide/expected content.\n"
         "  - areas_for_improvement: 1-2 sentences, pure English, IELTS 5.5-6.0. Name the SPECIFIC fact, "
         "number, or named concept from the AXIS 1 slide that the AXIS 3 answer left out. NEVER write "
         "generic advice like 'add more evidence' — always name the exact missing slide detail. If no "
