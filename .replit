@@ -24,13 +24,13 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python artifacts/ai-presentation/app.py"
 waitForPort = 8000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [agent]
 stack = "PNPM_WORKSPACE"
