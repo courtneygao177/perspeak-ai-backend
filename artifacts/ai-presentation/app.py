@@ -1570,54 +1570,75 @@ def _cq_heuristic_case_pitch(qa_texts, total_qa_seconds=0):
     return conclusion_first, persuasion_mix, max(0, command)
 
 
-def _cq_heuristic_class_presentation(qa_texts):
-    """Branch C: Class Presentation — returns (rule_of_three, conv_sense, illustrative_support)."""
-    all_text = " ".join(qa_texts).lower()
+def _cq_heuristic_class_presentation(qa_texts, comm_transcripts=None):
+    """
+    Branch C: Class Presentation — content-matching heuristic.
+    Returns (content_accuracy, concept_coverage, answer_completeness).
+    Scores based on how well the user's answer covers the question topic and
+    expected answer concepts, NOT on rhetorical structure (Rule of Three etc.).
+    """
+    STOP = {
+        "what","is","are","how","why","when","where","who","the","a","an",
+        "do","does","did","your","you","can","could","would","should","this",
+        "that","of","in","to","for","with","and","or","but","it","its","be",
+        "was","were","have","has","had","they","we","i","me","my","our",
+        "their","there","here","use","using","used","not","no","so","if","at",
+    }
 
-    ORDINAL_RE    = r'\b(?:first(?:ly)?[,\s]|second(?:ly)?[,\s]|third(?:ly)?[,\s]|firstly|secondly|thirdly|number one|number two|number three)\b'
-    THREE_FRAME_RE = r'\b(?:three (?:things|points|key|reasons|aspects|ways|parts)|3 (?:things|points|key))\b'
-    ord_hits   = len(re.findall(ORDINAL_RE,    all_text))
-    frame_hits = len(re.findall(THREE_FRAME_RE, all_text))
+    if comm_transcripts:
+        acc_scores, cov_scores, comp_scores = [], [], []
+        for t in comm_transcripts:
+            question = t.get("question", "").lower()
+            answer   = t.get("answer",   "").lower()
+            strategy = t.get("answering_strategy", "").lower()
 
-    if   frame_hits >= 1 and ord_hits >= 3: rule_of_three = 95
-    elif ord_hits >= 3:                     rule_of_three = 80
-    elif ord_hits >= 2:                     rule_of_three = 65
-    elif ord_hits >= 1:                     rule_of_three = 50
-    else:                                   rule_of_three = 35
+            if not answer.strip():
+                acc_scores.append(20); cov_scores.append(20); comp_scores.append(20)
+                continue
 
-    ORAL_RE = (
-        r'\b(?:you know|think about|imagine|right\?|the thing is|what i mean is|'
-        r'for example|in other words|actually|let me explain|you see|it\'s like)\b'
-    )
-    SCRIPT_RE = r'\b(?:furthermore|nevertheless|in conclusion|to summarize|accordingly|thus|hence|moreover)\b'
-    oral_hits   = len(re.findall(ORAL_RE,   all_text))
-    script_hits = len(re.findall(SCRIPT_RE, all_text))
+            q_words = set(re.findall(r'\b[a-z]{3,}\b', question)) - STOP
+            a_words = set(re.findall(r'\b[a-z]{3,}\b', answer))
+            s_words = set(re.findall(r'\b[a-z]{3,}\b', strategy)) - STOP if strategy else set()
 
-    if   oral_hits >= 4 and script_hits <= 2: conv_sense = 90
-    elif oral_hits >= 2:                      conv_sense = 74
-    elif oral_hits >= 1:                      conv_sense = 60
-    elif script_hits >= 3:                    conv_sense = 38
-    else:                                     conv_sense = 50
+            # DIM 1 — Content Accuracy: overlap with strategy (ideal answer concepts)
+            if s_words:
+                acc_ratio = len(s_words & a_words) / len(s_words)
+                if   acc_ratio >= 0.45: acc = 88
+                elif acc_ratio >= 0.30: acc = 74
+                elif acc_ratio >= 0.15: acc = 58
+                else:                   acc = 38
+            else:
+                acc = 60  # no strategy reference → neutral
 
-    EXAMPLE_RE = (
-        r'\b(?:for example|for instance|such as|like when|one (?:example|case|time|instance)|'
-        r'i (?:remember|recall|once saw)|when i (?:was|worked|studied|saw)|'
-        r'a (?:friend|colleague|classmate|professor|student) (?:told|said|shared))\b'
-    )
-    FIVE_W_RE = (
-        r'\b(?:in (?:china|the us|beijing|shanghai|london|new york|tokyo)|'
-        r'at (?:harvard|stanford|mit|oxford|cambridge|our university)|'
-        r'last (?:year|month|week|semester)|professor \w+)\b'
-    )
-    ex_hits     = len(re.findall(EXAMPLE_RE, all_text))
-    five_w_hits = len(re.findall(FIVE_W_RE,  all_text))
+            # DIM 2 — Concept Coverage: answer covers question keywords
+            if q_words:
+                cov_ratio = len(q_words & a_words) / len(q_words)
+                cov = int(35 + cov_ratio * 58)  # 35-93
+            else:
+                cov = 60
 
-    if   ex_hits >= 2 and five_w_hits >= 1: illustrative = 92
-    elif ex_hits >= 2:                      illustrative = 78
-    elif ex_hits >= 1:                      illustrative = 62
-    else:                                   illustrative = 38
+            # DIM 3 — Answer Completeness: length as proxy for thoroughness
+            answer_words = len(answer.split())
+            if   answer_words >= 60: comp = 85
+            elif answer_words >= 35: comp = 72
+            elif answer_words >= 20: comp = 58
+            else:                   comp = 38
 
-    return rule_of_three, conv_sense, illustrative
+            acc_scores.append(min(95, acc))
+            cov_scores.append(min(95, cov))
+            comp_scores.append(min(95, comp))
+
+        content_accuracy    = int(sum(acc_scores)  / len(acc_scores))  if acc_scores  else 55
+        concept_coverage    = int(sum(cov_scores)  / len(cov_scores))  if cov_scores  else 55
+        answer_completeness = int(sum(comp_scores) / len(comp_scores)) if comp_scores else 55
+    else:
+        all_text = " ".join(qa_texts).lower()
+        total_words = len(all_text.split())
+        content_accuracy    = min(80, 40 + total_words // 12)
+        concept_coverage    = min(75, 40 + total_words // 15)
+        answer_completeness = min(80, 35 + total_words // 10)
+
+    return content_accuracy, concept_coverage, answer_completeness
 
 
 def _cq_no_data_result(scene_slug):
@@ -1747,18 +1768,18 @@ def _cq_mock_result(scene_slug, heuristic_scores, cq_total, dim_names,
              "Replace hedges with clear assertions. Say this instead: '[The answer] is [X]. We know this because [data]. There is no ambiguity.'"),
         ],
         "class_presentation": [
-            ("Rule of Three",
-             "You organized your answer into three clear parts, which made it easy to follow and remember.",
-             "Your answer listed points but had no three-part structure. The Rule of Three helps your audience remember your main ideas.",
-             "Structure your answer into three points. Say this instead: 'There are three key things: first, [X]; second, [Y]; and third, [Z].'"),
-            ("Conversational Sense",
-             "Your answer sounded like a natural conversation rather than a recited script, with oral connectors and a natural rhythm throughout.",
-             "Your answer sounded formal or scripted. TED speakers talk like they are having a conversation, not giving a lecture.",
-             "Add conversational language markers. Say this instead: 'Think about it this way — [your core point]. The key insight is [idea].'"),
-            ("Illustrative Support",
-             "You supported your point with a specific, real example, including clear details like time, place, and people — this made the idea vivid.",
-             "You gave a conceptual explanation without a concrete 5-W example. A real story always beats abstract reasoning.",
-             "Jump straight into a 5-W example. Say this instead: 'Let me give you a real case: in [year], [who] at [place] did [what], with result [outcome].'"),
+            ("Content Accuracy",
+             "You correctly stated the key facts and concepts from the slides — your answer matched the slide content accurately.",
+             "Your answer missed or misstated key facts shown in the relevant slides. Review the slide content carefully.",
+             "Ground your answer in the slide content. Say this instead: 'According to [slide topic], the key point is [specific fact from the slides].'"),
+            ("Concept Coverage",
+             "You addressed the core concepts the question was asking about — your answer directly covered what the slides contained.",
+             "You did not mention the core concepts from the question topic. Review which slide terms are relevant to this question.",
+             "Include the key concepts. Say this instead: 'The [core concept] refers to [definition or explanation from slide content].'"),
+            ("Answer Completeness",
+             "Your answer was complete — you covered all the main points that would be expected for this question.",
+             "Your answer was too brief or left out important expected points. Expand your response to cover the full topic.",
+             "Make your answer more complete. Say this instead: 'In addition to [what you said], [the missing expected point from the slides].'"),
         ],
     }
 
@@ -1864,6 +1885,19 @@ def _extract_dimension_quote(qa_texts, dim_slug, max_chars=165):
         ],
         # conclusion_first: first sentence of any answer is always the most relevant signal
         "conclusion_first": None,
+        # Class Presentation content-matching signals
+        "content_accuracy": [
+            r'\b(because|since|this means|which means|therefore|as a result)\b',
+            r'\b(shows?|indicates?|means?|refers?\s+to|defined?\s+as)\b',
+        ],
+        "concept_coverage": [
+            r'\b(main|key|core|central|primary|important|major)\b',
+            r'\b(concept|idea|point|factor|aspect|feature|element|principle)\b',
+        ],
+        "answer_completeness": [
+            r'\b(also|additionally|in addition|moreover|besides|furthermore)\b',
+            r'\b(another|second|next|finally|lastly|overall|as well)\b',
+        ],
     }
 
     # conclusion_first: first sentence wins by definition
@@ -1979,20 +2013,20 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
         ],
         "class_presentation": [
             (dim_names[0],
-             has_structure and scores.get(dim_names[0], 60) >= 65,
-             "You organized your answer into three clear parts, which made it easy to follow and remember.",
-             "Your answer listed points but had no three-part structure. The Rule of Three improves audience retention.",
-             "Structure your answer into three points. Say this instead: 'There are three things: first [X]; second [Y]; third [Z].'"),
+             scores.get(dim_names[0], 60) >= 65,
+             "Your answer covered the key facts and concepts from the slides accurately and correctly.",
+             "Your answer missed or misstated key facts from the slides. Check the slide content for the right details.",
+             "Ground your answer in the slide content. Say this instead: 'According to [slide topic], the key point is [specific fact].'"),
             (dim_names[1],
              scores.get(dim_names[1], 60) >= 65,
-             "Your answer sounded like a natural conversation rather than a recited script.",
-             "Your answer sounded formal or scripted. TED speakers talk like they are having a conversation, not giving a lecture.",
-             "Add conversational language markers. Say this instead: 'Think about it this way — [core point]. The key is [insight].'"),
+             "You addressed the core concepts the question was asking about — your answer matched what the slides contained.",
+             "You did not mention the core concepts from the question topic. Review which slide terms are relevant to this question.",
+             "Include the key concepts. Say this instead: 'The [core concept] means [explanation using slide vocabulary].'"),
             (dim_names[2],
-             has_example and scores.get(dim_names[2], 60) >= 65,
-             "You supported your point with a specific, real example, including clear details like time, place, and people.",
-             "You gave a conceptual explanation without a concrete 5-W example. A real story always beats abstract reasoning.",
-             "Jump straight into a 5-W example. Say this instead: 'In [year], [who] at [place] did [what], result: [outcome].'"),
+             scores.get(dim_names[2], 60) >= 65,
+             "Your answer was complete — you covered all the main points expected for this question.",
+             "Your answer was too brief or left out important expected points. Expand your response to cover the full topic.",
+             "Make your answer more complete. Say this instead: 'In addition to [what you said], [the missing expected point].'"),
         ],
     }
 
@@ -2003,7 +2037,7 @@ def _build_cq_coaching_cards(qa_texts, scene_slug, scene_label, dim_names, score
     _dim_slug_map = {
         "thesis_defense":    ["directness",       "defensibility",    "tact"],
         "case_pitch":        ["conclusion_first",  "persuasion_mix",   "command_presence"],
-        "class_presentation":["rule_of_three",     "conversational_sense", "illustrative_support"],
+        "class_presentation":["content_accuracy",   "concept_coverage",     "answer_completeness"],
     }
     dim_slugs = _dim_slug_map.get(scene_slug, ["directness", "defensibility", "tact"])
 
@@ -2201,18 +2235,18 @@ _FALLBACK_DIM_CONFIG = {
          "cut the hedging words and state it plainly"),
     ],
     "class_presentation": [
-        ("rule_of_three", "three_point_structure",
-         "you structured your answer into clear first/second/third-style points",
-         "your answer wasn't structured into clear points (first / second / third)",
-         "break your answer into three clearly labeled points"),
-        ("conversational_sense", "oral_marker",
-         "you spoke naturally instead of sounding like you were reading a script",
-         "your answer sounded formal or scripted, without natural spoken connectors",
-         "add a natural spoken connector like 'you know' or 'the thing is'"),
-        ("illustrative_support", "example_marker",
-         "you grounded your point in a concrete example instead of an abstract statement",
-         "your answer gave a conceptual explanation with no concrete example",
-         "add a specific example with a who/when/where detail"),
+        ("content_accuracy", "strategy_keyword",
+         "your answer correctly stated the key facts and concepts from the relevant slides",
+         "your answer missed or misstated key facts from the slides",
+         "check the slide content and state the correct fact or concept directly"),
+        ("concept_coverage", "question_keyword",
+         "you addressed the core concepts the question was asking about",
+         "you did not mention the core concepts from the question's topic in the slides",
+         "include the key concept from the slides in your answer"),
+        ("answer_completeness", "length_signal",
+         "your answer was complete and covered all the main points expected",
+         "your answer was too brief and left out important expected points",
+         "expand your answer to cover all expected points from the slide content"),
     ],
 }
 
@@ -2588,9 +2622,9 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         dim_names   = ["Conclusion First", "Persuasion Mix", "Command Presence"]
         weights     = [0.40, 0.30, 0.30]
     else:  # class_presentation
-        s1, s2, s3 = _cq_heuristic_class_presentation(qa_texts)
-        dim_names   = ["Rule of Three", "Conversational Sense", "Illustrative Support"]
-        weights     = [0.40, 0.30, 0.30]
+        s1, s2, s3 = _cq_heuristic_class_presentation(qa_texts, comm_transcripts)
+        dim_names   = ["Content Accuracy", "Concept Coverage", "Answer Completeness"]
+        weights     = [0.40, 0.35, 0.25]
 
     heuristic_scores      = {dim_names[0]: int(s1), dim_names[1]: int(s2), dim_names[2]: int(s3)}
     cq_total_heuristic    = int(round(s1 * weights[0] + s2 * weights[1] + s3 * weights[2]))
@@ -2699,38 +2733,52 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     else:  # class_presentation
         rubric_text = (
             "RUBRIC — CLASS PRESENTATION Q&A (0-100 each)\n\n"
+            "EVALUATION FOCUS: Compare the user's answer to (a) the PPT slide content relevant to\n"
+            "the question keywords, and (b) the AI-inferred ideal answer. Score content quality only.\n"
+            "Do NOT penalise for lack of 'Rule of Three' unless the question explicitly asks for\n"
+            "a numbered list (e.g. 'list three things', 'give three reasons', 'name three points').\n\n"
             f"DIM 1 — {dim_names[0]} (weight 40%)\n"
-            "90-100: Explicitly structures into 3 named buckets (there are three things: first...second...third).\n"
-            "70-89:  Uses sequential markers (First / Then / Finally) without declaring the 3-point frame.\n"
-            "50-69:  One or two ordinal markers, otherwise unstructured.\n"
-            "0-49:   Stream of consciousness. No discernible structure.\n\n"
-            f"DIM 2 — {dim_names[1]} (weight 30%)\n"
-            "90-100: Natural conversation, not recited script. Uses oral markers (You know / Think about it / The thing is).\n"
-            "70-89:  Some conversational elements.\n50-69: Mixed natural and scripted.\n0-49: Reads like a paper. Formal academic language only.\n\n"
-            f"DIM 3 — {dim_names[2]} (weight 30%)\n"
-            "Carnegie: Jump immediately into a 5-W example (Who, What, When, Where, Why/Outcome).\n"
-            "90-100: Concrete example with specific details (name, place, year, outcome).\n"
-            "70-89:  Examples provided but lack 5-W specificity.\n50-69: Generic ('a company might...'). 0-49: No examples — pure abstract concept.\n\n"
-            f"HEURISTIC ANCHORS:\n"
+            "Does the user's answer state facts/concepts that match the PPT slide content?\n"
+            "90-100: Key facts/data/concepts from the relevant slides are correctly stated and explained.\n"
+            "70-89:  Most main points correct; 1-2 minor gaps or imprecisions.\n"
+            "50-69:  Partial correctness; misses important facts or uses vague language.\n"
+            "0-49:   Off-topic, factually wrong, or empty answer.\n\n"
+            f"DIM 2 — {dim_names[1]} (weight 35%)\n"
+            "How many of the core concepts from the question topic (as shown in PPT) did the user mention?\n"
+            "90-100: Addresses all key concepts from the relevant slides.\n"
+            "70-89:  Covers most key concepts; 1-2 slide-critical terms omitted.\n"
+            "50-69:  Covers only surface-level terms; misses deeper slide content.\n"
+            "0-49:   Does not address the question topic at all.\n\n"
+            f"DIM 3 — {dim_names[2]} (weight 25%)\n"
+            "Compared to the AI-inferred ideal answer, how complete is the user's response?\n"
+            "90-100: Hits all expected answer points; nothing important left out.\n"
+            "70-89:  Mostly complete; 1 expected point missing.\n"
+            "50-69:  Partial answer; 2+ expected points missing.\n"
+            "0-49:   Severely incomplete or off-topic.\n\n"
+            "SPECIAL RULE — Rule of Three (bonus only, not a base dimension):\n"
+            "Check if the question text explicitly asks for a numbered list or three points.\n"
+            "If YES and the user uses a clear three-part structure → add up to +8 bonus to DIM 1.\n"
+            "If NO → ignore structure entirely. Zero penalty for not using numbered points.\n\n"
+            f"HEURISTIC ANCHORS (adjust ±15 based on actual text):\n"
             f"- {dim_names[0]}: {s1}/100\n"
             f"- {dim_names[1]}: {s2}/100\n"
             f"- {dim_names[2]}: {s3}/100"
         )
         good_templates = (
             "what_i_did_good — EXACTLY 3 strings. Insert EXACT words from A1/A2/A3 in every [bracket]:\n"
-            f'1. "[Class Presentation] Rule of Three — Structure: You perfectly limited your core takeaways to three points in your opening, saying: \'[EXACT quote showing explicit 3-point framing from A1/A2/A3 — copy verbatim]\'. This kept your audience focused and prevented information overload."\n'
-            f'2. "[Class Presentation] Conversational Sense — No Script Reading: Instead of reading from a paper, you spoke naturally and said: \'[EXACT oral-marker quote like You know / Think about it / The thing is from A1/A2/A3 — copy verbatim]\'. This gave your answer a TED-style conversational feel."\n'
-            f'3. "[Class Presentation] Illustrative Support — 5-W Example: Instead of giving a dry explanation, you immediately jumped into a specific example when you said: \'[EXACT example quote with 5-W who/when/where detail from A1/A2/A3 — copy verbatim]\'. This made your answer vivid and memorable."\n\n'
+            f'1. "[Class Presentation] Content Accuracy: You correctly stated the key fact from the slides when you said: \'[EXACT quote from A1/A2/A3 that matches the slide content — copy verbatim]\'. This shows you understood the core material."\n'
+            f'2. "[Class Presentation] Concept Coverage: You addressed the main topic by mentioning: \'[EXACT quote from A1/A2/A3 covering the core concept — copy verbatim]\'. This directly answers what was asked."\n'
+            f'3. "[Class Presentation] Answer Completeness: Your answer covered both [concept X] and [concept Y] from the slides, as shown when you said: \'[EXACT quote from A1/A2/A3 showing comprehensive coverage — copy verbatim]\'."\n\n'
             "areas_for_improvement — EXACTLY 3 objects with keys: dimension, issue, example, how_to_fix:\n"
-            f'1. dimension="{dim_names[0]}", issue="[Class Presentation] Information Overload: Your answer was unstructured — no Rule of Three framing used.", '
-            f'example="You said: \'[EXACT scattered quote without any structure from A1/A2/A3 — copy verbatim]\'", '
-            f'how_to_fix="Structure into three clear buckets. Say this instead: \'To answer your question, there are three key things: first, [point 1]; second, [point 2]; and third, [point 3].\'"\n'
-            f'2. dimension="{dim_names[1]}", issue="[Class Presentation] Script Reading: Your tone sounded like reading from a paper rather than having a conversation.", '
-            f'example="You literally read: \'[EXACT mechanical quote with no natural oral connectors from A1/A2/A3 — copy verbatim]\'", '
-            f'how_to_fix="Speak like a conversation. Say this instead: \'[Same idea rewritten with You know / Think about it / The thing is at the start].\'"\n'
-            f'3. dimension="{dim_names[2]}", issue="[Class Presentation] No Specific Example: You gave a conceptual explanation with no real-world 5-W example.", '
-            f'example="You said: \'[EXACT abstract explanation quote with no specific details from A1/A2/A3 — copy verbatim]\'", '
-            f'how_to_fix="Jump into a 5-W example immediately. Say this instead: \'Let me give you a concrete example: [who] did [what] in [when/where], and the result was [outcome].\'"\n'
+            f'1. dimension="{dim_names[0]}", issue="[Class Presentation] Factual Gap: Your answer missed or misstated a key fact shown in the relevant slides.", '
+            f'example="You said: \'[EXACT quote from A1/A2/A3 showing the gap or error — copy verbatim]\'", '
+            f'how_to_fix="The slide showed [specific fact]. Say this instead: \'[Corrected version using the slide vocabulary and the exact fact/concept that was missing].\'"\n'
+            f'2. dimension="{dim_names[1]}", issue="[Class Presentation] Missing Core Concept: The question asked about [topic], but you did not mention [key concept from slides].", '
+            f'example="You said: \'[EXACT quote from A1/A2/A3 that shows the omission — copy verbatim]\'", '
+            f'how_to_fix="Include the key concept. Say this instead: \'The [key concept] refers to [definition or explanation from slide content].\'"\n'
+            f'3. dimension="{dim_names[2]}", issue="[Class Presentation] Incomplete Answer: Your response covered [X] but left out [Y] — an expected part of the answer.", '
+            f'example="You said: \'[EXACT quote from A1/A2/A3 — copy verbatim]\' but did not address [missing point].", '
+            f'how_to_fix="Complete your answer. Say this instead: \'In addition, [the missing point explained using slide vocabulary].\'"\n'
         )
 
     # ── Per-dimension signal labels used in RULE 6 ───────────────────────────
@@ -2748,9 +2796,9 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
             "confidence signal — a hedge word (maybe/perhaps/I think/I guess) OR an assertive statement",
         ],
         "class_presentation": [
-            "list structure — first / second / third ordinal markers, or total absence of any structure",
-            "oral tone — natural connector (you know / think about it / the thing is) OR scripted/formal phrasing",
-            "concrete example — for example / specifically / in [year] / 5-W who+when+where detail, or total abstraction",
+            "content accuracy — a fact, definition, or concept that matches or contradicts the slide content",
+            "concept coverage — a key term from the question topic appearing (or absent) in the answer",
+            "answer completeness — additional points added (also / in addition / moreover) OR a very short answer with missing points",
         ],
     }
 
