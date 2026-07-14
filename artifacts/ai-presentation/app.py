@@ -2810,7 +2810,11 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         "RULE 0 (LANGUAGE — MANDATORY): ALL text in what_i_did_good, areas_for_improvement, how_to_fix, "
         "and every field inside communication_quality_report MUST be written in PURE ENGLISH ONLY. "
         "Do NOT write any Chinese characters anywhere in the output — not even as translation aids.\n"
-        "RULE 1: IELTS 5.5-6.0 vocabulary. Short, clear sentences for non-native speakers.\n"
+        "RULE 1 — LANGUAGE & CONCISENESS: IELTS 5.5-6.0 vocabulary. Short, clear sentences for non-native speakers. "
+        "No long paragraphs. Max 30 words per what_i_did_good item. "
+        "areas_for_improvement: issue max 20 words, example max 25 words, how_to_fix max 40 words (1-2 short sentences only). "
+        "per_question_analysis: what_i_did_good max 25 words, areas_for_improvement max 25 words, how_to_fix max 50 words. "
+        "Use bullet points (• each line, max 12 words per bullet) whenever listing 2+ points.\n"
         "RULE 2 (MOST IMPORTANT): Every item MUST quote EXACT words from A1/A2/A3 above. NEVER invent quotes.\n"
         "RULE 3: EXACTLY 3 items each in what_i_did_good and areas_for_improvement.\n"
         f"RULE 4 — TEMPLATES:\n{good_templates}\n"
@@ -3248,7 +3252,11 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
         "RULE 0b (LANGUAGE — MANDATORY): ALL text in what_i_did_good, areas_for_improvement, how_to_fix, and "
         "every field inside communication_quality_report MUST be written in PURE ENGLISH ONLY. Do NOT write "
         "any Chinese characters anywhere in the output.\n"
-        "RULE 1: IELTS 5.5-6.0 vocabulary. Short sentences.\n"
+        "RULE 1 — LANGUAGE & CONCISENESS: IELTS 5.5-6.0 vocabulary. Short sentences. No long paragraphs. "
+        "Max 30 words per what_i_did_good item. "
+        "areas_for_improvement: issue max 20 words, example max 25 words, how_to_fix max 40 words (1-2 sentences only). "
+        "per_question_analysis: what_i_did_good max 25 words, areas_for_improvement max 25 words, how_to_fix max 50 words. "
+        "Use bullet points (• each line, max 12 words per bullet) whenever listing 2+ points.\n"
         "RULE 2 (CRITICAL): Every example MUST quote EXACT words from the labelled transcripts. NEVER invent.\n"
         "  - FREE dims (Directness/Resonance/Evidence): quote ONLY from A1 sentences. NOT from A_anchor.\n"
         "  - ANCHOR dim: quote ONLY from A_anchor sentences. NOT from A1.\n"
@@ -3817,10 +3825,13 @@ Q&A TRANSCRIPT
 MANDATORY OUTPUT RULES — READ ALL BEFORE WRITING
 ══════════════════════════════════════════════
 
-⚡ SPEED RULE: Max 2 sentences per feedback item. Be concise. No essay text.
+⚡ SPEED RULE: Max 2 sentences per feedback item. No long paragraphs. If listing 2+ points, use bullet points (• each line, max 12 words per bullet).
 
-RULE 1 — LANGUAGE
+RULE 1 — LANGUAGE & CONCISENESS
 Use IELTS 5.5-6.0 vocabulary only. Short, clear sentences. Write for a university student who is NOT a native English speaker. Say "show" not "demonstrate". Say "fix" not "mitigate". Say "use" not "utilise".
+— what_i_did_good items: max 30 words each. One sentence + optional 1-bullet quote.
+— areas_for_improvement.issue: max 20 words. areas_for_improvement.example: max 25 words. areas_for_improvement.how_to_fix: max 40 words (1-2 short sentences only, no paragraph).
+— Prefer bullet points (•) over long compound sentences whenever 2+ points are listed.
 
 RULE 2 — QUOTE RULE (MOST IMPORTANT)
 Every item MUST be grounded in the ACTUAL SLIDE CONTENT and ACTUAL PRESENTER NARRATION above.
