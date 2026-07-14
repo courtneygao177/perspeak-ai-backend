@@ -9,7 +9,7 @@
   @keyframes wave { from { transform: scaleY(0.4); } to { transform: scaleY(1.0); } }
   @keyframes recordPulse { 0%,100% { transform:scale(1);opacity:0.8;} 50%{transform:scale(1.1);opacity:1;}}
   /* Slide image — fills its 16:9 wrapper, never overflows */
-  #slideImgWrap { position:relative; width:100%; aspect-ratio:16/9; max-height:min(48vh,480px); overflow:hidden; border-radius:0.5rem; }
+  #slideImgWrap { position:relative; width:100%; aspect-ratio:16/9; max-height:min(58vh,600px); overflow:hidden; border-radius:0.5rem; }
   #slideImg { display:block; width:100%; height:100%; object-fit:contain; border-radius:0.5rem; }
   .progress-bar-fill { transition: width 0.4s ease; }
 
@@ -68,13 +68,13 @@
     </div>
   </div>
 
-  <!-- ═══ TOP HALF: sidebar | slide viewer + voice button ══════════════ -->
-  <div class="flex gap-3">
+  <!-- Main layout: sidebar | center | right ══════════════════════════ -->
+  <div class="flex gap-3 flex-1" style="min-height: calc(100vh - 160px);">
 
-    <!-- LEFT SIDEBAR: Slide outline -->
+    <!-- ═══ LEFT SIDEBAR: Slide outline ════════════════════════════════════ -->
     <div class="flex flex-col gap-2 overflow-y-auto flex-shrink-0"
          id="slideOutlineSidebar"
-         style="width:6rem;max-height:calc(100vh - 220px);scrollbar-width:thin;scrollbar-color:#334155 transparent;">
+         style="width:8rem;max-height:calc(100vh - 160px);scrollbar-width:thin;scrollbar-color:#334155 transparent;">
       {% for slide in slides %}
       <div class="sidebar-thumb relative {% if slide.page == state.current_page %}active{% endif %}"
            id="sthumb-{{ slide.page }}"
@@ -89,11 +89,11 @@
       {% endfor %}
     </div>
 
-    <!-- RIGHT: Slide viewer + Start Voice Recording button -->
+    <!-- ═══ CENTER: Slide viewer + QA panels ═══════════════════════════════ -->
     <div class="flex-1 flex flex-col gap-3 min-w-0">
 
       <!-- Slide image panel -->
-      <div id="slidePanel" class="slide-panel rounded-2xl flex flex-col relative overflow-hidden">
+      <div id="slidePanel" class="slide-panel rounded-2xl flex-1 flex flex-col relative overflow-hidden">
         <!-- Label -->
         <div class="absolute top-3 left-3 z-10 flex items-center gap-2">
           <span class="font-mono text-xs px-2 py-1 rounded-lg border"
@@ -118,7 +118,7 @@
         </div>
 
         <!-- Progress bar -->
-        <div class="px-6 pb-3">
+        <div class="px-6 pb-4">
           <div class="flex items-center justify-between mb-1.5">
             <span class="text-xs text-gray-600">Slide <span id="progCurrent">{{ state.current_page }}</span> of {{ total_pages }}</span>
             <span class="text-xs text-gray-700 font-mono" id="progPct">{{ ((state.current_page / total_pages) * 100)|round|int }}%</span>
@@ -139,17 +139,6 @@
           {% endfor %}
         </div>
       </div>
-
-      <!-- Start Voice Recording button — near the slide viewer -->
-      <button onclick="toggleNarrationVoice()" id="narrationVoiceBtn"
-              class="w-full rounded-xl text-sm py-3 transition-all flex items-center justify-center gap-2 border font-medium"
-              style="color:#16A34A;background:rgba(217,72,31,0.06);border-color:rgba(217,72,31,0.2)">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-        </svg>
-        Start Voice Recording
-      </button>
 
       <!-- Academic / Class Presentation Post-Session Q&A Panel -->
       <div id="academicQaPanel" class="hidden rounded-2xl p-6"
@@ -232,7 +221,7 @@
             </div>
             <div class="space-y-3">
               <textarea id="answerInput"
-                        placeholder="Type your answer here, or use Voice input below"
+                        placeholder="Type your answer here, or use Voice input on the right"
                         class="w-full bg-red-50 border border-red-200 rounded-xl px-4 py-3
                                text-[#0F172A] placeholder-slate-400 resize-none text-sm focus:outline-none
                                focus:border-red-400 transition-colors"
@@ -261,66 +250,77 @@
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ═══ BOTTOM HALF: Recording | Session Log ══════════════════════════ -->
-  <div class="flex gap-3">
+    <!-- ═══ RIGHT: Controls ════════════════════════════════════════════════ -->
+    <div class="w-64 flex-shrink-0 flex flex-col gap-4">
 
-    <!-- Recording card -->
-    <div class="flex-1 glass rounded-2xl p-5 flex flex-col gap-3">
-      <div class="flex items-center justify-between">
-        <span class="text-sm font-semibold text-[#0F172A]">Recording</span>
-        <div class="flex items-center gap-1.5">
-          <div id="recActiveDot" class="w-2 h-2 rounded-full bg-red-500"
-               style="display:none;animation:recordPulse 1.5s ease-in-out infinite;"></div>
-          <span id="recActiveLabel" class="text-xs font-mono text-gray-600">Mic off</span>
+      <!-- Recording + Voice Input merged card -->
+      <div class="glass rounded-2xl p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-semibold text-[#0F172A]">Recording</span>
+          <div class="flex items-center gap-1.5">
+            <div id="recActiveDot" class="w-2 h-2 rounded-full bg-red-500"
+                 style="display:none;animation:recordPulse 1.5s ease-in-out infinite;"></div>
+            <span id="recActiveLabel" class="text-xs font-mono text-gray-600">Mic off</span>
+          </div>
         </div>
-      </div>
 
-      <!-- Waveform visualiser -->
-      <div class="flex items-end gap-0.5 h-8 justify-center">
-        {% for i in range(20) %}
-        <div class="rounded-full w-1.5"
-             style="background:rgba(217,167,82,0.35);height:{{ [15,25,35,28,42,20,32,45,18,38,22,40,30,15,35,28,42,18,32,25][loop.index0] }}%;animation:wave {{ [0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1][loop.index0] }}s ease-in-out infinite alternate;animation-delay:{{ (loop.index0*0.05)|round(2) }}s;"></div>
-        {% endfor %}
-      </div>
-
-      <!-- Narration transcript textarea -->
-      <textarea id="narrationInput"
-                placeholder="Start recording or type your narration here…&#10;Your speech will appear here as you present this slide."
-                class="w-full rounded-xl px-3 py-2.5 font-mono text-sm
-                       text-slate-700 placeholder-slate-400 resize-none focus:outline-none
-                       transition-colors overflow-y-auto leading-relaxed"
-                style="background:#F8FAFC;border:1px solid #E2E8F0;min-height:100px;"
-                rows="4"></textarea>
-    </div>
-
-    <!-- Session Monitor: Timer + Log -->
-    <div class="w-80 flex-shrink-0 glass rounded-2xl p-5 flex flex-col gap-3">
-      <!-- Compact timer -->
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-base">⏱️</span>
-          <span id="timerDisplay" class="text-2xl font-mono font-bold text-[#0F172A] tracking-wider">00:00</span>
-          <span id="timerStatus" class="text-xs text-green-400 font-medium ml-1">Presenting</span>
+        <!-- Waveform visualiser -->
+        <div class="flex items-end gap-0.5 h-8 justify-center">
+          {% for i in range(20) %}
+          <div class="rounded-full w-1.5"
+               style="background:rgba(217,167,82,0.35);height:{{ [15,25,35,28,42,20,32,45,18,38,22,40,30,15,35,28,42,18,32,25][loop.index0] }}%;animation:wave {{ [0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1,0.6,1.4,0.9,1.2,0.7,1.0,1.3,0.8,1.1][loop.index0] }}s ease-in-out infinite alternate;animation-delay:{{ (loop.index0*0.05)|round(2) }}s;"></div>
+          {% endfor %}
         </div>
-        <button onclick="resetTimer()"
-                class="text-xs text-gray-600 hover:text-slate-400 underline transition-colors">Reset</button>
+
+        <!-- Narration transcript textarea -->
+        <textarea id="narrationInput"
+                  placeholder="Start recording or type your narration here…&#10;Your speech will appear here as you present this slide."
+                  class="w-full rounded-xl px-3 py-2.5 font-mono text-sm
+                         text-slate-700 placeholder-slate-400 resize-none focus:outline-none
+                         transition-colors overflow-y-auto leading-relaxed"
+                  style="background:#F8FAFC;border:1px solid #E2E8F0;min-height:140px;"
+                  rows="7"></textarea>
+
+        <!-- Voice recording button -->
+        <button onclick="toggleNarrationVoice()" id="narrationVoiceBtn"
+                class="w-full rounded-xl text-xs py-2.5 transition-all flex items-center justify-center gap-2 border font-medium"
+                style="color:#16A34A;background:rgba(217,72,31,0.06);border-color:rgba(217,72,31,0.2)">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+          </svg>
+          Start Voice Recording
+        </button>
       </div>
 
-      <!-- Divider -->
-      <div class="h-px bg-slate-100"></div>
+      <!-- Session Monitor: Timer + Log merged -->
+      <div class="glass rounded-2xl p-5 flex-1 flex flex-col gap-3 min-h-0">
+        <!-- Compact timer -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">⏱️</span>
+            <span id="timerDisplay" class="text-2xl font-mono font-bold text-[#0F172A] tracking-wider">00:00</span>
+            <span id="timerStatus" class="text-xs text-green-400 font-medium ml-1">Presenting</span>
+          </div>
+          <button onclick="resetTimer()"
+                  class="text-xs text-gray-600 hover:text-slate-400 underline transition-colors">Reset</button>
+        </div>
 
-      <!-- Session log stream -->
-      <div class="flex items-center justify-between mb-0.5">
-        <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Session Log</span>
-      </div>
-      <div id="sessionLog"
-           class="flex-1 overflow-y-auto space-y-1.5 text-xs text-gray-600"
-           style="max-height:160px;scrollbar-width:thin;scrollbar-color:#334155 transparent;">
-        <div class="flex gap-2">
-          <span class="text-indigo-700 font-mono flex-shrink-0">00:00</span>
-          <span>Session started</span>
+        <!-- Divider -->
+        <div class="h-px bg-slate-100"></div>
+
+        <!-- Session log stream -->
+        <div class="flex items-center justify-between mb-0.5">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Session Log</span>
+        </div>
+        <div id="sessionLog"
+             class="flex-1 overflow-y-auto space-y-1.5 text-xs text-gray-600"
+             style="max-height:220px;scrollbar-width:thin;scrollbar-color:#334155 transparent;">
+          <div class="flex gap-2">
+            <span class="text-indigo-700 font-mono flex-shrink-0">00:00</span>
+            <span>Session started</span>
+          </div>
         </div>
       </div>
     </div>
