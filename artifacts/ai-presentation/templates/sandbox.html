@@ -791,6 +791,8 @@
   }
 
   async function submitAcademicQa() {
+    // Stop any active voice recording first so all speech is finalised into the textarea
+    if (audioMode === 'acq') _stopAllRecording();
     const answer = document.getElementById('acqInput').value.trim();
     if (!answer) return;
     const btn = document.getElementById('acqSubmitBtn');
@@ -807,6 +809,7 @@
         body: JSON.stringify({ answer }),
       });
       const data = await res.json();
+      // Clear the textarea BEFORE showing the next question to prevent transcript bleedover
       document.getElementById('acqInput').value = '';
 
       if (data.status === 'ACADEMIC_QA_NEXT') {
@@ -816,6 +819,8 @@
         btn.disabled = false;
         btn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>Submit Answer`;
+        // Sync audio buttons so Voice shows as inactive for the new question
+        _syncAudioButtons();
 
       } else if (data.status === 'ACADEMIC_QA_DONE') {
         hideAcademicQaPanel();
@@ -832,6 +837,8 @@
 
   // ── Q&A ───────────────────────────────────────────────────────────────────
   async function submitAnswer() {
+    // Stop any active voice recording first so all speech is finalised into the textarea
+    if (audioMode === 'qa') _stopAllRecording();
     const answer = document.getElementById('answerInput').value.trim();
     if (!answer) return;
     const btn = document.getElementById('submitAnswerBtn');
@@ -848,6 +855,7 @@
         body: JSON.stringify({ answer }),
       });
       const data = await res.json();
+      // Clear textarea BEFORE showing the next round to prevent transcript bleedover
       document.getElementById('answerInput').value = '';
 
       if (data.status === 'CONTINUE_QA') {
@@ -859,6 +867,8 @@
         btn.disabled = false;
         btn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>Submit Answer`;
+        // Sync audio buttons so Voice shows as inactive for the new round
+        _syncAudioButtons();
 
       } else if (data.status === 'QA_FINISHED') {
         audioResumeAfterQa();
