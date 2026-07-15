@@ -298,24 +298,53 @@
   </div>
   {% endif %}
 
-  <!-- ── PQ Sub-page 1: Overview + What I did well ──────────────────────── -->
-  <div id="pq-page-1">
-
-  <!-- Performance Analysis — What I did well (full width) -->
-  <div class="relative z-10 mb-6">
-    <h2 class="text-sm font-semibold text-[#0F172A] mb-5 flex items-center gap-2">
+  <!-- ── Performance Analysis: selector cards + content panel ────────────── -->
+  <div class="relative z-10 mb-8">
+    <h2 class="text-sm font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
       <svg class="w-4 h-4" style="color:#16A34A" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
       </svg>
       表现分析
     </h2>
-    <div class="section-card p-5">
-      <div class="flex items-center gap-2 mb-4">
-        <svg class="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
-        </svg>
-        <h3 class="text-sm font-semibold text-[#0F172A]">What I did well</h3>
-      </div>
+
+    <!-- Selector cards row -->
+    <div class="grid grid-cols-2 gap-4 mb-5">
+
+      <!-- Green: What I did well -->
+      <button id="perf-btn-good" onclick="switchPerfView('good')"
+              class="perf-selector-btn perf-btn-active-good text-left rounded-xl p-4 border-2 transition-all duration-200"
+              style="background:#ECFDF5;border-color:#16A34A;">
+        <div class="flex items-center gap-2.5 mb-1.5">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+               style="background:#BBF7D0">
+            <svg class="w-4 h-4" style="color:#15803D" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <span class="text-sm font-bold" style="color:#15803D">What I did well</span>
+        </div>
+        <p class="text-xs ml-10.5" style="color:#166534">{{ pillar.what_i_did_good | length }} strengths identified</p>
+      </button>
+
+      <!-- Amber: Areas for Improvement -->
+      <button id="perf-btn-fix" onclick="switchPerfView('fix')"
+              class="perf-selector-btn text-left rounded-xl p-4 border-2 transition-all duration-200"
+              style="background:#FFFBEB;border-color:#E2E8F0;color:#92400E;">
+        <div class="flex items-center gap-2.5 mb-1.5">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+               style="background:#FDE68A">
+            <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+          </div>
+          <span class="text-sm font-bold text-amber-800">Areas for Improvement</span>
+        </div>
+        <p class="text-xs text-amber-700 ml-10.5">{{ pillar.areas_for_improvement | length }} items to work on</p>
+      </button>
+    </div>
+
+    <!-- Content: What I did well -->
+    <div id="perf-panel-good">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {% for item in pillar.what_i_did_good %}
           {% set s = item | string %}
@@ -340,101 +369,59 @@
         {% endfor %}
       </div>
     </div>
-  </div>
 
-  <!-- Next page button -->
-  <div class="relative z-10 flex justify-end mb-2">
-    <button onclick="switchPqPage(2)"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-            style="background:#FFF7ED;border:1px solid #E5BE7E;color:#92400E"
-            onmouseover="this.style.background='#FEF3C7'" onmouseout="this.style.background='#FFF7ED'">
-      <svg class="w-4 h-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-      </svg>
-      Areas for Improvement
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-      </svg>
-    </button>
-  </div>
-
-  </div><!-- /pq-page-1 -->
-
-  <!-- ── PQ Sub-page 2: Areas for Improvement ─────────────────────────────── -->
-  <div id="pq-page-2" class="hidden">
-
-  <!-- Back button + header -->
-  <div class="relative z-10 flex items-center gap-3 mb-6">
-    <button onclick="switchPqPage(1)"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-            style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569"
-            onmouseover="this.style.background='#E2E8F0'" onmouseout="this.style.background='#F1F5F9'">
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-      </svg>
-      返回概览
-    </button>
-    <h2 class="text-sm font-semibold text-[#0F172A] flex items-center gap-2">
-      <svg class="w-4 h-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-      </svg>
-      Areas for Improvement
-    </h2>
-  </div>
-
-  <!-- Areas for improvement cards -->
-  <div class="relative z-10 mb-8">
-    <div class="space-y-3">
-      {% for item in pillar.areas_for_improvement %}
-      {% set itag_class = '' %}
-      {% set issue_text = item.issue if item.issue is string else '' %}
-      {% set dim = item.dimension if item.dimension is defined and item.dimension else '' %}
-      {% if dim == 'Structure'         or '[Structure]'        in issue_text %}{% set itag_class = 'pillar-structure' %}
-      {% elif dim == 'Fluency'         or '[Fluency]'          in issue_text %}{% set itag_class = 'pillar-fluency' %}
-      {% elif dim == 'Content Relevance' or '[Content Relevance]' in issue_text or '[Relevance]' in issue_text %}{% set itag_class = 'pillar-relevance' %}
-      {% elif dim == 'Delivery'        or '[Delivery]'         in issue_text %}{% set itag_class = 'pillar-delivery' %}{% endif %}
-      {% set display_label = dim if dim else (issue_text.split(']')[0][1:] if '[' in issue_text else '') %}
-      {% set display_issue = issue_text if issue_text else '' %}
-      <div class="fix-item">
-        <div class="fix-header">
-          <div class="flex items-start gap-2">
-            <span class="text-amber-600 text-sm flex-shrink-0 mt-0.5">⚠</span>
-            <p class="text-amber-900 text-sm font-semibold leading-snug">
-              {% if itag_class and display_label %}
-                <span class="pillar-tag {{ itag_class }}">{{ display_label }}</span>{{ display_issue }}
+    <!-- Content: Areas for Improvement -->
+    <div id="perf-panel-fix" class="hidden">
+      <div class="space-y-3">
+        {% for item in pillar.areas_for_improvement %}
+        {% set itag_class = '' %}
+        {% set issue_text = item.issue if item.issue is string else '' %}
+        {% set dim = item.dimension if item.dimension is defined and item.dimension else '' %}
+        {% if dim == 'Structure'           or '[Structure]'        in issue_text %}{% set itag_class = 'pillar-structure' %}
+        {% elif dim == 'Fluency'           or '[Fluency]'          in issue_text %}{% set itag_class = 'pillar-fluency' %}
+        {% elif dim == 'Content Relevance' or '[Content Relevance]' in issue_text or '[Relevance]' in issue_text %}{% set itag_class = 'pillar-relevance' %}
+        {% elif dim == 'Delivery'          or '[Delivery]'         in issue_text %}{% set itag_class = 'pillar-delivery' %}{% endif %}
+        {% set display_label = dim if dim else (issue_text.split(']')[0][1:] if '[' in issue_text else '') %}
+        {% set display_issue = issue_text if issue_text else '' %}
+        <div class="fix-item">
+          <div class="fix-header">
+            <div class="flex items-start gap-2">
+              <span class="text-amber-600 text-sm flex-shrink-0 mt-0.5">⚠</span>
+              <p class="text-amber-900 text-sm font-semibold leading-snug">
+                {% if itag_class and display_label %}
+                  <span class="pillar-tag {{ itag_class }}">{{ display_label }}</span>{{ display_issue }}
+                {% else %}
+                  {{ display_issue }}
+                {% endif %}
+              </p>
+            </div>
+          </div>
+          <div class="fix-body">
+            <div>
+              <p class="fix-label text-amber-700 mb-1">你的原话</p>
+              <p class="text-slate-600 text-xs leading-relaxed italic">{{ item.example }}</p>
+            </div>
+            <div>
+              <p class="fix-label text-emerald-600 mb-1">改进建议</p>
+              {% set fix = item.how_to_fix if item.how_to_fix is string else '' %}
+              {% if 'Say this instead:' in fix %}
+                {% set fix_parts = fix.split('Say this instead:', 1) %}
+                <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ fix_parts[0] }}</p>
+                <div class="say-instead">
+                  <p class="text-emerald-700 text-xs leading-relaxed font-medium">
+                    <span class="say-instead-arrow">→</span>Say this instead:{{ fix_parts[1] }}
+                  </p>
+                </div>
               {% else %}
-                {{ display_issue }}
+                <p class="text-slate-700 text-xs leading-relaxed">{{ fix }}</p>
               {% endif %}
-            </p>
+            </div>
           </div>
         </div>
-        <div class="fix-body">
-          <div>
-            <p class="fix-label text-amber-700 mb-1">你的原话</p>
-            <p class="text-slate-600 text-xs leading-relaxed italic">{{ item.example }}</p>
-          </div>
-          <div>
-            <p class="fix-label text-emerald-600 mb-1">改进建议</p>
-            {% set fix = item.how_to_fix if item.how_to_fix is string else '' %}
-            {% if 'Say this instead:' in fix %}
-              {% set fix_parts = fix.split('Say this instead:', 1) %}
-              <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ fix_parts[0] }}</p>
-              <div class="say-instead">
-                <p class="text-emerald-700 text-xs leading-relaxed font-medium">
-                  <span class="say-instead-arrow">→</span>Say this instead:{{ fix_parts[1] }}
-                </p>
-              </div>
-            {% else %}
-              <p class="text-slate-700 text-xs leading-relaxed">{{ fix }}</p>
-            {% endif %}
-          </div>
-        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
   </div>
-
-  </div><!-- /pq-page-2 -->
 
   </div><!-- /tab-pane-pq -->
 
@@ -989,19 +976,36 @@
     }
   }
 
-  // ── PQ sub-page navigation ─────────────────────────────────────────────────
-  function switchPqPage(n) {
-    var p1 = document.getElementById('pq-page-1');
-    var p2 = document.getElementById('pq-page-2');
-    if (!p1 || !p2) return;
-    if (n === 2) {
-      p1.classList.add('hidden');
-      p2.classList.remove('hidden');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+  // ── Performance Analysis selector (What I did well / Areas for Improvement) ─
+  function switchPerfView(which) {
+    var panelGood = document.getElementById('perf-panel-good');
+    var panelFix  = document.getElementById('perf-panel-fix');
+    var btnGood   = document.getElementById('perf-btn-good');
+    var btnFix    = document.getElementById('perf-btn-fix');
+    if (!panelGood || !panelFix) return;
+
+    if (which === 'fix') {
+      panelGood.classList.add('hidden');
+      panelFix.classList.remove('hidden');
+      // Amber active state
+      btnFix.style.background     = '#FFFBEB';
+      btnFix.style.borderColor    = '#F59E0B';
+      btnFix.style.boxShadow      = '0 2px 12px rgba(245,158,11,0.18)';
+      // Green inactive
+      btnGood.style.background    = '#F8FAFC';
+      btnGood.style.borderColor   = '#E2E8F0';
+      btnGood.style.boxShadow     = 'none';
     } else {
-      p2.classList.add('hidden');
-      p1.classList.remove('hidden');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      panelFix.classList.add('hidden');
+      panelGood.classList.remove('hidden');
+      // Green active state
+      btnGood.style.background    = '#ECFDF5';
+      btnGood.style.borderColor   = '#16A34A';
+      btnGood.style.boxShadow     = '0 2px 12px rgba(22,163,74,0.15)';
+      // Amber inactive
+      btnFix.style.background     = '#FFFBEB';
+      btnFix.style.borderColor    = '#E2E8F0';
+      btnFix.style.boxShadow      = 'none';
     }
   }
 
@@ -1022,8 +1026,8 @@
         btn.classList.remove('active', 'active-cq', 'active-cqual');
       }
     });
-    // Reset PQ to page 1 whenever switching tabs
-    if (name !== 'pq') switchPqPage(1);
+    // Reset PQ performance view to "What I did well" when switching back to PQ
+    if (name === 'pq') switchPerfView('good');
   }
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
