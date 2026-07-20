@@ -2,7 +2,27 @@
 {% block title %}PerspeakAI — Train Your Talk{% endblock %}
 
 {% block nav_steps %}
-<span class="text-xs font-semibold uppercase tracking-wide" style="color:#15803D">Step 1 of 4 — Upload</span>
+<nav class="flex items-center gap-2 text-xs select-none">
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#16A34A;color:#fff">1</span>
+    <span class="font-semibold" style="color:#16A34A">Upload</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#E2E8F0;color:#94A3B8">2</span>
+    <span style="color:#94A3B8">Configure</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#E2E8F0;color:#94A3B8">3</span>
+    <span style="color:#94A3B8">Rehearsal</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#E2E8F0;color:#94A3B8">4</span>
+    <span style="color:#94A3B8">Report</span>
+  </div>
+</nav>
 {% endblock %}
 
 {% block content %}
@@ -113,9 +133,20 @@
         <div class="text-center">
           <p class="text-[#0F172A] font-bold text-base mb-1">Drop your presentation here</p>
           <p class="font-mono text-xs" style="color:#94A3B8">PDF / PPT / PPTX · MAX 50 MB</p>
-          {% if ai_enabled %}
-          <p class="text-xs mt-1.5" style="color:#15803D">PDF pages are analyzed by AI Vision for deeper insights</p>
-          {% endif %}
+        </div>
+
+        <!-- Static PDF tip inside dropzone -->
+        <div class="flex items-start gap-2.5 px-4 py-3 rounded-lg w-full max-w-sm text-left"
+             style="background:#FAF3E3;border:1px solid #EDD4A6">
+          <svg class="w-4 h-4 flex-shrink-0 mt-0.5" style="color:#C98A2D" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          <div>
+            <p class="text-xs font-bold mb-0.5" style="color:#6F4A10">建议使用 PDF</p>
+            <p class="text-xs leading-relaxed" style="color:#8A5C13">
+              先在 PowerPoint 导出为 <strong>PDF</strong>，AI 可读取每页内容，获得更深度的分析。PPTX 格式仅能提取文字。
+            </p>
+          </div>
         </div>
 
         <div class="flex items-center gap-2 text-xs" style="color:#94A3B8">

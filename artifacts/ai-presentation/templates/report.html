@@ -94,10 +94,27 @@
 {% endblock %}
 
 {% block nav_steps %}
-<span class="text-slate-400">Upload</span><span class="text-slate-300 mx-1">→</span>
-<span class="text-slate-400">Configure</span><span class="text-slate-300 mx-1">→</span>
-<span class="text-slate-400">Rehearsal</span><span class="text-slate-300 mx-1">→</span>
-<span class="font-semibold" style="color:#16A34A">Step 4 of 4 — Report</span>
+<nav class="flex items-center gap-2 text-xs select-none">
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#BBF7D0;color:#166534">1</span>
+    <span style="color:#94A3B8">Upload</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#BBF7D0;color:#166534">2</span>
+    <span style="color:#94A3B8">Configure</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#BBF7D0;color:#166534">3</span>
+    <span style="color:#94A3B8">Rehearsal</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#16A34A;color:#fff">4</span>
+    <span class="font-semibold" style="color:#16A34A">Report</span>
+  </div>
+</nav>
 {% endblock %}
 
 {% block content %}

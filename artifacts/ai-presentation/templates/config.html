@@ -2,9 +2,27 @@
 {% block title %}PerspeakAI — Set Up Your Practice{% endblock %}
 
 {% block nav_steps %}
-<span class="text-slate-400">Upload</span>
-<span class="text-slate-300 mx-1">→</span>
-<span class="font-semibold" style="color:#16A34A">Step 2 of 4 — Configure</span>
+<nav class="flex items-center gap-2 text-xs select-none">
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#BBF7D0;color:#166534">1</span>
+    <span style="color:#94A3B8">Upload</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#16A34A;color:#fff">2</span>
+    <span class="font-semibold" style="color:#16A34A">Configure</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#E2E8F0;color:#94A3B8">3</span>
+    <span style="color:#94A3B8">Rehearsal</span>
+  </div>
+  <span class="text-slate-300">›</span>
+  <div class="flex items-center gap-1.5">
+    <span class="w-4 h-4 rounded-full font-bold flex items-center justify-center text-[0.6rem]" style="background:#E2E8F0;color:#94A3B8">4</span>
+    <span style="color:#94A3B8">Report</span>
+  </div>
+</nav>
 {% endblock %}
 
 {% block content %}
@@ -93,56 +111,11 @@
 
     <form id="configForm" class="space-y-8">
 
-      <!-- AUDIENCE -->
+      <!-- SCENARIO (now section 1) -->
       <div>
         <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#15803D]">
           <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
                 style="background:#16A34A">1</span>
-          选择听众角色
-        </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {% set audiences = [
-            ('Professor', 'Rigorous · Detail-first', [
-              '提问冗长且注重细节',
-              '极度看重逻辑与数据论据',
-              '要求学术严谨性，直击论文痛点',
-            ]),
-            ('Classmates', 'Friendly · Curious', [
-              '态度友善，充满好奇心',
-              '倾向于提出应用层面的实际问题',
-              '渴望听到生动的现实案例',
-            ]),
-            ('VC', 'Cold · Results-only', [
-              '冷静务实，结果导向',
-              '提问短促、言辞犀利',
-              '只关心核心数据与商业变现',
-            ]),
-          ] %}
-          {% for val, icon, bullets in audiences %}
-          <label class="config-card cursor-pointer group" data-group="audience" data-value="{{ val }}">
-            <input type="radio" name="audience" value="{{ val }}" class="sr-only" {% if val == 'Professor' %}checked{% endif %}>
-            <div class="glass rounded-md p-5 border-2 transition-all duration-200 h-full"
-                 style="border-color:transparent">
-              <div class="font-mono text-[0.62rem] uppercase tracking-widest mb-2" style="color:#16A34A">{{ icon }}</div>
-              <div class="font-bold text-[#0F172A] mb-3 uppercase tracking-wide">{{ val }}</div>
-              <ul class="space-y-1">
-                {% for b in bullets %}
-                <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
-                  <span class="mt-0.5 flex-shrink-0" style="color:#16A34A;opacity:.7">·</span>{{ b }}
-                </li>
-                {% endfor %}
-              </ul>
-            </div>
-          </label>
-          {% endfor %}
-        </div>
-      </div>
-
-      <!-- SCENARIO -->
-      <div>
-        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#15803D]">
-          <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
-                style="background:#16A34A">2</span>
           选择演练场景
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -179,6 +152,51 @@
                 <span class="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded-sm ml-2 flex-shrink-0">高压打断</span>
                 {% endif %}
               </div>
+              <ul class="space-y-1">
+                {% for b in bullets %}
+                <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
+                  <span class="mt-0.5 flex-shrink-0" style="color:#16A34A;opacity:.7">·</span>{{ b }}
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- AUDIENCE (now section 2) -->
+      <div>
+        <h3 class="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2 text-[#15803D]">
+          <span class="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
+                style="background:#16A34A">2</span>
+          选择听众角色
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {% set audiences = [
+            ('Professor', 'Rigorous · Detail-first', [
+              '提问冗长且注重细节',
+              '极度看重逻辑与数据论据',
+              '要求学术严谨性，直击论文痛点',
+            ]),
+            ('Classmates', 'Friendly · Curious', [
+              '态度友善，充满好奇心',
+              '倾向于提出应用层面的实际问题',
+              '渴望听到生动的现实案例',
+            ]),
+            ('VC', 'Cold · Results-only', [
+              '冷静务实，结果导向',
+              '提问短促、言辞犀利',
+              '只关心核心数据与商业变现',
+            ]),
+          ] %}
+          {% for val, icon, bullets in audiences %}
+          <label class="config-card cursor-pointer group" data-group="audience" data-value="{{ val }}">
+            <input type="radio" name="audience" value="{{ val }}" class="sr-only" {% if val == 'Professor' %}checked{% endif %}>
+            <div class="glass rounded-md p-5 border-2 transition-all duration-200 h-full"
+                 style="border-color:transparent">
+              <div class="font-mono text-[0.62rem] uppercase tracking-widest mb-2" style="color:#16A34A">{{ icon }}</div>
+              <div class="font-bold text-[#0F172A] mb-3 uppercase tracking-wide">{{ val }}</div>
               <ul class="space-y-1">
                 {% for b in bullets %}
                 <li class="flex items-start gap-1.5 text-xs text-gray-500 leading-relaxed">
