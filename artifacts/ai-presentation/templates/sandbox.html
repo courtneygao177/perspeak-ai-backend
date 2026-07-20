@@ -718,15 +718,12 @@
         });
         state.current_page = data.page;
         updateSlideDisplay(data.slide);
-        // ── Reset per-slide transcript accumulator ──
+        // ── Reset per-slide transcript accumulator; keep SpeechRecognition running ──
         currentSlideTranscript = '';
         document.getElementById('narrationInput').value = '';
         addLog(`✓ Slide ${state.current_page - 1} → ${state.current_page}`);
         resetBtn();
-        if (wasRecordingNarration) {
-          _stopAllRecording();
-          setTimeout(() => _startNarrationRec(), 200);
-        }
+        // Narration recording stays active across slides — no stop/restart needed.
 
       } else if (data.action === 'ACADEMIC_QA_START') {
         _onSlideCapture(state.current_page, narration);
@@ -1425,16 +1422,14 @@
   }
 
   function audioSuspendForQa(wasActive = false) {
-    _narrationWasActiveBeforeQA = wasActive;
+    // Q&A starts — always stop narration recording; never auto-resume after Q&A.
+    _narrationWasActiveBeforeQA = false;
     _stopAllRecording();
   }
 
   function audioResumeAfterQa() {
+    // Narration recording does NOT resume after Q&A — PPT phase is over.
     _stopAllRecording();
-    if (_narrationWasActiveBeforeQA) {
-      _narrationWasActiveBeforeQA = false;
-      setTimeout(() => { if (audioMode === 'idle') _startNarrationRec(); }, 300);
-    }
   }
 
   // QA voice button (mid-session interrupt)
@@ -1487,14 +1482,14 @@
   // Init sidebar highlight on load
   updateSidebar(state.current_page);
 
-  // ── Auto-start MediaRecorder on first user interaction ────────────────────
-  // This pre-arms the mic so even text-input users get pronunciation analysis.
-  // getUserMedia requires a user gesture; any click/keydown on the page counts.
+  // ── Auto-start recording on first user interaction ────────────────────────
+  // Arms MediaRecorder (pronunciation scoring) AND SpeechRecognition (live
+  // transcript) together. Recording stays on until a Q&A session begins.
   (function _armMic() {
     function _tryArm() {
       if (!_mediaRecorder) _startMediaRecorder();
-      document.removeEventListener('click',   _tryArm);
-      document.removeEventListener('keydown', _tryArm);
+      // Auto-start narration voice transcription
+      if (audioMode === 'idle') _startNarrationRec();
     }
     document.addEventListener('click',   _tryArm, { once: true });
     document.addEventListener('keydown', _tryArm, { once: true });
