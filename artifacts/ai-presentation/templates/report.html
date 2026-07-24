@@ -530,15 +530,16 @@
                 {% endif %}
                 <div>
                   <p class="fix-label text-emerald-600 mb-1">改进建议</p>
+                  {% set fix_display = item.fix_text if (item.fix_text is defined and item.fix_text) else (item.how_to_fix if item.how_to_fix is defined else '') %}
                   {% if item.spoken_example is defined and item.spoken_example %}
-                    <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ item.how_to_fix if item.how_to_fix is defined else '' }}</p>
+                    <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ fix_display }}</p>
                     <div class="say-instead">
                       <p class="text-emerald-700 text-xs leading-relaxed font-medium">
                         <span class="say-instead-arrow">→</span>可以这样说："{{ item.spoken_example }}"
                       </p>
                     </div>
                   {% else %}
-                    <p class="text-slate-700 text-xs leading-relaxed">{{ item.how_to_fix if item.how_to_fix is defined else '' }}</p>
+                    <p class="text-slate-700 text-xs leading-relaxed">{{ fix_display }}</p>
                   {% endif %}
                 </div>
               </div>

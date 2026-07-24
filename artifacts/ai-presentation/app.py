@@ -3652,12 +3652,29 @@ structure * 0.30 + fluency * 0.25 + relevance * 0.25 + delivery * 0.20
 5. 一个具体改法（how_to_fix）
 6. 仅在适合时提供一条简洁的改写/示例（spoken_example）
 
-改写规则：
-- 保持学习者原本意图和主题。
-- 使用清楚、可口头表达的英语，约 IELTS 5.5 / CEFR B1 难度。
-- 不得编造事实、例子、数据或幻灯片内容。
-- 改写必须短而可说，不能变成润色过度的文章。
+改写规则（spoken_example）：
+
+spoken_example 必须始终为英文，无论输出的其余部分使用何种语言。这是一条硬性规则：绝不在 spoken_example 中出现中文。
+
+在撰写任何改写示例前，先根据学习者的转录文本估计其英语水平（以 CEFR 划分：A2 / B1 / B2 / C1）。判断依据包括：
+- 词汇复杂度与多样性（是否重复、是否只用高频词）
+- 句式结构（是否只有简单句，或能使用从句、被动、条件句）
+- 连接词与过渡语的使用质量
+- 是否有明显语法错误或中式英语结构
+
+将估计的学习者水平（learner_cefr）写入输出 JSON 的顶层（见输出契约）。
+
+spoken_example 的难度应比学习者当前水平高约 0.5–1 个 CEFR 档，具体规则：
+- A2 学习者 → 写 B1 难度：清晰主谓宾，可加一个从句，少量连接词
+- B1 学习者 → 写 B1-B2 难度：加入转折/对比连接词，一个较长的复合句，精确但常见词汇
+- B2 学习者 → 写 B2-C1 难度：可使用分词短语、倒装、学术连接词，但句子仍可说
+- C1+ 学习者 → 保持 C1 自然流畅，无需刻意拔高
+
+其他要求：
+- 保持学习者原本意图和主题；不得编造事实、例子、数据或幻灯片内容。
+- 改写必须短而可说（1-2 句），不能变成润色过度的文章。
 - 对语速建议，可以用 / 标记有意义的停顿。
+- 不要使用过于书面化、正式或学术的词汇，除非学习者明显是 C1+ 水平。
 
 不得强行赞美未出现的技巧。没有转录和/或音频证据时，不得称学习者"机械""犹豫""赶读"或"自信"。
 本模块中禁止使用关于 Content Accuracy、Concept Coverage 或 Answer Completeness 的固定回退文案。
@@ -3669,6 +3686,7 @@ structure * 0.30 + fluency * 0.25 + relevance * 0.25 + delivery * 0.20
 {
   "module": "class_presentation_quality",
   "language": "zh-CN",
+  "learner_cefr": "B1",
   "coverage": {
     "sections_reviewed": ["A","B","C","D","E"],
     "coverage_warning": false,
@@ -4057,12 +4075,38 @@ def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuris
 
     # ── dimensions_info for legacy template ───────────────────────────────────
     result["dimensions_info"] = {}
+    _PILLAR_CALC_DESC = {
+        "structure": (
+            "Evaluated across 5 weighted criteria: "
+            "central message & scope control (25%), logical progression (25%), "
+            "signposting & transitions (20%), support material integration (15%), "
+            "closure & time density (15%)."
+        ),
+        "fluency": (
+            "Evaluated across 5 weighted criteria: "
+            "continuity & self-recovery (25%), pace, rhythm & pausing (20%), "
+            "clear audience-appropriate wording (20%), natural vs. scripted expression (15%), "
+            "key idea emphasis (20%)."
+        ),
+        "relevance": (
+            "Evaluated across 5 weighted criteria: "
+            "audience & situation fit (25%), why it matters / value (25%), "
+            "knowledge-level & language fit (20%), new value or perspective (15%), "
+            "usable takeaway or action (15%)."
+        ),
+        "delivery": (
+            "Evaluated across 4 weighted criteria based solely on available audio evidence: "
+            "pace suitability (35%), phrase grouping & purposeful pausing (25%), "
+            "vocal emphasis & variety (20%), vocal clarity & control (20%). "
+            "Criteria without audio data are marked not assessed and excluded from the weighted total."
+        ),
+    }
     for dim in ("structure", "fluency", "relevance", "delivery"):
         dim_data = scores_rich.get(dim, {})
         summary  = dim_data.get("summary") or f"Score: {flat_scores.get(dim, 65)}/100"
         result["dimensions_info"][dim] = {
             "explanation": summary,
-            "calculation": "Weighted subscore evaluation.",
+            "calculation": _PILLAR_CALC_DESC.get(dim, "Weighted subscore evaluation."),
         }
 
     # ── what_i_did_well — rich list + backward-compat string list ─────────────
@@ -4101,6 +4145,7 @@ def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuris
             for e in evidence[:2] if e.get("quote")
         ]
         example    = " / ".join(quote_parts) if quote_parts else li
+        # Legacy how_to_fix includes spoken_example inline (used by legacy flat renderer)
         how_to_fix = fix + (f' Say this instead: "{spoken}"' if spoken else "")
 
         normalized.append({
@@ -4113,6 +4158,7 @@ def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuris
             "priority":        priority,
             "listener_impact": li,
             "evidence_rich":   evidence,
+            "fix_text":        fix,       # raw fix text WITHOUT spoken_example appended
             "spoken_example":  spoken,
         })
     result["areas_for_improvement"] = normalized
