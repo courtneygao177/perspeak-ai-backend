@@ -3956,13 +3956,25 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
-        return raw, json.loads(raw)
+        finish_reason = getattr(resp.choices[0], "finish_reason", None)
+        if finish_reason == "length":
+            app.logger.warning("[CLASS PQ] LLM output truncated (finish_reason=length) — attempting json_repair")
+        try:
+            return raw, json.loads(raw)
+        except json.JSONDecodeError as e:
+            app.logger.warning(f"[CLASS PQ] json.loads failed ({e}), attempting json_repair")
+            repaired = _repair_json(raw, return_objects=True)
+            if isinstance(repaired, dict) and repaired:
+                app.logger.info("[CLASS PQ] json_repair succeeded")
+                return raw, repaired
+            raise
 
     base_messages = [
         {"role": "system", "content": CLASS_PRES_PQ_SYSTEM_PROMPT},
         {"role": "user",   "content": json.dumps(user_payload, ensure_ascii=False)},
     ]
 
+    raw = ""  # ensure raw is always defined for the outer except handler
     try:
         raw, result = _call_llm(base_messages)
 
@@ -3995,7 +4007,17 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
         return _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuristic)
 
     except json.JSONDecodeError as e:
-        app.logger.error(f"[CLASS PQ ERROR] JSON parse failure: {str(e)[:200]}")
+        app.logger.error(f"[CLASS PQ ERROR] JSON parse failure: {str(e)[:200]} — attempting json_repair")
+        try:
+            repaired = _repair_json(raw, return_objects=True)
+            if isinstance(repaired, dict) and repaired.get("module") == "class_presentation_quality":
+                app.logger.info("[CLASS PQ] Outer json_repair succeeded, continuing to validate")
+                ok, err = _validate_class_pq_result(repaired, transcript_segments)
+                if ok:
+                    return _normalize_class_pq_result(repaired, wpm_estimate, difficulty, jaw_drop_heuristic)
+                app.logger.warning(f"[CLASS PQ] Repaired JSON failed validation: {err}")
+        except Exception as repair_e:
+            app.logger.warning(f"[CLASS PQ] json_repair also failed: {repair_e}")
         return _class_pq_unavailable("json_parse_error")
     except Exception as e:
         app.logger.error(f"[CLASS PQ ERROR] {type(e).__name__}: {str(e)[:300]}")
