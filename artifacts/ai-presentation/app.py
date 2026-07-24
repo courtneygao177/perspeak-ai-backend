@@ -3807,6 +3807,34 @@ def _class_pq_unavailable(reason="llm_error"):
     }
 
 
+def _coerce_class_pq_lists(result):
+    """
+    Coerce what_i_did_well and areas_for_improvement to lists in-place.
+    The LLM occasionally returns these as a string (JSON-encoded list), a single
+    dict, or omits them entirely — all of which are recoverable without a retry.
+    Returns the (mutated) result dict.
+    """
+    for key in ("what_i_did_well", "areas_for_improvement"):
+        val = result.get(key)
+        if isinstance(val, list):
+            continue  # already correct
+        if val is None or val == "":
+            result[key] = []
+        elif isinstance(val, dict):
+            # LLM wrapped the list in an extra object layer
+            result[key] = [val]
+        elif isinstance(val, str):
+            # LLM returned a JSON-encoded list as a string
+            try:
+                parsed = json.loads(val)
+                result[key] = parsed if isinstance(parsed, list) else [parsed]
+            except (json.JSONDecodeError, ValueError):
+                result[key] = []  # unparseable — leave empty, validator will flag
+        else:
+            result[key] = list(val) if hasattr(val, "__iter__") else []
+    return result
+
+
 def _validate_class_pq_result(result, transcript_segments):
     """
     Validate LLM output for Class Presentation PQ evidence-first schema.
@@ -3995,6 +4023,7 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
     raw = ""  # ensure raw is always defined for the outer except handler
     try:
         raw, result = _call_llm(base_messages)
+        _coerce_class_pq_lists(result)  # normalise list fields before validation
 
         # ── Validate first attempt ─────────────────────────────────────────────
         ok, err = _validate_class_pq_result(result, transcript_segments)
@@ -4011,6 +4040,7 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
             ]
             try:
                 raw2, result2 = _call_llm(retry_messages)
+                _coerce_class_pq_lists(result2)  # normalise before retry validation
                 ok2, err2 = _validate_class_pq_result(result2, transcript_segments)
                 if ok2:
                     app.logger.info("[CLASS PQ] Retry succeeded.")
@@ -4030,6 +4060,7 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
             repaired = _repair_json(raw, return_objects=True)
             if isinstance(repaired, dict) and repaired.get("module") == "class_presentation_quality":
                 app.logger.info("[CLASS PQ] Outer json_repair succeeded, continuing to validate")
+                _coerce_class_pq_lists(repaired)
                 ok, err = _validate_class_pq_result(repaired, transcript_segments)
                 if ok:
                     return _normalize_class_pq_result(repaired, wpm_estimate, difficulty, jaw_drop_heuristic)
