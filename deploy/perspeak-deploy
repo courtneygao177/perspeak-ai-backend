@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Root-owned release switcher for PerspeakAI on Alibaba Cloud.
+# Called only by GitHub Actions through a narrowly scoped sudo rule.
+set -Eeuo pipefail
+
+readonly APP_ROOT="/opt/apps"
+readonly RELEASES_DIR="${APP_ROOT}/perspeak-releases"
+readonly CURRENT_LINK="${APP_ROOT}/perspeak-current"
+readonly APP_DIR_REL="artifacts/ai-presentation"
+readonly WHEELS_DIR_REL=".deploy-wheels"
+readonly SERVICE_NAME="perspeak-ai"
+readonly SERVICE_USER="perspeak"
+readonly BASE_PYTHON="${APP_ROOT}/perspeak-venv311-local/bin/python"
+readonly DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
+readonly DROPIN_FILE="${DROPIN_DIR}/release-path.conf"
+
+fail() {
+  echo "Deployment failed: $*" >&2
+  exit 1
+}
+
+[[ ${EUID} -eq 0 ]] || fail "must run as root"
+[[ $# -eq 2 ]] || fail "usage: $0 <40-char-git-sha> <release-archive>"
+
+revision="$1"
+archive="$2"
+[[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail "invalid Git revision"
+[[ "$archive" == "/tmp/perspeak-release-${revision}.tgz" ]] || fail "unexpected archive path"
+[[ -f "$archive" ]] || fail "release archive is missing"
+[[ -x "$BASE_PYTHON" ]] || fail "base Python runtime is missing: $BASE_PYTHON"
+
+install -d -m 0755 -o root -g root "$RELEASES_DIR"
+release_dir="${RELEASES_DIR}/${revision}"
+work_dir="${release_dir}.incoming"
+[[ ! -e "$release_dir" ]] || fail "release already exists: $revision"
+rm -rf "$work_dir"
+install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_USER" "$work_dir"
+
+cleanup_incoming() {
+  rm -rf "$work_dir"
+}
+trap cleanup_incoming EXIT
+
+tar -xzf "$archive" -C "$work_dir" --no-same-owner --no-same-permissions
+[[ -f "${work_dir}/${APP_DIR_REL}/app.py" ]] || fail "app.py is absent from the release"
+[[ -f "${work_dir}/${APP_DIR_REL}/requirements.txt" ]] || fail "requirements.txt is absent from the release"
+[[ -d "${work_dir}/${WHEELS_DIR_REL}" ]] || fail "offline dependency wheels are absent from the release"
+chown -R "${SERVICE_USER}:${SERVICE_USER}" "$work_dir"
+
+# Every release owns its virtual environment. A rollback therefore restores
+# both the source and the exact dependency set used by that source.
+runuser -u "$SERVICE_USER" -- "$BASE_PYTHON" -m venv "${work_dir}/.venv"
+runuser -u "$SERVICE_USER" -- "${work_dir}/.venv/bin/python" -m pip install \
+  --no-index --find-links "${work_dir}/${WHEELS_DIR_REL}" \
+  -r "${work_dir}/${APP_DIR_REL}/requirements.txt"
+runuser -u "$SERVICE_USER" -- "${work_dir}/.venv/bin/python" -m py_compile \
+  "${work_dir}/${APP_DIR_REL}/app.py" \
+  "${work_dir}/${APP_DIR_REL}/server_store.py" \
+  "${work_dir}/${APP_DIR_REL}/audio_engine.py"
+
+mv "$work_dir" "$release_dir"
+trap - EXIT
+
+previous_target="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+next_link="${CURRENT_LINK}.next"
+rm -f "$next_link"
+ln -s "$release_dir" "$next_link"
+mv -Tf "$next_link" "$CURRENT_LINK"
+
+# Keep the existing production environment file and persistent data directory.
+# Only the working directory and Gunicorn executable become release-specific.
+install -d -m 0755 -o root -g root "$DROPIN_DIR"
+cat >"$DROPIN_FILE" <<'EOF'
+[Service]
+WorkingDirectory=/opt/apps/perspeak-current/artifacts/ai-presentation
+ExecStart=
+ExecStart=/opt/apps/perspeak-current/.venv/bin/gunicorn --workers 2 --threads 2 --bind 127.0.0.1:8000 --timeout 180 --access-logfile - --error-logfile - --no-control-socket app:app
+EOF
+
+rollback() {
+  echo "Health check failed; restoring the previous release." >&2
+  if [[ -n "$previous_target" ]]; then
+    rm -f "$next_link"
+    ln -s "$previous_target" "$next_link"
+    mv -Tf "$next_link" "$CURRENT_LINK"
+  else
+    rm -f "$CURRENT_LINK" "$DROPIN_FILE"
+  fi
+  systemctl daemon-reload
+  systemctl restart "$SERVICE_NAME" || true
+}
+
+systemctl daemon-reload
+if ! systemctl restart "$SERVICE_NAME"; then
+  rollback
+  fail "systemd could not start the new release"
+fi
+
+healthy=0
+for _ in {1..15}; do
+  if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8000/ >/dev/null; then
+    healthy=1
+    break
+  fi
+  sleep 1
+done
+if [[ $healthy -ne 1 ]]; then
+  rollback
+  fail "the new release did not pass its local health check"
+fi
+
+rm -f "$archive"
+echo "PerspeakAI release ${revision} is live."
