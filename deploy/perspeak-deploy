@@ -31,34 +31,33 @@ archive="$2"
 
 install -d -m 0755 -o root -g root "$RELEASES_DIR"
 release_dir="${RELEASES_DIR}/${revision}"
-work_dir="${release_dir}.incoming"
 [[ ! -e "$release_dir" ]] || fail "release already exists: $revision"
-rm -rf "$work_dir"
-install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_USER" "$work_dir"
+install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_USER" "$release_dir"
 
-cleanup_incoming() {
-  rm -rf "$work_dir"
+cleanup_release() {
+  rm -rf "$release_dir"
 }
-trap cleanup_incoming EXIT
+trap cleanup_release EXIT
 
-tar -xzf "$archive" -C "$work_dir" --no-same-owner --no-same-permissions
-[[ -f "${work_dir}/${APP_DIR_REL}/app.py" ]] || fail "app.py is absent from the release"
-[[ -f "${work_dir}/${APP_DIR_REL}/requirements.txt" ]] || fail "requirements.txt is absent from the release"
-[[ -d "${work_dir}/${WHEELS_DIR_REL}" ]] || fail "offline dependency wheels are absent from the release"
-chown -R "${SERVICE_USER}:${SERVICE_USER}" "$work_dir"
+tar -xzf "$archive" -C "$release_dir" --no-same-owner --no-same-permissions
+[[ -f "${release_dir}/${APP_DIR_REL}/app.py" ]] || fail "app.py is absent from the release"
+[[ -f "${release_dir}/${APP_DIR_REL}/requirements.txt" ]] || fail "requirements.txt is absent from the release"
+[[ -d "${release_dir}/${WHEELS_DIR_REL}" ]] || fail "offline dependency wheels are absent from the release"
+chown -R "${SERVICE_USER}:${SERVICE_USER}" "$release_dir"
 
 # Every release owns its virtual environment. A rollback therefore restores
-# both the source and the exact dependency set used by that source.
-runuser -u "$SERVICE_USER" -- "$BASE_PYTHON" -m venv "${work_dir}/.venv"
-runuser -u "$SERVICE_USER" -- "${work_dir}/.venv/bin/python" -m pip install \
-  --no-index --find-links "${work_dir}/${WHEELS_DIR_REL}" \
-  -r "${work_dir}/${APP_DIR_REL}/requirements.txt"
-runuser -u "$SERVICE_USER" -- "${work_dir}/.venv/bin/python" -m py_compile \
-  "${work_dir}/${APP_DIR_REL}/app.py" \
-  "${work_dir}/${APP_DIR_REL}/server_store.py" \
-  "${work_dir}/${APP_DIR_REL}/audio_engine.py"
+# both the source and the exact dependency set used by that source. Virtual
+# environments contain absolute interpreter paths, so they must be created in
+# their final directory and never moved after creation.
+runuser -u "$SERVICE_USER" -- "$BASE_PYTHON" -m venv "${release_dir}/.venv"
+runuser -u "$SERVICE_USER" -- "${release_dir}/.venv/bin/python" -m pip install \
+  --no-index --find-links "${release_dir}/${WHEELS_DIR_REL}" \
+  -r "${release_dir}/${APP_DIR_REL}/requirements.txt"
+runuser -u "$SERVICE_USER" -- "${release_dir}/.venv/bin/python" -m py_compile \
+  "${release_dir}/${APP_DIR_REL}/app.py" \
+  "${release_dir}/${APP_DIR_REL}/server_store.py" \
+  "${release_dir}/${APP_DIR_REL}/audio_engine.py"
 
-mv "$work_dir" "$release_dir"
 trap - EXIT
 
 previous_target="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
@@ -85,6 +84,9 @@ rollback() {
     mv -Tf "$next_link" "$CURRENT_LINK"
   else
     rm -f "$CURRENT_LINK" "$DROPIN_FILE"
+    # This is the initial migration. The original unit had no deployment
+    # drop-in, so remove the directory too and return to its untouched unit.
+    rmdir "$DROPIN_DIR" 2>/dev/null || true
   fi
   systemctl daemon-reload
   systemctl restart "$SERVICE_NAME" || true
