@@ -316,6 +316,13 @@
   {% endif %}
 
   <!-- ── Performance Analysis: selector cards + content panel ────────────── -->
+  {% set rich_good = pillar.what_i_did_well_rich if pillar.what_i_did_well_rich is defined else [] %}
+  {% set good_count = rich_good | length if rich_good else (pillar.what_i_did_good | length if pillar.what_i_did_good is defined else 0) %}
+  {% set fix_count  = pillar.areas_for_improvement | length if pillar.areas_for_improvement is defined else 0 %}
+  {% set is_unavailable = pillar.analysis_unavailable is defined and pillar.analysis_unavailable %}
+  {% set has_coverage_warn = pillar.coverage is defined and pillar.coverage.coverage_warning is defined and pillar.coverage.coverage_warning %}
+  {% set pillar_order = ['structure', 'fluency', 'relevance', 'delivery'] %}
+
   <div class="relative z-10 mb-8">
     <h2 class="text-sm font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
       <svg class="w-4 h-4" style="color:#16A34A" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -324,6 +331,33 @@
       表现分析
     </h2>
 
+    <!-- Analysis unavailable banner -->
+    {% if is_unavailable %}
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-5 flex items-start gap-3">
+      <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <div>
+        <p class="text-sm font-semibold text-amber-900 mb-0.5">本次未能生成带原话证据的分析</p>
+        <p class="text-xs text-amber-700">本次演练的转录或音频未能通过质量校验，无法生成逐句引文分析。请重新演练后重试。</p>
+        {% if pillar.unavailable_reason is defined %}
+        <p class="text-[10px] font-mono text-amber-500 mt-1">原因：{{ pillar.unavailable_reason }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Coverage warning banner (non-penalty, shown alongside partial results) -->
+    {% if has_coverage_warn and not is_unavailable %}
+    <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 mb-4 flex items-start gap-2.5">
+      <svg class="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <p class="text-xs text-blue-700">本次演练的转录/时长不足以支持完整的逐句分析；以下仅显示有可靠原话证据的反馈。{{ pillar.coverage.coverage_note if pillar.coverage.coverage_note is defined and pillar.coverage.coverage_note }}</p>
+    </div>
+    {% endif %}
+
+    {% if not is_unavailable %}
     <!-- Selector cards row -->
     <div class="grid grid-cols-2 gap-4 mb-5">
 
@@ -340,7 +374,7 @@
           </div>
           <span class="text-sm font-bold" style="color:#15803D">What I did well</span>
         </div>
-        <p class="text-xs ml-10.5" style="color:#166534">{{ pillar.what_i_did_good | length }} strengths identified</p>
+        <p class="text-xs ml-10.5" style="color:#166534">{{ good_count }} strengths identified</p>
       </button>
 
       <!-- Amber: Areas for Improvement -->
@@ -356,46 +390,58 @@
           </div>
           <span class="text-sm font-bold text-amber-800">Areas for Improvement</span>
         </div>
-        <p class="text-xs text-amber-700 ml-10.5">{{ pillar.areas_for_improvement | length }} items to work on</p>
+        <p class="text-xs text-amber-700 ml-10.5">{{ fix_count }} items to work on</p>
       </button>
     </div>
 
     <!-- Content: What I did well -->
     <div id="perf-panel-good">
-      {% if pillar.what_i_did_well_rich %}
-      <!-- Rich rendering (new evidence-first schema) -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        {% for item in pillar.what_i_did_well_rich %}
-          {% set p = item.pillar | lower %}
-          {% set tag_class = 'pillar-structure' if p == 'structure' else ('pillar-fluency' if p == 'fluency' else ('pillar-relevance' if p in ['relevance','content relevance'] else ('pillar-delivery' if p == 'delivery' else ''))) %}
-          <div class="good-item flex-col items-start gap-1.5">
-            <div class="flex items-start gap-2 w-full">
-              <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-              </svg>
-              <p class="text-slate-700 text-sm font-semibold leading-snug">
-                {% if tag_class %}<span class="pillar-tag {{ tag_class }}">{{ item.pillar | title }}</span>{% endif %}
-                {{ item.title }}
-              </p>
+      {% if rich_good %}
+      <!-- Rich rendering (evidence-first schema) — grouped by pillar -->
+      <div class="space-y-5">
+        {% for pillar_name in pillar_order %}
+          {% set pillar_items = rich_good | selectattr('pillar', 'equalto', pillar_name) | list %}
+          {% if pillar_items %}
+          {% set ptag = 'pillar-structure' if pillar_name == 'structure' else ('pillar-fluency' if pillar_name == 'fluency' else ('pillar-relevance' if pillar_name == 'relevance' else 'pillar-delivery')) %}
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="pillar-tag {{ ptag }} text-[10px] font-bold uppercase tracking-wider">{{ pillar_name | title }}</span>
+              <span class="text-[10px] text-slate-400">{{ pillar_items | length }} strength{{ 's' if pillar_items | length != 1 }}</span>
             </div>
-            {% if item.evidence %}
-              {% for ev in item.evidence[:1] %}
-              {% if ev.quote %}
-              <div class="ml-6 border-l-2 border-green-200 pl-2">
-                <span class="font-mono text-[10px] text-green-600">{{ ev.timestamp }}</span>
-                <span class="text-slate-500 text-xs italic"> "{{ ev.quote }}"</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {% for item in pillar_items %}
+              <div class="good-item flex-col items-start gap-1.5">
+                <div class="flex items-start gap-2 w-full">
+                  <svg class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  <p class="text-slate-700 text-sm font-semibold leading-snug">{{ item.title }}</p>
+                </div>
+                {% if item.evidence %}
+                  {% for ev in item.evidence[:1] %}
+                  {% if ev.quote %}
+                  <div class="ml-6">
+                    <p class="fix-label text-green-700 mb-0.5">你的原话</p>
+                    <div class="border-l-2 border-green-200 pl-2">
+                      <span class="font-mono text-[10px] text-green-600">{{ ev.timestamp }}</span>
+                      <span class="text-slate-500 text-xs italic"> "{{ ev.quote }}"</span>
+                    </div>
+                  </div>
+                  {% endif %}
+                  {% endfor %}
+                {% endif %}
+                {% if item.why_it_works %}
+                <p class="ml-6 text-slate-600 text-xs leading-relaxed">{{ item.why_it_works }}</p>
+                {% endif %}
               </div>
-              {% endif %}
               {% endfor %}
-            {% endif %}
-            {% if item.why_it_works %}
-            <p class="ml-6 text-slate-600 text-xs leading-relaxed">{{ item.why_it_works }}</p>
-            {% endif %}
+            </div>
           </div>
+          {% endif %}
         {% endfor %}
       </div>
       {% else %}
-      <!-- Legacy string rendering -->
+      <!-- Legacy string rendering (non-Class-Presentation scenarios) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {% for item in pillar.what_i_did_good %}
           {% set s = item | string %}
@@ -424,6 +470,87 @@
 
     <!-- Content: Areas for Improvement -->
     <div id="perf-panel-fix" class="hidden">
+      {% if pillar.areas_for_improvement %}
+      <!-- Grouped by pillar when rich evidence is present -->
+      {% set has_rich_fix = pillar.areas_for_improvement | selectattr('evidence_rich', 'defined') | list | length > 0 %}
+      {% if has_rich_fix %}
+      <div class="space-y-5">
+        {% for pillar_name in pillar_order %}
+          {% set pillar_fix_items = pillar.areas_for_improvement | selectattr('dimension', 'equalto', pillar_name | title) | list %}
+          {% if pillar_fix_items %}
+          {% set ptag = 'pillar-structure' if pillar_name == 'structure' else ('pillar-fluency' if pillar_name == 'fluency' else ('pillar-relevance' if pillar_name == 'relevance' else 'pillar-delivery')) %}
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="pillar-tag {{ ptag }} text-[10px] font-bold uppercase tracking-wider">{{ pillar_name | title }}</span>
+              <span class="text-[10px] text-slate-400">{{ pillar_fix_items | length }} item{{ 's' if pillar_fix_items | length != 1 }} to work on</span>
+            </div>
+            <div class="space-y-3">
+            {% for item in pillar_fix_items %}
+            {% set card_title = item.title if item.title is defined and item.title else (item.issue if item.issue is defined else '') %}
+            {% set priority   = item.priority if item.priority is defined else 'medium' %}
+            <div class="fix-item">
+              <div class="fix-header">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-start gap-2 flex-1 min-w-0">
+                    <span class="text-amber-600 text-sm flex-shrink-0 mt-0.5">⚠</span>
+                    <p class="text-amber-900 text-sm font-semibold leading-snug">{{ card_title }}</p>
+                  </div>
+                  {% if priority == 'high' %}
+                  <span class="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                        style="background:#FEE2E2;color:#B91C1C;">High</span>
+                  {% elif priority == 'medium' %}
+                  <span class="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                        style="background:#FEF3C7;color:#92400E;">Med</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="fix-body">
+                {% if item.evidence_rich is defined and item.evidence_rich %}
+                  {% if item.listener_impact is defined and item.listener_impact %}
+                  <p class="text-amber-800 text-xs leading-relaxed italic mb-1.5">{{ item.listener_impact }}</p>
+                  {% endif %}
+                  <div class="mb-2">
+                    <p class="fix-label text-amber-700 mb-1">你的原话</p>
+                    <div class="space-y-1">
+                    {% for ev in item.evidence_rich[:2] %}
+                    {% if ev.quote %}
+                    <div class="flex items-start gap-1.5 border-l-2 border-amber-200 pl-2">
+                      <span class="font-mono text-[10px] text-slate-400 flex-shrink-0 mt-0.5">{{ ev.timestamp }}</span>
+                      <span class="text-slate-600 text-xs italic leading-relaxed">"{{ ev.quote }}"</span>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    </div>
+                  </div>
+                {% else %}
+                  <div class="mb-2">
+                    <p class="fix-label text-amber-700 mb-1">你的原话</p>
+                    <p class="text-slate-600 text-xs leading-relaxed italic">{{ item.example }}</p>
+                  </div>
+                {% endif %}
+                <div>
+                  <p class="fix-label text-emerald-600 mb-1">改进建议</p>
+                  {% if item.spoken_example is defined and item.spoken_example %}
+                    <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ item.how_to_fix if item.how_to_fix is defined else '' }}</p>
+                    <div class="say-instead">
+                      <p class="text-emerald-700 text-xs leading-relaxed font-medium">
+                        <span class="say-instead-arrow">→</span>可以这样说："{{ item.spoken_example }}"
+                      </p>
+                    </div>
+                  {% else %}
+                    <p class="text-slate-700 text-xs leading-relaxed">{{ item.how_to_fix if item.how_to_fix is defined else '' }}</p>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% else %}
+      <!-- Legacy flat rendering (non-Class-Presentation) -->
       <div class="space-y-3">
         {% for item in pillar.areas_for_improvement %}
         {% set dim = item.dimension if item.dimension is defined and item.dimension else (item.pillar | title if item.pillar is defined else '') %}
@@ -454,57 +581,35 @@
             </div>
           </div>
           <div class="fix-body">
-            <!-- Evidence quotes with timestamps (rich) OR legacy example text -->
-            {% if item.evidence_rich is defined and item.evidence_rich %}
-              {% if item.listener_impact is defined and item.listener_impact %}
-              <p class="text-amber-800 text-xs leading-relaxed italic mb-1">{{ item.listener_impact }}</p>
-              {% endif %}
-              <div class="space-y-1">
-              {% for ev in item.evidence_rich[:2] %}
-              {% if ev.quote %}
-              <div class="flex items-start gap-1.5">
-                <span class="font-mono text-[10px] text-slate-400 flex-shrink-0 mt-0.5">{{ ev.timestamp }}</span>
-                <span class="text-slate-600 text-xs italic leading-relaxed">"{{ ev.quote }}"</span>
-              </div>
-              {% endif %}
-              {% endfor %}
-              </div>
-            {% else %}
-              <div>
-                <p class="fix-label text-amber-700 mb-1">你的原话</p>
-                <p class="text-slate-600 text-xs leading-relaxed italic">{{ item.example }}</p>
-              </div>
-            {% endif %}
-            <!-- How to fix + spoken example -->
+            <div class="mb-2">
+              <p class="fix-label text-amber-700 mb-1">你的原话</p>
+              <p class="text-slate-600 text-xs leading-relaxed italic">{{ item.example }}</p>
+            </div>
             <div>
               <p class="fix-label text-emerald-600 mb-1">改进建议</p>
-              {% if item.spoken_example is defined and item.spoken_example %}
-                <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ item.how_to_fix if item.how_to_fix is defined else '' }}</p>
+              {% set fix = item.how_to_fix if item.how_to_fix is defined and item.how_to_fix is string else '' %}
+              {% if 'Say this instead:' in fix %}
+                {% set fix_parts = fix.split('Say this instead:', 1) %}
+                <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ fix_parts[0] }}</p>
                 <div class="say-instead">
                   <p class="text-emerald-700 text-xs leading-relaxed font-medium">
-                    <span class="say-instead-arrow">→</span>Say this instead: "{{ item.spoken_example }}"
+                    <span class="say-instead-arrow">→</span>Say this instead:{{ fix_parts[1] }}
                   </p>
                 </div>
               {% else %}
-                {% set fix = item.how_to_fix if item.how_to_fix is defined and item.how_to_fix is string else '' %}
-                {% if 'Say this instead:' in fix %}
-                  {% set fix_parts = fix.split('Say this instead:', 1) %}
-                  <p class="text-slate-600 text-xs leading-relaxed mb-1.5">{{ fix_parts[0] }}</p>
-                  <div class="say-instead">
-                    <p class="text-emerald-700 text-xs leading-relaxed font-medium">
-                      <span class="say-instead-arrow">→</span>Say this instead:{{ fix_parts[1] }}
-                    </p>
-                  </div>
-                {% else %}
-                  <p class="text-slate-700 text-xs leading-relaxed">{{ fix }}</p>
-                {% endif %}
+                <p class="text-slate-700 text-xs leading-relaxed">{{ fix }}</p>
               {% endif %}
             </div>
           </div>
         </div>
         {% endfor %}
       </div>
+      {% endif %}
+      {% else %}
+      <p class="text-slate-400 text-sm italic text-center py-6">暂无改进反馈（证据不足或分析不可用）。</p>
+      {% endif %}
     </div>
+    {% endif %}{# end not is_unavailable #}
   </div>
 
   </div><!-- /tab-pane-pq -->

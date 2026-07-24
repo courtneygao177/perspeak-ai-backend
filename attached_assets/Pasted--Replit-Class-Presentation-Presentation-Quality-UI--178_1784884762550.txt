@@ -1,0 +1,390 @@
+发给 Replit 的实施指令：修复 Class Presentation 的 Presentation Quality 分析
+
+请直接检查并修改当前项目代码，完成以下任务。不要只修改 UI 文案或仅替换 LLM prompt；问题同时存在于 **分析路由、旧 heuristic fallback、JSON 解析/映射、前端数量限制和证据渲染**。
+
+## 先确认问题根因
+
+当前页面截图证明新版分析结果没有被正确使用，页面仍在输出旧 heuristic fallback：
+
+- 顶部固定显示 `4 strengths identified` 和 `4 items to work on`；
+- What I did well 使用 `Rehearsal Completed`、`Steady Pace`、`Topic Covered`、`Session Finished` 等系统状态，不是对学习者展示内容的分析；
+- Areas for Improvement 仍使用 `No linking words detected between slides`、filler words、slide coverage、`golden zone` 等旧规则；
+- “你的原话”栏显示的是系统建议，例如 `You moved between slides without...`、`Aim for 120-150 WPM...`，并非学习者真实转录；
+- 没有时间戳，没有学习者原话，也没有按新版 Structure / Fluency / Relevance / Delivery 子标准进行分析。
+
+这说明至少存在以下一种情况，必须逐一排查并修复：
+
+1. 新的 `what_i_did_well` 字段没有被后端 parser 或前端识别，导致触发旧 fallback。
+2. LLM 调用失败、JSON 解析失败或 schema 校验失败后，代码静默回退到旧的 generic feedback。
+3. 前端仍把反馈数组 `slice(0, 4)`，或假设每个 pillar 只能有一条 feedback。
+4. 发给 LLM 的 payload 没有传完整的带时间戳转录，因此模型不能引用真实原话。
+5. 卡片中的“你的原话”绑定到了错误字段，例如 `how_to_fix`、默认模板或 heuristic reason，而不是 `evidence.quote`。
+
+## 非协商验收目标
+
+完成后，Class Presentation → Presentation Quality 必须满足：
+
+1. `what_i_did_well`：四个维度 **每个至少 2 条**；在证据充足时至少 8 条。
+2. `areas_for_improvement`：四个维度 **每个至少 2 条、最多 3 条**；在证据充足时总数为 8-12 条。
+3. 每一条正向或改进反馈都必须带至少一条：
+   - 学习者的真实原话；
+   - 原始时间戳；
+   - 该原话如何帮助或损害听众理解的解释。
+4. “你的原话”区域只能显示 `evidence.quote`，并在旁边显示 `timestamp`。**绝不能**显示 AI 建议、系统状态、模板句或虚构句子。
+5. 全部 feedback 引文中，至少 60% 来自演讲主体中段（20%-80%）；开头和结尾各不超过 25%。
+6. 每个维度都必须呈现该维度真正的评估内容：
+   - Structure：主张、逻辑推进、过渡、支撑、收束；
+   - Fluency：连续性、可恢复性、节奏、清晰措辞、自然表达；
+   - Relevance：受众/任务适配、为什么重要、知识门槛、价值、收获；
+   - Delivery：仅基于可用音频数据评估语速适配、意义停顿、声音强调、清晰度。
+7. 不再出现 `TED Golden Zone`、自动 WPM 分档、Rule of Three bonus、PSE violation、slide-keyword score cap、固定 filler penalty 等旧逻辑。
+8. LLM 或证据不足时，不得伪造四条 generic strengths / improvements。必须显示“分析证据不足”或“部分维度未评估”的真实状态。
+
+---
+
+## A. 替换并隔离旧 heuristic fallback
+
+1. 在代码库中搜索并定位所有旧 Presentation Quality 规则、模板和回退文案，包括但不限于：
+
+```text
+Rehearsal Completed
+Steady Pace
+Topic Covered
+Session Finished
+No linking words detected
+golden zone
+120-150 WPM
+160-190 WPM
+filler words may have slowed
+Slide content may not have been fully covered
+Picture Superiority
+Rule of Three
+what_went_well
+slice(0, 4)
+```
+
+2. 删除或停用这些旧 heuristic feedback 生成器在 `class presentation / presentation quality` 场景下的调用路径。
+3. 不允许 LLM 调用失败后回退到这些模板。替代行为应为：
+   - 返回结构化 `analysis_unavailable` 或 `insufficient_evidence` 状态；
+   - 保留已验证的、可测的指标（例如真实总时长或真实 WPM），但不可把它伪装为学习者原话或完整的四维分析；
+   - 前端显示“本次无法生成带原话证据的分析，请重试”，而不是显示通用赞美或通用批评。
+4. 若当前系统有多个分析路径，确保 Class Presentation 的 Presentation Quality 只进入新版 evidence-first LLM path。
+
+---
+
+## B. 更新 LLM 输出契约与后端 parser
+
+后端必须以以下字段名解析新版 LLM 结果：
+
+```ts
+type Evidence = {
+  timestamp: string; // e.g. "00:42-00:49"
+  quote: string;     // exact learner transcript substring
+};
+
+type FeedbackItem = {
+  pillar: "structure" | "fluency" | "relevance" | "delivery";
+  title: string;
+  evidence: Evidence[];
+  why_it_works?: string;
+  listener_impact?: string;
+  how_to_fix?: string;
+  spoken_example?: string;
+  priority?: "high" | "medium";
+};
+
+type PresentationQualityResult = {
+  module: "class_presentation_quality";
+  coverage: {
+    sections_reviewed: string[];
+    coverage_warning: boolean;
+    coverage_note: string | null;
+    quote_distribution: {
+      opening_pct: number;
+      middle_pct: number;
+      closing_pct: number;
+    };
+  };
+  scores: {
+    structure: PillarScore;
+    fluency: PillarScore;
+    relevance: PillarScore;
+    delivery: PillarScore;
+  };
+  overall: {
+    score: number | null;
+    score_status: "assessed" | "not_assessed";
+    summary: string;
+    top_next_steps: string[];
+  };
+  what_i_did_well: FeedbackItem[];
+  areas_for_improvement: FeedbackItem[];
+  not_assessed: Array<{
+    item: string;
+    reason: string;
+    required_input: string;
+  }>;
+};
+```
+
+### 关键兼容性要求
+
+- 新字段名是 **`what_i_did_well`**，不是 `what_went_well`。
+- 后端、数据库、API response、前端 props 和导出报告必须统一使用 `what_i_did_well`。
+- 如果必须短期兼容旧数据，只能在 adapter 层做一次明确映射：
+
+```ts
+const whatIDidWell = raw.what_i_did_well ?? raw.what_went_well ?? [];
+```
+
+但新的 LLM prompt、数据库新记录和前端主路径必须写入/读取 `what_i_did_well`。不得因为字段不匹配而触发 generic fallback。
+
+### LLM 调用输入必须包含
+
+每次调用必须向 LLM 传入：
+
+```ts
+{
+  requested_output_language: "zh-CN" | "en",
+  presentation_context: {
+    class_name?: string,
+    assignment_goal?: string,
+    target_audience: string | "unknown",
+    presentation_duration_seconds: number
+  },
+  slides_context: [
+    {
+      slide_number: number,
+      title?: string,
+      key_ideas?: string[]
+    }
+  ],
+  transcript_segments: [
+    {
+      start: "MM:SS",
+      end: "MM:SS",
+      text: "verbatim learner transcript",
+      slide_number?: number
+    }
+  ],
+  audio_metrics: {
+    overall_wpm: number | null,
+    wpm_by_segment: unknown[],
+    pause_events: unknown[],
+    pitch_variation: number | null,
+    volume_stability: number | null,
+    audio_clarity: number | null,
+    filler_events: unknown[]
+  }
+}
+```
+
+`transcript_segments` 必须是完整演练的全篇分段转录，且带原始时间戳；不得只传摘要、slide keywords、开头或结尾。
+
+---
+
+## C. 强制服务端验证；失败时重试，而不是降级为旧模板
+
+在接收 LLM JSON 后、写数据库或渲染前，实现以下 validator。若是格式或证据选择问题，可带验证错误信息让 LLM 重试一次；第二次仍失败则返回 `analysis_unavailable` / `insufficient_evidence`。
+
+### 1. 基础 schema 校验
+
+- JSON 可解析；
+- `module === "class_presentation_quality"`；
+- 四维 score 在 0-100 或为 null；
+- `what_i_did_well` 与 `areas_for_improvement` 必须是数组；
+- 不接受只输出旧字段 `what_went_well` 的新结果；
+- 所有 `pillar` 只能是 `structure | fluency | relevance | delivery`。
+
+### 2. 数量校验
+
+在完整转录足够长且证据充足时（建议：至少 5 个有效 transcript segments 且至少 220 个转录词）：
+
+```ts
+const pillars = ["structure", "fluency", "relevance", "delivery"] as const;
+
+for (const pillar of pillars) {
+  assert(count(result.what_i_did_well, pillar) >= 2);
+  assert(count(result.areas_for_improvement, pillar) >= 2);
+  assert(count(result.areas_for_improvement, pillar) <= 3);
+}
+
+assert(result.what_i_did_well.length >= 8);
+assert(result.areas_for_improvement.length >= 8);
+assert(result.areas_for_improvement.length <= 12);
+```
+
+若转录不足以支撑上述数量：
+
+- `coverage.coverage_warning` 必须为 `true`；
+- `coverage.coverage_note` 说明是“时长过短 / 转录缺失 / 音频指标缺失”；
+- 允许少于上述数量，但每条仍必须有真实证据；
+- 前端必须显示“证据不足，反馈数量已相应减少”，绝不能填充通用模板。
+
+### 3. 原话与时间戳校验
+
+对每个 feedback item：
+
+- `evidence.length >= 1`；
+- `evidence.quote` 经空格、大小写和标点规范化后，必须是 `transcript_segments` 中的真实连续子串；
+- `timestamp` 必须对应一个已传入 segment 的时间范围；
+- quote 不得是建议、系统模板、幻灯片 bullet 或模型虚构的话；
+- 同一个 quote 不应在超过两张不同卡片中重复使用；
+- 如果无法找到真实 quote，拒绝该 LLM 输出，不要用空字符串或默认文本代替。
+
+### 4. 引文分布校验
+
+对全部 `what_i_did_well` 和 `areas_for_improvement` 的引文按时间计算：
+
+```ts
+assert(middleBodyQuotePct >= 0.60); // 20%-80%
+assert(openingQuotePct <= 0.25);    // 0%-20%
+assert(closingQuotePct <= 0.25);    // 80%-100%
+```
+
+对长度足够的展示额外检查：
+
+- Structure 至少一条 body evidence；
+- Relevance 至少一条 body evidence；
+- Fluency 引文来自至少两个不相邻部分；
+- Delivery 若有音频指标，至少覆盖前/中/后中的两个部分。
+
+无法满足时，让模型重新选证据；不能继续渲染只引用开头/结尾的分析。
+
+### 5. 旧规则禁用校验
+
+在 Presentation Quality 结果的 title、summary、why、impact、fix、example 中禁止出现以下旧规则或固定模板：
+
+```text
+TED Golden Zone
+golden zone
+160-190 WPM
+120-150 WPM
+Rule of Three bonus
+PSE violation
+Picture Superiority Violation
+Rehearsal Completed
+Session Finished
+Topic Covered
+Steady Pace
+No linking words detected between slides
+Slide content may not have been fully covered
+```
+
+如有命中，判为 legacy fallback contamination，拒绝该结果并记录日志。
+
+---
+
+## D. 前端渲染修改
+
+### 1. 移除固定数量和旧字段
+
+- 删除 `slice(0, 4)`、固定 `4 strengths identified`、固定 `4 items to work on` 以及任何“每个 pillar 一张卡”的限制。
+- 标题必须根据真实数组长度动态显示：
+
+```ts
+`${whatIDidWell.length} strengths identified`
+`${areasForImprovement.length} items to work on`
+```
+
+- 主路径读取：
+
+```ts
+const whatIDidWell = analysis.what_i_did_well ?? [];
+const areasForImprovement = analysis.areas_for_improvement ?? [];
+```
+
+### 2. 按四个维度分组渲染
+
+What I did well 与 Areas for Improvement 都必须按以下顺序分组显示：
+
+```ts
+const PILLAR_ORDER = ["structure", "fluency", "relevance", "delivery"];
+```
+
+每组应显示例如：
+
+```text
+STRUCTURE · 2 strengths
+  [卡片 1]
+  [卡片 2]
+
+FLUENCY · 2 strengths
+  [卡片 1]
+  [卡片 2]
+```
+
+不要把四个维度各取一条后混排；这样会再次掩盖“每维至少两条”的规则。
+
+### 3. 反馈卡片字段绑定
+
+#### What I did well 卡片
+
+```text
+[PILLAR] [title]
+
+你的原话（或 Your words）
+[00:42-00:49] “{evidence[0].quote}”
+
+为什么有效
+{why_it_works}
+```
+
+#### Areas for Improvement 卡片
+
+```text
+[PILLAR] [title] [priority]
+
+你的原话（或 Your words）
+[00:42-00:49] “{evidence[0].quote}”
+
+对听众的影响
+{listener_impact}
+
+改进建议
+{how_to_fix}
+
+可以这样说（仅在 spoken_example 非空时展示）
+{spoken_example}
+```
+
+必须遵循：
+
+- `你的原话` 只绑定 `evidence[0].quote`，时间戳只绑定 `evidence[0].timestamp`；
+- 不得把 `how_to_fix`、`spoken_example`、heuristic reason 或默认 string 显示在“你的原话”下；
+- `spoken_example` 为空时隐藏整个“可以这样说”区域；
+- 如果没有验证后的 evidence，不渲染该卡，而不是填入默认句。
+
+### 4. 缺失数据状态
+
+- `coverage_warning === true` 时，在结果顶部显示一个非惩罚性提示：
+  `本次演练的转录/时长不足以支持完整的逐句分析；以下仅显示有可靠原话证据的反馈。`
+- `not_assessed` 中的项目，应在对应维度显示“未评估”和原因；不能显示 0 分或 generic criticism。
+- LLM 失败时显示可重试错误状态；不能显示旧 fallback cards。
+
+---
+
+## E. 请加入自动化测试
+
+至少增加以下测试，避免旧逻辑重新出现：
+
+1. **字段映射测试**：LLM 返回 `what_i_did_well` 后，前端显示其内容；不得因仍读取 `what_went_well` 而为空或回退。
+2. **数量测试**：给定完整 5 段转录和合格 LLM 响应，UI 显示至少 8 个 strengths、8-12 个 improvement，不再固定为 4 / 4。
+3. **原话绑定测试**：每张卡片“你的原话”显示真实 `evidence.quote` 和 timestamp；断言不会显示 `how_to_fix` 或默认模板。
+4. **旧文案回归测试**：任何 Class Presentation Presentation Quality 结果中不得出现 `golden zone`、`Rehearsal Completed`、`Session Finished`、`Slide content may not have been fully covered` 等字符串。
+5. **证据分布测试**：构造一段有开头、主体、结尾的转录，校验主体引文占比不少于 60%。
+6. **缺失音频测试**：缺少 pitch/volume/audio clarity 时，Delivery 对应项目显示未评估，不输出“monotone”“strong voice”等推断。
+7. **LLM 失败测试**：模型失败或 JSON 不合法时，UI 显示可重试/分析不可用状态，绝不生成 4 条旧 heuristic 卡片。
+
+---
+
+## F. 完成后交付内容
+
+完成代码修改后，请回复：
+
+1. 修改了哪些文件及每个文件负责什么；
+2. 新 LLM 调用实际传入的 `transcript_segments` 示例（脱敏即可）；
+3. 一份真实或 fixture 的最终 JSON，证明包含 `what_i_did_well`、至少 8 条 strengths、8-12 条 improvements、真实时间戳和真实引用；
+4. 自动化测试结果；
+5. 确认旧 heuristic fallback 已不再用于此场景。
+

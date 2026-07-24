@@ -3739,6 +3739,138 @@ structure * 0.30 + fluency * 0.25 + relevance * 0.25 + delivery * 0.20
 """
 
 
+# ─────────────────────────────────────────────
+# CLASS PRESENTATION PQ — unavailable / validator helpers
+# ─────────────────────────────────────────────
+
+# Phrases that indicate old heuristic fallback contaminated the LLM output.
+_LEGACY_CONTAMINATION_PHRASES = [
+    "TED Golden Zone", "golden zone", "160-190 WPM", "120-150 WPM",
+    "Rule of Three bonus", "PSE violation", "Picture Superiority Violation",
+    "Rehearsal Completed", "Session Finished", "Topic Covered", "Steady Pace",
+    "No linking words detected between slides",
+    "Slide content may not have been fully covered",
+]
+
+
+def _class_pq_unavailable(reason="llm_error"):
+    """
+    Return a structured 'analysis unavailable' result for Class Presentation PQ.
+    Never returns heuristic/template content — shows a clear error state instead.
+    The frontend detects analysis_unavailable=True and shows a retry message.
+    """
+    return {
+        "analysis_unavailable": True,
+        "unavailable_reason":   reason,
+        "scores": {
+            "structure": 65, "fluency": 65, "relevance": 65, "delivery": 65,
+        },
+        "dimensions_info": {
+            d: {"explanation": "分析不可用。", "calculation": "—"}
+            for d in ("structure", "fluency", "relevance", "delivery")
+        },
+        "filler_log":           [],
+        "jaw_dropping_moment":  False,
+        "pitch_data":           _generate_pitch_data(65, 130),
+        "what_i_did_well_rich": [],
+        "what_i_did_good":      [],
+        "areas_for_improvement": [],
+        "not_assessed": [],
+        "coverage": {
+            "coverage_warning": True,
+            "coverage_note":    f"分析不可用：{reason}",
+        },
+        "pq_overall": {
+            "score": None,
+            "score_status": "not_assessed",
+            "summary": "本次未能生成带原话证据的分析。请重新演练后重试。",
+            "top_next_steps": [],
+        },
+    }
+
+
+def _validate_class_pq_result(result, transcript_segments):
+    """
+    Validate LLM output for Class Presentation PQ evidence-first schema.
+    Returns (ok: bool, error_msg: str | None).
+    """
+    # 1. Module check
+    if result.get("module") != "class_presentation_quality":
+        return False, f"module mismatch: {result.get('module')!r}"
+
+    # 2. Array checks
+    if not isinstance(result.get("what_i_did_well"), list):
+        return False, "what_i_did_well is not a list"
+    if not isinstance(result.get("areas_for_improvement"), list):
+        return False, "areas_for_improvement is not a list"
+
+    # 3. Reject old field name as primary output (no what_i_did_well at all)
+    if not result.get("what_i_did_well") and result.get("what_went_well"):
+        return False, "uses deprecated field what_went_well instead of what_i_did_well"
+
+    # 4. Pillar enum check
+    valid_pillars = {"structure", "fluency", "relevance", "delivery"}
+    all_items = result.get("what_i_did_well", []) + result.get("areas_for_improvement", [])
+    for item in all_items:
+        if not isinstance(item, dict):
+            return False, "feedback item is not a dict"
+        p = (item.get("pillar") or "").lower().strip()
+        if p and p not in valid_pillars:
+            return False, f"invalid pillar value: {p!r}"
+
+    # 5. Score range check
+    scores = result.get("scores", {})
+    for dim in ("structure", "fluency", "relevance", "delivery"):
+        dim_data = scores.get(dim, {})
+        sc = dim_data.get("score") if isinstance(dim_data, dict) else dim_data
+        if sc is not None:
+            try:
+                if not (0 <= float(sc) <= 100):
+                    return False, f"score out of range for {dim}: {sc}"
+            except (TypeError, ValueError):
+                return False, f"score not numeric for {dim}: {sc}"
+
+    # 6. Evidence non-empty quotes
+    for item in all_items[:8]:
+        if not isinstance(item, dict):
+            continue
+        for ev in item.get("evidence", []):
+            if not isinstance(ev, dict):
+                return False, "evidence entry is not a dict"
+            if not (ev.get("quote") or "").strip():
+                return False, f"empty quote in item '{item.get('title','?')}'"
+
+    # 7. Legacy contamination check
+    full_text = json.dumps(result, ensure_ascii=False)
+    for phrase in _LEGACY_CONTAMINATION_PHRASES:
+        if phrase.lower() in full_text.lower():
+            return False, f"legacy contamination detected: '{phrase}'"
+
+    # 8. Spot-check evidence quotes against transcript text (normalised)
+    transcript_text = re.sub(
+        r'[^\w\s]', '',
+        " ".join(seg.get("text", "") for seg in transcript_segments).lower()
+    )
+    mismatch_count = 0
+    for item in all_items[:6]:
+        if not isinstance(item, dict):
+            continue
+        for ev in item.get("evidence", [])[:1]:
+            quote = (ev.get("quote") or "").strip()
+            if not quote:
+                continue
+            norm_words = re.sub(r'[^\w\s]', '', quote.lower()).split()
+            if len(norm_words) >= 4:
+                snippet = " ".join(norm_words[:4])
+                if snippet not in transcript_text:
+                    mismatch_count += 1
+    # Allow up to 2 mismatches (STT transcription variation)
+    if mismatch_count > 2:
+        return False, f"{mismatch_count} evidence quotes not found in transcript (possible fabrication)"
+
+    return True, None
+
+
 def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_history,
                                 audience, difficulty, challenge_type,
                                 total_words, wpm_estimate, filler_matches, filler_density,
@@ -3746,9 +3878,10 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
     """
     Evidence-first PQ evaluation for Class Presentation.
     Uses a separate system prompt + structured user payload.
+    On error, returns _class_pq_unavailable() — never falls back to heuristic templates.
     """
     if not AI_ENABLED:
-        return _mock_pillar_evaluation(difficulty)
+        return _class_pq_unavailable("ai_disabled")
 
     # ── Build transcript segments with approximate timestamps ──────────────────
     transcript_segments = []
@@ -3816,25 +3949,58 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
         f"slides={len(slides)} segments={len(transcript_segments)}"
     )
 
-    try:
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL,
-            max_tokens=MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": CLASS_PRES_PQ_SYSTEM_PROMPT},
-                {"role": "user",   "content": json.dumps(user_payload, ensure_ascii=False)},
-            ],
+    def _call_llm(messages):
+        resp = _ai_client.chat.completions.create(
+            model=EVAL_MODEL, max_tokens=MAX_TOKENS, messages=messages,
         )
-        raw = response.choices[0].message.content.strip()
+        raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
-        result = json.loads(raw)
+        return raw, json.loads(raw)
+
+    base_messages = [
+        {"role": "system", "content": CLASS_PRES_PQ_SYSTEM_PROMPT},
+        {"role": "user",   "content": json.dumps(user_payload, ensure_ascii=False)},
+    ]
+
+    try:
+        raw, result = _call_llm(base_messages)
+
+        # ── Validate first attempt ─────────────────────────────────────────────
+        ok, err = _validate_class_pq_result(result, transcript_segments)
+        if not ok:
+            app.logger.warning(f"[CLASS PQ] Attempt 1 validation failed: {err}. Retrying...")
+            retry_messages = base_messages + [
+                {"role": "assistant", "content": raw},
+                {"role": "user",      "content": (
+                    f"Your previous response failed validation: {err}. "
+                    "Please fix the issues and return a corrected JSON. "
+                    "Ensure all evidence quotes are verbatim substrings of the provided transcript. "
+                    "Do NOT use any legacy terms (golden zone, 120-150 WPM, etc.)."
+                )},
+            ]
+            try:
+                raw2, result2 = _call_llm(retry_messages)
+                ok2, err2 = _validate_class_pq_result(result2, transcript_segments)
+                if ok2:
+                    app.logger.info("[CLASS PQ] Retry succeeded.")
+                    return _normalize_class_pq_result(result2, wpm_estimate, difficulty, jaw_drop_heuristic)
+                else:
+                    app.logger.error(f"[CLASS PQ] Retry also failed: {err2}. Returning unavailable.")
+                    return _class_pq_unavailable(f"validation_failed: {err2}")
+            except Exception as retry_e:
+                app.logger.error(f"[CLASS PQ] Retry exception: {retry_e}")
+                return _class_pq_unavailable(f"retry_error: {str(retry_e)[:80]}")
+
         return _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuristic)
 
+    except json.JSONDecodeError as e:
+        app.logger.error(f"[CLASS PQ ERROR] JSON parse failure: {str(e)[:200]}")
+        return _class_pq_unavailable("json_parse_error")
     except Exception as e:
         app.logger.error(f"[CLASS PQ ERROR] {type(e).__name__}: {str(e)[:300]}")
         traceback.print_exc()
-        return _mock_pillar_evaluation(difficulty)
+        return _class_pq_unavailable(f"llm_error: {type(e).__name__}")
 
 
 def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuristic):
@@ -4076,12 +4242,18 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
     # ── BRANCH A: Zero / near-zero speech — fast return, skip Gemini entirely ──
     # This fires when the user never spoke (< 5 real words across all slides).
     # Calling Gemini with an empty transcript produces hallucinated, generic praise
-    # that is completely wrong. We return a fixed penalty result immediately.
+    # that is completely wrong. We return a clear unavailable/penalty result.
     if total_words < 5:
         app.logger.warning(
             f"[EvalGuard] Zero-speech detected ({total_words} words). "
-            "Skipping Gemini call. Returning penalty result."
+            "Skipping Gemini call."
         )
+        # Class Presentation: return unavailable (no heuristic cards)
+        if scenario == "Class Presentation":
+            result = _class_pq_unavailable("zero_speech")
+            result["scores"] = {"structure": 0, "fluency": 0, "relevance": 0, "delivery": 0}
+            return result
+        # Other scenarios: fixed penalty result (TED rubric format)
         return {
             "scores": {"structure": 0, "fluency": 0, "relevance": 0, "delivery": 0},
             "dimensions_info": {
