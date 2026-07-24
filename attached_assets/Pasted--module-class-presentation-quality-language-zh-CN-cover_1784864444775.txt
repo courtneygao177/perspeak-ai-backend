@@ -1,0 +1,219 @@
+{
+  "module": "class_presentation_quality",
+  "language": "zh-CN",
+  "coverage": {
+    "sections_reviewed": ["A", "B", "C", "D", "E"],
+    "coverage_warning": false,
+    "coverage_note": null,
+    "quote_distribution": {
+      "opening_pct": 0,
+      "middle_pct": 0,
+      "closing_pct": 0
+    }
+  },
+  "scores": {
+    "structure": {
+      "score": null,
+      "confidence": "high",
+      "subscores": [
+        {
+          "name": "central_message_and_scope",
+          "weight": 0.25,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "logical_progression",
+          "weight": 0.25,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "signposting_and_transitions",
+          "weight": 0.2,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "support_material_integration",
+          "weight": 0.15,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "closure_and_time_density",
+          "weight": 0.15,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        }
+      ],
+      "summary": ""
+    },
+    "fluency": {
+      "score": null,
+      "confidence": "high",
+      "subscores": [
+        {
+          "name": "continuity_and_recovery",
+          "weight": 0.25,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "pace_rhythm_and_pausing",
+          "weight": 0.2,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "clear_audience_appropriate_wording",
+          "weight": 0.2,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "natural_expression",
+          "weight": 0.15,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "key_idea_emphasis",
+          "weight": 0.2,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        }
+      ],
+      "summary": ""
+    },
+    "relevance": {
+      "score": null,
+      "confidence": "high",
+      "subscores": [
+        {
+          "name": "audience_and_situation_fit",
+          "weight": 0.25,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "why_it_matters",
+          "weight": 0.25,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "knowledge_level_and_language_fit",
+          "weight": 0.2,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "new_value_or_perspective",
+          "weight": 0.15,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "usable_takeaway_or_action",
+          "weight": 0.15,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        }
+      ],
+      "summary": ""
+    },
+    "delivery": {
+      "score": null,
+      "confidence": "medium",
+      "subscores": [
+        {
+          "name": "pace_suitability",
+          "weight": 0.35,
+          "score": null,
+          "status": "assessed",
+          "evidence": []
+        },
+        {
+          "name": "phrase_grouping_and_pauses",
+          "weight": 0.25,
+          "score": null,
+          "status": "assessed_or_not_assessed",
+          "evidence": []
+        },
+        {
+          "name": "vocal_emphasis_and_variety",
+          "weight": 0.2,
+          "score": null,
+          "status": "assessed_or_not_assessed",
+          "evidence": []
+        },
+        {
+          "name": "vocal_clarity_and_control",
+          "weight": 0.2,
+          "score": null,
+          "status": "assessed_or_not_assessed",
+          "evidence": []
+        }
+      ],
+      "summary": ""
+    }
+  },
+  "overall": {
+    "score": null,
+    "score_status": "assessed",
+    "summary": "",
+    "top_next_steps": ["", ""]
+  },
+  "what_i_did_well": [
+    {
+      "pillar": "structure",
+      "title": "",
+      "evidence": [
+        {
+          "timestamp": "00:00-00:00",
+          "quote": ""
+        }
+      ],
+      "why_it_works": ""
+    }
+  ],
+  "areas_for_improvement": [
+    {
+      "pillar": "structure",
+      "priority": "high",
+      "title": "",
+      "evidence": [
+        {
+          "timestamp": "00:00-00:00",
+          "quote": ""
+        }
+      ],
+      "listener_impact": "",
+      "how_to_fix": "",
+      "spoken_example": ""
+    }
+  ],
+  "not_assessed": [
+    {
+      "item": "",
+      "reason": "",
+      "required_input": ""
+    }
+  ]
+}

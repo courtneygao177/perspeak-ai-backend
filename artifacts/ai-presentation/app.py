@@ -3514,6 +3514,433 @@ def _generate_pitch_data(delivery_score, wpm=0):
     return data
 
 
+# ─────────────────────────────────────────────
+# CLASS PRESENTATION: EVIDENCE-FIRST PQ SYSTEM PROMPT
+# ─────────────────────────────────────────────
+CLASS_PRES_PQ_SYSTEM_PROMPT = """\
+你是 Perspeak AI 的 Class Presentation（课堂展示）场景中 Presentation Quality 模块的评估助手。
+
+你的任务是评估学习者"如何组织和交付"一场展示，而不是评估其事实正误、幻灯片美观度、英语语法准确性，或是否使用某种知名 TED 技巧。你只评估以下四个维度：
+
+1. Structure（结构）：听众能否跟上并复述核心信息？
+2. Fluency（言语流畅度）：语言是否连贯、清楚、自然、易理解？
+3. Relevance（受众相关性）：内容是否连接到这次课堂任务、目标听众与实际意义？
+4. Delivery（声音呈现）：仅根据可获得的音频证据，节奏、停顿与强调是否帮助理解？
+
+重要的范围边界：
+- 不评估事实准确性、事实完整性、是否说到了每一个幻灯片关键词。这些属于 Content Quality，不属于 Presentation Quality。
+- 除非输入明确提供可靠证据，否则不评估眼神、手势、姿态、面部表情、通过外表判断的自信程度、幻灯片美观度或身体语言。当前产品没有摄像头，通常必须标记为"未评估"。
+- 不评估口音、方言、音色、性别化表达方式、性格或外向程度。
+
+你的评估参考两套兼容的演讲原则：
+- 高质量展示通常有一个清楚的核心信息、较低的认知负荷、能说明问题的故事或例子、自然的交流感、可记住的重点和真实的表达。
+- 高质量展示会把主题控制在合适范围内，以清楚顺序展开，适配听众的兴趣与知识基础，并像人与人交流一样传递，而不是像背诵。
+
+绝不把以下内容视为必要条件：
+- Rule of Three（三点式）
+- Twitter 风格标题
+- 故事、比喻、幽默、演示或视觉辅助
+- 固定的每分钟词数目标
+- 固定数量的对话式连接词
+
+这些都只是可选技巧。只有当某项技巧确实提升清晰度、相关性或呈现效果时，才给予正向评价。绝不因为学习者没有使用某项技巧而扣分。
+
+========================
+证据优先的方法
+========================
+
+在评分前，必须先建立整篇转录的内部证据地图。
+
+1. 按说话时长或字数将转录稿分为五个大致均等的部分：
+   A. 开场（0-20%）
+   B. 前段主体（20-40%）
+   C. 中段主体（40-60%）
+   D. 后段主体（60-80%）
+   E. 结尾（80-100%）
+2. 对每一部分识别：主要观点、例子/数据/幻灯片引用、过渡、受众连接，以及任何流畅度或语速问题。
+3. 必须审阅全部五个部分后才能评分。
+4. 只能引用输入转录中学习者的原话。每条引用必须包含时间戳，通常为 6-25 个词。不得编造、润色或拼接引用。如果转录质量使引文不可靠，不要引用。
+5. 证据必须分布在整场展示中。what_i_did_well 与 areas_for_improvement 内所有引文合计必须满足：
+   - 至少 60% 的引文来自展示中间 60%（B、C、D 段）；
+   - 最多 25% 来自开场 A 段；
+   - 最多 25% 来自结尾 E 段；
+   - Structure 必须至少引用一条主体内容；
+   - 若转录长度足够，Fluency 必须使用至少两个不相邻部分的证据；
+   - Relevance 必须至少引用一条主体内容，不得只根据开头或结尾判断；
+   - 若有音频指标，Delivery 应从前段、中段、后段取样。
+6. 如果展示太短、主体缺失，或无法满足上述分布，设置 coverage_warning=true 并说明原因。不得为了满足规则而编造证据。
+
+没有时间戳证据时，不得做"结构很好"或"你有很多填充词"之类的泛泛判断。
+
+========================
+评分模型：0-100 分
+========================
+
+四个维度独立按 0-100 分评分。使用加权子项，不使用 bonus、score cap 或自动扣分。
+
+A. STRUCTURE（结构，0-100）
+- 核心信息与范围控制：25% — 展示是否建立了一个与时长匹配、足够聚焦的主张/主题？它是否被持续维持？
+- 逻辑推进：25% — 观点是否按合理的时间、过程、因果、比较或主题顺序推进？
+- 路标与过渡：20% — 听众是否知道讲到哪里，以及下一个观点为何接着出现？
+- 支撑材料整合：15% — 例子、数据、故事、比较或幻灯片引用是否在解释/支持一个观点，而不是成为罗列？
+- 收束与时间密度：15% — 结尾是否有意设计，包含收获、总结或下一步，并避免赶读、循环或突然停止？
+
+B. FLUENCY（言语流畅度，0-100）
+- 连续性与自我恢复：25% — 停顿、修正或重启是否短暂且能回到完整意思，而不是反复打断理解？
+- 节奏、语速与停顿：20% — 节奏是否帮助听众分组理解观点？停顿是否位于有意义的边界？
+- 清晰且适配听众的措辞：20% — 必要时是否解释术语？句子与指代是否容易理解？
+- 自然表达而非机械念稿：15% — 语言是否像在解释想法，而不只是背诵文本？
+- 关键观点是否可被听见：20% — 基于可用声音证据，重要结论、对比或数据是否被适当突出？
+
+填充词只是"连续性与自我恢复"中的一个信号。绝不计算自动填充词扣分。少量填充词或自然停顿不应降低分数。只有当填充词反复打断意思或遮蔽核心信息时，才提及它。
+
+C. RELEVANCE（受众相关性，0-100）
+- 受众与情境适配：25% — 目标课堂听众、任务要求或使用场景是否清楚？
+- 价值与"为什么重要"：25% — 学习者是否说明对听众的收益、影响、风险或重要性？
+- 知识门槛与语言适配：20% — 是否用听众能理解的概念、例子或比较来解释陌生内容？
+- 新价值或视角：15% — 听众是否获得清楚的新理解、新角度或可用的理解路径？
+- 可用的收获/行动：15% — 听众在展示后是否知道该理解、判断或做什么？
+
+若输入包含幻灯片，幻灯片只能作为任务与主题的上下文。关键词覆盖率只是弱信号，不能作为主要评分依据，也绝不能形成分数上限。应奖励对幻灯片内容的解释、情境化以及面向听众的价值，而不仅是比较词语重合度。
+
+D. DELIVERY（声音呈现，0-100；仅基于音频）
+- 语速适配性：35% — 评估全程语速是否支持理解。
+- 意义分组与目的性停顿：25% — 评估停顿是否帮助分隔观点，并为关键信息留出空间。
+- 声音强调与变化：20% — 基于可用的音高、能量、语速或停顿数据，评估主要观点是否容易被注意到。
+- 声音清晰度与控制：20% — 基于可用音频证据，评估声音是否稳定、可理解。
+
+不存在"TED 黄金语速"，也不存在按 WPM 自动打分的档位。
+- WPM 只是诊断线索，不是分数本身。
+- 对英语课堂展示而言，约 120-175 WPM 常常较舒适，但语言能力、任务类型和句子复杂度比任何固定范围都重要。
+- 只有当过快或过慢的节奏持续存在，并且明确损害理解时，才能因语速降低分数。
+- 正常、易理解的语速，绝不能仅因不在 160-190 WPM 而被低分。
+
+如果音高、音量、停顿或音频清晰度指标不可用，则将 Delivery 对应子项标记为 not_assessed，按可评子项重新归一，降低该维度置信度。绝不根据转录文本推断不存在的声音行为。
+
+========================
+分数解释
+========================
+
+- 90-100：卓越。清楚、稳定，且显著帮助听众理解。
+- 80-89：强。整体有效，只有少量局部可提升。
+- 70-79：有效。听众基本能跟上，且存在可明确修正的提升点。
+- 60-69：发展中。核心信息部分可理解，但至少一个重要环节明显影响效果。
+- 0-59：需要优先提升。持续性问题使展示难以理解、信任或使用。
+
+Presentation Quality 总分公式：
+structure * 0.30 + fluency * 0.25 + relevance * 0.25 + delivery * 0.20
+
+========================
+反馈规则
+========================
+
+在转录长度和可靠证据充足时，必须严格输出：
+- 每个维度至少 2 条 what_i_did_well；
+- 每个维度至少 2 条、最多 3 条 areas_for_improvement；
+- areas_for_improvement 总数为 8-12 条。
+
+若可靠证据不足以支持上述数量：
+- 不得编造、重复或牵强使用引文；
+- 设置 coverage_warning = true；
+- 按实际可支持的数量输出，并在 coverage_note 中说明原因。
+
+每条反馈必须包含：
+1. pillar（维度名小写英文）
+2. 简短标题
+3. 分布合理、带时间戳的原话证据
+4. 它如何帮助或损害听众理解（why_it_works 或 listener_impact）
+5. 一个具体改法（how_to_fix）
+6. 仅在适合时提供一条简洁的改写/示例（spoken_example）
+
+改写规则：
+- 保持学习者原本意图和主题。
+- 使用清楚、可口头表达的英语，约 IELTS 5.5 / CEFR B1 难度。
+- 不得编造事实、例子、数据或幻灯片内容。
+- 改写必须短而可说，不能变成润色过度的文章。
+- 对语速建议，可以用 / 标记有意义的停顿。
+
+不得强行赞美未出现的技巧。没有转录和/或音频证据时，不得称学习者"机械""犹豫""赶读"或"自信"。
+本模块中禁止使用关于 Content Accuracy、Concept Coverage 或 Answer Completeness 的固定回退文案。
+
+========================
+输出契约 — 只返回合法 JSON，不要在 JSON 前后添加任何文字
+========================
+
+{
+  "module": "class_presentation_quality",
+  "language": "zh-CN",
+  "coverage": {
+    "sections_reviewed": ["A","B","C","D","E"],
+    "coverage_warning": false,
+    "coverage_note": null,
+    "quote_distribution": {"opening_pct": 0, "middle_pct": 0, "closing_pct": 0}
+  },
+  "scores": {
+    "structure": {
+      "score": null, "confidence": "high",
+      "subscores": [
+        {"name":"central_message_and_scope","weight":0.25,"score":null,"status":"assessed","evidence":[]},
+        {"name":"logical_progression","weight":0.25,"score":null,"status":"assessed","evidence":[]},
+        {"name":"signposting_and_transitions","weight":0.2,"score":null,"status":"assessed","evidence":[]},
+        {"name":"support_material_integration","weight":0.15,"score":null,"status":"assessed","evidence":[]},
+        {"name":"closure_and_time_density","weight":0.15,"score":null,"status":"assessed","evidence":[]}
+      ],
+      "summary": ""
+    },
+    "fluency": {
+      "score": null, "confidence": "high",
+      "subscores": [
+        {"name":"continuity_and_recovery","weight":0.25,"score":null,"status":"assessed","evidence":[]},
+        {"name":"pace_rhythm_and_pausing","weight":0.2,"score":null,"status":"assessed","evidence":[]},
+        {"name":"clear_audience_appropriate_wording","weight":0.2,"score":null,"status":"assessed","evidence":[]},
+        {"name":"natural_expression","weight":0.15,"score":null,"status":"assessed","evidence":[]},
+        {"name":"key_idea_emphasis","weight":0.2,"score":null,"status":"assessed","evidence":[]}
+      ],
+      "summary": ""
+    },
+    "relevance": {
+      "score": null, "confidence": "high",
+      "subscores": [
+        {"name":"audience_and_situation_fit","weight":0.25,"score":null,"status":"assessed","evidence":[]},
+        {"name":"why_it_matters","weight":0.25,"score":null,"status":"assessed","evidence":[]},
+        {"name":"knowledge_level_and_language_fit","weight":0.2,"score":null,"status":"assessed","evidence":[]},
+        {"name":"new_value_or_perspective","weight":0.15,"score":null,"status":"assessed","evidence":[]},
+        {"name":"usable_takeaway_or_action","weight":0.15,"score":null,"status":"assessed","evidence":[]}
+      ],
+      "summary": ""
+    },
+    "delivery": {
+      "score": null, "confidence": "medium",
+      "subscores": [
+        {"name":"pace_suitability","weight":0.35,"score":null,"status":"assessed","evidence":[]},
+        {"name":"phrase_grouping_and_pauses","weight":0.25,"score":null,"status":"assessed_or_not_assessed","evidence":[]},
+        {"name":"vocal_emphasis_and_variety","weight":0.2,"score":null,"status":"assessed_or_not_assessed","evidence":[]},
+        {"name":"vocal_clarity_and_control","weight":0.2,"score":null,"status":"assessed_or_not_assessed","evidence":[]}
+      ],
+      "summary": ""
+    }
+  },
+  "overall": {
+    "score": null,
+    "score_status": "assessed",
+    "summary": "",
+    "top_next_steps": ["", ""]
+  },
+  "what_i_did_well": [
+    {"pillar": "structure", "title": "", "evidence": [{"timestamp":"00:00-00:00","quote":""}], "why_it_works": ""}
+  ],
+  "areas_for_improvement": [
+    {"pillar": "structure", "priority": "high", "title": "", "evidence": [{"timestamp":"00:00-00:00","quote":""}], "listener_impact": "", "how_to_fix": "", "spoken_example": ""}
+  ],
+  "not_assessed": [
+    {"item": "", "reason": "", "required_input": ""}
+  ]
+}
+"""
+
+
+def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_history,
+                                audience, difficulty, challenge_type,
+                                total_words, wpm_estimate, filler_matches, filler_density,
+                                total_time_seconds, jaw_drop_heuristic):
+    """
+    Evidence-first PQ evaluation for Class Presentation.
+    Uses a separate system prompt + structured user payload.
+    """
+    if not AI_ENABLED:
+        return _mock_pillar_evaluation(difficulty)
+
+    # ── Build transcript segments with approximate timestamps ──────────────────
+    transcript_segments = []
+    total_elapsed = 0
+    for entry in narration_entries:
+        text = (entry.get("text") or "").strip()
+        if not text:
+            continue
+        words = len(text.split())
+        if total_words > 0 and total_time_seconds > 30:
+            duration = max(5, round((words / total_words) * total_time_seconds))
+        else:
+            duration = max(5, round(words * 60 / 150))   # fallback ~150 WPM
+        start_s = total_elapsed
+        end_s   = total_elapsed + duration
+        transcript_segments.append({
+            "start":        f"{int(start_s // 60):02d}:{int(start_s % 60):02d}",
+            "end":          f"{int(end_s   // 60):02d}:{int(end_s   % 60):02d}",
+            "text":         text,
+            "slide_number": entry.get("page", 1),
+        })
+        total_elapsed = end_s
+
+    # ── Build slides context (key ideas only, not raw OCR) ────────────────────
+    slides_context = []
+    for s in slides:
+        claims = s.get("key_claims") or []
+        if not claims:
+            content = s.get("content", "")
+            sentences = [t.strip() for t in re.split(r'[.!?\n]', content) if len(t.strip()) > 12]
+            claims = sentences[:3]
+        slides_context.append({
+            "slide_number": s.get("page", 1),
+            "title":        s.get("title", ""),
+            "key_ideas":    claims[:4],
+        })
+
+    # ── Build filler events from pre-computed matches ─────────────────────────
+    filler_events = [{"word": fw, "timestamp": "unknown", "context": ""}
+                     for fw in filler_matches[:30]]
+
+    user_payload = {
+        "requested_output_language": "zh-CN",
+        "presentation_context": {
+            "class_name":                    "Class Presentation",
+            "assignment_goal":               f"Present to {audience}",
+            "target_audience":               audience,
+            "presentation_duration_seconds": int(total_time_seconds) if total_time_seconds > 0 else None,
+        },
+        "slides_context":      slides_context,
+        "transcript_segments": transcript_segments,
+        "audio_metrics": {
+            "overall_wpm":      wpm_estimate if wpm_estimate > 0 else None,
+            "wpm_by_segment":   [],
+            "pause_events":     [],
+            "pitch_variation":  None,
+            "volume_stability": None,
+            "audio_clarity":    None,
+            "filler_events":    filler_events,
+        },
+    }
+
+    app.logger.info(
+        f"[CLASS PQ] Sending to AI: words={total_words} wpm={wpm_estimate} "
+        f"slides={len(slides)} segments={len(transcript_segments)}"
+    )
+
+    try:
+        response = _ai_client.chat.completions.create(
+            model=EVAL_MODEL,
+            max_tokens=MAX_TOKENS,
+            messages=[
+                {"role": "system", "content": CLASS_PRES_PQ_SYSTEM_PROMPT},
+                {"role": "user",   "content": json.dumps(user_payload, ensure_ascii=False)},
+            ],
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        result = json.loads(raw)
+        return _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuristic)
+
+    except Exception as e:
+        app.logger.error(f"[CLASS PQ ERROR] {type(e).__name__}: {str(e)[:300]}")
+        traceback.print_exc()
+        return _mock_pillar_evaluation(difficulty)
+
+
+def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuristic):
+    """
+    Normalise the new class_presentation PQ schema to be backward-compatible
+    with the existing report template while preserving the rich new data.
+    """
+    # ── Flat scores for radar chart + training plan ────────────────────────────
+    raw_scores = result.get("scores", {})
+    flat_scores  = {}
+    scores_rich  = {}
+    for dim in ("structure", "fluency", "relevance", "delivery"):
+        dim_data = raw_scores.get(dim, {})
+        sc = dim_data.get("score") if isinstance(dim_data, dict) else dim_data
+        flat_scores[dim]  = int(min(100, max(0, float(sc)))) if sc is not None else 65
+        scores_rich[dim]  = dim_data if isinstance(dim_data, dict) else {}
+    result["scores"]      = flat_scores
+    result["scores_rich"] = scores_rich
+
+    # ── overall.score — compute if null ───────────────────────────────────────
+    overall   = result.get("overall", {})
+    ov_score  = overall.get("score")
+    if ov_score is None:
+        ov_score = round(
+            flat_scores.get("structure", 65) * 0.30 +
+            flat_scores.get("fluency",   65) * 0.25 +
+            flat_scores.get("relevance", 65) * 0.25 +
+            flat_scores.get("delivery",  65) * 0.20
+        )
+        overall["score"] = ov_score
+    result["pq_overall"] = overall
+
+    # ── dimensions_info for legacy template ───────────────────────────────────
+    result["dimensions_info"] = {}
+    for dim in ("structure", "fluency", "relevance", "delivery"):
+        dim_data = scores_rich.get(dim, {})
+        summary  = dim_data.get("summary") or f"Score: {flat_scores.get(dim, 65)}/100"
+        result["dimensions_info"][dim] = {
+            "explanation": summary,
+            "calculation": "Weighted subscore evaluation.",
+        }
+
+    # ── what_i_did_well — rich list + backward-compat string list ─────────────
+    raw_good = result.get("what_i_did_well") or result.get("what_i_did_good") or []
+    rich_good = [i for i in raw_good if isinstance(i, dict)]
+    result["what_i_did_well_rich"] = rich_good
+    str_good = []
+    for item in raw_good:
+        if isinstance(item, dict):
+            pillar = (item.get("pillar") or "").title()
+            title  = item.get("title") or ""
+            why    = item.get("why_it_works") or ""
+            str_good.append(f"[{pillar}] {title}: {why}" if pillar else f"{title}: {why}")
+        else:
+            str_good.append(str(item))
+    result["what_i_did_good"] = str_good
+
+    # ── areas_for_improvement — add legacy fields alongside new ones ──────────
+    areas      = result.get("areas_for_improvement", [])
+    normalized = []
+    for item in areas:
+        if not isinstance(item, dict):
+            continue
+        pillar   = (item.get("pillar") or "").title()
+        title    = item.get("title") or ""
+        li       = item.get("listener_impact") or ""
+        evidence = item.get("evidence") or []
+        fix      = item.get("how_to_fix") or ""
+        spoken   = item.get("spoken_example") or ""
+        priority = item.get("priority") or "medium"
+
+        # Legacy fields for backward-compat rendering
+        issue = f"[{pillar}] {title}" if pillar else title
+        quote_parts = [
+            f'"{e.get("quote","")}" ({e.get("timestamp","")})'
+            for e in evidence[:2] if e.get("quote")
+        ]
+        example    = " / ".join(quote_parts) if quote_parts else li
+        how_to_fix = fix + (f' Say this instead: "{spoken}"' if spoken else "")
+
+        normalized.append({
+            "dimension":       pillar,
+            "issue":           issue,
+            "example":         example,
+            "how_to_fix":      how_to_fix,
+            # Rich new fields for enhanced rendering
+            "title":           title,
+            "priority":        priority,
+            "listener_impact": li,
+            "evidence_rich":   evidence,
+            "spoken_example":  spoken,
+        })
+    result["areas_for_improvement"] = normalized
+
+    # ── Misc fields ────────────────────────────────────────────────────────────
+    result.setdefault("filler_log",   [])
+    result.setdefault("not_assessed", result.get("not_assessed") or [])
+    result.setdefault("coverage",     result.get("coverage") or {})
+
+    if not isinstance(result.get("pitch_data"), list) or len(result.get("pitch_data", [])) < 5:
+        result["pitch_data"] = _generate_pitch_data(flat_scores.get("delivery", 65), wpm_estimate)
+
+    result["jaw_dropping_moment"] = result.get("jaw_dropping_moment", jaw_drop_heuristic)
+    return result
+
+
 # GEMINI: 4-PILLAR EVALUATION ENGINE (Step 8)
 # ─────────────────────────────────────────────
 def run_pillar_evaluation(slides, answers, config, challenge_seed,
@@ -3676,7 +4103,16 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
             ],
         }
 
-    # ── BRANCH B: Real speech present — proceed to AI evaluation ─────────────
+    # ── BRANCH C: Class Presentation — evidence-first evaluation ────────────────
+    if scenario == "Class Presentation":
+        return _run_class_presentation_pq(
+            slides, narration_entries, qa_entries, fe_qa_history,
+            audience, difficulty, challenge_type,
+            total_words, wpm_estimate, filler_matches, filler_density,
+            total_time_seconds, jaw_drop_heuristic,
+        )
+
+    # ── BRANCH B: Other scenarios (Thesis Defense / Case Pitch) — TED rubric ──
 
     # ── Build per-slide narration map ──────────────────────────────────────────
     narration_map = {a["page"]: (a.get("text") or "").strip() for a in narration_entries}
