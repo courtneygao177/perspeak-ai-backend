@@ -3804,6 +3804,10 @@ def _validate_class_pq_result(result, transcript_segments):
     if not isinstance(result.get("areas_for_improvement"), list):
         return False, "areas_for_improvement is not a list"
 
+    # 2b. Both lists empty = output was truncated before feedback was generated
+    if (not result.get("what_i_did_well")) and (not result.get("areas_for_improvement")):
+        return False, "both what_i_did_well and areas_for_improvement are empty (likely truncated output)"
+
     # 3. Reject old field name as primary output (no what_i_did_well at all)
     if not result.get("what_i_did_well") and result.get("what_went_well"):
         return False, "uses deprecated field what_went_well instead of what_i_did_well"
@@ -3950,24 +3954,40 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
     )
 
     def _call_llm(messages):
+        # Use 32768 tokens and disable Gemini thinking to prevent the thinking
+        # budget from consuming the output token budget (causing finish_reason=length
+        # at only a few hundred chars of JSON).
         resp = _ai_client.chat.completions.create(
-            model=EVAL_MODEL, max_tokens=MAX_TOKENS, messages=messages,
+            model=EVAL_MODEL,
+            max_tokens=32768,
+            messages=messages,
+            extra_body={"thinking": {"budget_tokens": 0}},
         )
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
         finish_reason = getattr(resp.choices[0], "finish_reason", None)
         if finish_reason == "length":
-            app.logger.warning("[CLASS PQ] LLM output truncated (finish_reason=length) — attempting json_repair")
+            app.logger.warning("[CLASS PQ] LLM output still truncated after token increase — attempting json_repair")
         try:
-            return raw, json.loads(raw)
+            parsed = json.loads(raw)
         except json.JSONDecodeError as e:
             app.logger.warning(f"[CLASS PQ] json.loads failed ({e}), attempting json_repair")
             repaired = _repair_json(raw, return_objects=True)
             if isinstance(repaired, dict) and repaired:
-                app.logger.info("[CLASS PQ] json_repair succeeded")
+                app.logger.info(
+                    f"[CLASS PQ] json_repair succeeded — "
+                    f"what_i_did_well={len(repaired.get('what_i_did_well') or [])}, "
+                    f"areas_for_improvement={len(repaired.get('areas_for_improvement') or [])}"
+                )
                 return raw, repaired
             raise
+        app.logger.info(
+            f"[CLASS PQ] Parsed OK — "
+            f"what_i_did_well={len(parsed.get('what_i_did_well') or [])}, "
+            f"areas_for_improvement={len(parsed.get('areas_for_improvement') or [])}"
+        )
+        return raw, parsed
 
     base_messages = [
         {"role": "system", "content": CLASS_PRES_PQ_SYSTEM_PROMPT},
@@ -4056,13 +4076,36 @@ def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuris
     result["pq_overall"] = overall
 
     # ── dimensions_info for legacy template ───────────────────────────────────
+    _DIM_CALCULATION_ZH = {
+        "structure": (
+            "基于 5 项子维度加权评分：核心信息与范围控制（25%）、"
+            "逻辑推进（25%）、路标与过渡（20%）、支撑材料整合（15%）、"
+            "收束与时间密度（15%）。"
+        ),
+        "fluency": (
+            "基于 5 项子维度加权评分：连续性与自我恢复（25%）、"
+            "节奏与停顿（20%）、清晰且适配听众的措辞（20%）、"
+            "自然表达（15%）、关键观点清晰度（20%）。"
+        ),
+        "relevance": (
+            "基于 5 项子维度加权评分：受众与情境适配（25%）、"
+            "价值与\u201c为什么重要\u201d（25%）、知识门槛与语言适配（20%）、"
+            "新价值或视角（15%）、可用的收获与行动（15%）。"
+        ),
+        "delivery": (
+            "基于 4 项子维度加权评分：语速适配性（35%）、"
+            "意义分组与目的性停顿（25%）、声音强调与变化（20%）、"
+            "声音清晰度与控制（20%）。仅根据音频证据评估；"
+            "无音频数据的子项标记为\u201c未评估\u201d并重新归一。"
+        ),
+    }
     result["dimensions_info"] = {}
     for dim in ("structure", "fluency", "relevance", "delivery"):
         dim_data = scores_rich.get(dim, {})
-        summary  = dim_data.get("summary") or f"Score: {flat_scores.get(dim, 65)}/100"
+        summary  = dim_data.get("summary") or ""
         result["dimensions_info"][dim] = {
             "explanation": summary,
-            "calculation": "Weighted subscore evaluation.",
+            "calculation": _DIM_CALCULATION_ZH.get(dim, ""),
         }
 
     # ── what_i_did_well — rich list + backward-compat string list ─────────────

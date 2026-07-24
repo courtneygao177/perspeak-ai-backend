@@ -941,9 +941,14 @@
       <span class="text-5xl font-bold text-[#0F172A]">{{ sc }}</span>
       <span class="text-xl font-semibold" style="color:{{ color }}">{{ tag }}</span>
     </div>
-    <p class="text-slate-400 text-sm leading-relaxed mb-4">{{ info.explanation if info else '' }}</p>
+    {% if info and info.explanation %}
+    <div class="mb-4">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">你在本次演讲中的表现</p>
+      <p class="text-[#0F172A] text-sm leading-relaxed">{{ info.explanation }}</p>
+    </div>
+    {% endif %}
     <div class="bg-gray-900/60 rounded-xl p-4 border border-gray-800/40 mb-3">
-      <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">How it's calculated</p>
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">评分依据</p>
       <p class="text-slate-400 text-sm leading-relaxed">{{ info.calculation if info else '' }}</p>
     </div>
     {% if key == 'delivery' %}
