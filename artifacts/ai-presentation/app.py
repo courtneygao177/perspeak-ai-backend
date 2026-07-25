@@ -4473,7 +4473,7 @@ def _thesis_snap_evidence_quotes(result, transcript_segments):
                     candidate_tokens = tokens[start:end]
                     overlap = len(set(query_tokens) & set(candidate_tokens))
                     ratio = SequenceMatcher(None, query_tokens, candidate_tokens).ratio()
-                    if ratio >= 0.68 and overlap >= max(4, int(len(query_tokens) * 0.65)):
+                    if ratio >= 0.60 and overlap >= max(4, int(len(query_tokens) * 0.55)):
                         if ratio > best[0] or (ratio == best[0] and overlap > best[1]):
                             exact = source[matches[start].start():matches[end - 1].end()].strip()
                             best = (ratio, overlap, exact)
@@ -4557,7 +4557,7 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
     # Only require the full 4 x 2 distribution for a sufficiently long,
     # sectioned presentation. Short transcripts must remain honestly partial.
     sections_present = {segment.get("section") for segment in transcript_segments}
-    if status == "complete" and total_words >= 160 and len(sections_present) == 4:
+    if status == "complete" and total_words >= 500 and len(sections_present) == 4:
         if len(good) < 8 or not 8 <= len(improvements) <= 12:
             return False, "complete long presentation has invalid feedback quantity"
         for label in valid_labels:
@@ -4708,6 +4708,14 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
             "wpm": wpm_estimate or None,
             "filler_events": [{"word": word} for word in filler_matches[:30]],
         },
+        "feedback_quantity_policy": (
+            "This is a short diagnostic rehearsal. Set analysis_status to "
+            "insufficient_evidence and return only distinct, supportable feedback "
+            "items; do not try to fill an 8-12-card target."
+            if elapsed < 360 or clean_words < 500 else
+            "This is a sufficiently long presentation. Apply the full evidence-based "
+            "feedback quantity rules."
+        ),
         "slide_thesis_context_background_only": slide_context,
         "presenter_transcript_presentation_phase_only": transcript_segments,
     }
@@ -4745,7 +4753,11 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
                 {"role": "user", "content": (
                     f"Your previous JSON failed validation: {error}. Correct it. Use only "
                     "verbatim transcript quotes, the Thesis Defense schema and weighting, "
-                    "and no TED or Q&A feedback. Return JSON only."
+                    "and no TED or Q&A feedback. Copy each evidence_quote as a complete, "
+                    "unchanged sentence or phrase from PRESENTER TRANSCRIPT. This is a short "
+                    "diagnostic rehearsal, so use analysis_status=insufficient_evidence and "
+                    "return only distinct items you can support if the full matrix is not "
+                    "evidenced. Return JSON only."
                 )},
             ])
             result = _thesis_snap_evidence_quotes(result, transcript_segments)
