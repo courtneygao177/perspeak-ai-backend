@@ -12,10 +12,13 @@ try:
     _HAS_JSON_REPAIR = True
 except ImportError:
     _HAS_JSON_REPAIR = False
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from functools import wraps
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, abort
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import audio_engine
 import server_store
+import mvp_store
 from server_store import store
 from config.defense_knowledge_base import (
     DEFENSE_QUESTION_BANK,
@@ -32,6 +35,41 @@ app.session_interface = server_store.StoreSessionInterface()
 if os.environ.get("VERCEL") == "1":
     app.config["SESSION_COOKIE_SECURE"] = True
 app.config["UPLOAD_FOLDER"] = os.path.join(server_store.local_data_dir(), "files")
+mvp_store.init_db()
+app.jinja_env.filters["fromjson"] = lambda value: json.loads(value or "{}")
+
+# Closed-beta accounts are stored in the existing server SQLite database.  This
+# keeps personal practice history private and lets the owner review activity.
+_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _current_user():
+    user_id = session.get("user_id")
+    return mvp_store.get_user(user_id) if user_id else None
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not _current_user():
+            if request.path.startswith("/x/"):
+                return jsonify({"error": "Please sign in first.", "login": "/login"}), 401
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user = _current_user()
+        if not user:
+            return redirect(url_for("login", next=request.path))
+        if not user.get("is_admin"):
+            abort(403)
+        return view(*args, **kwargs)
+    return wrapped
 
 # ── Server-side report store ──────────────────────────────────────────────────
 # Large blobs (evaluation, qa_bank, answers) are stored as JSON in the Store,
@@ -93,6 +131,19 @@ def add_cors_headers(response):
 @app.route("/<path:p>", methods=["OPTIONS"])
 def options_handler(p=""):
     return "", 204
+
+
+@app.before_request
+def require_account_for_product_routes():
+    """Keep the landing page public while protecting all product data routes."""
+    public = {"index", "login", "register", "logout", "static", "options_handler"}
+    if request.endpoint in public or request.endpoint is None:
+        return None
+    if _current_user():
+        return None
+    if request.path.startswith("/x/"):
+        return jsonify({"error": "Please sign in first.", "login": "/login"}), 401
+    return redirect(url_for("login", next=request.path))
 
 ALLOWED_EXTENSIONS = {"pdf", "ppt", "pptx"}
 
@@ -4996,15 +5047,99 @@ def transcribe_audio(audio_file):
 
 @app.route("/")
 def index():
+    # Starting over resets only the active practice, never the signed-in user.
+    for key in ("slide_key", "filename", "file_key", "filepath", "answers", "qa_bank",
+                "config", "challenge_seed", "state", "report_key", "practice_id"):
+        session.pop(key, None)
+    return render_template("index.html", ai_enabled=AI_ENABLED, user=_current_user())
+
+
+def _safe_next(value):
+    return value if value and value.startswith("/") and not value.startswith("//") else url_for("index")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if _current_user():
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        if not _EMAIL_RE.fullmatch(email):
+            error = "请输入有效的邮箱地址。"
+        elif len(password) < 8:
+            error = "密码至少需要 8 位。"
+        elif mvp_store.get_user_by_email(email):
+            error = "该邮箱已注册，请直接登录。"
+        else:
+            user = mvp_store.create_user(
+                email, generate_password_hash(password),
+                is_admin=bool(_ADMIN_EMAIL and email == _ADMIN_EMAIL),
+            )
+            session.clear()
+            session["user_id"] = user["id"]
+            mvp_store.touch_login(user["id"])
+            return redirect(_safe_next(request.form.get("next") or request.args.get("next")))
+    return render_template("auth.html", mode="register", error=error, next_url=request.args.get("next", ""))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if _current_user():
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        user = mvp_store.get_user_by_email(email)
+        if not user or not check_password_hash(user["password_hash"], request.form.get("password") or ""):
+            error = "邮箱或密码不正确。"
+        else:
+            session.clear()
+            session["user_id"] = user["id"]
+            mvp_store.touch_login(user["id"])
+            return redirect(_safe_next(request.form.get("next") or request.args.get("next")))
+    return render_template("auth.html", mode="login", error=error, next_url=request.args.get("next", ""))
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
     session.clear()
-    return render_template("index.html", ai_enabled=AI_ENABLED)
+    return redirect(url_for("index"))
+
+
+@app.route("/history")
+@login_required
+def history():
+    user = _current_user()
+    return render_template("history.html", user=user, practices=mvp_store.list_practices_for_user(user["id"]))
+
+
+@app.route("/history/<record_id>")
+@login_required
+def history_report(record_id):
+    user = _current_user()
+    record = mvp_store.get_practice(record_id)
+    if not record or (record["user_id"] != user["id"] and not user["is_admin"]):
+        abort(404)
+    report_data = _load_report(record.get("report_key"))
+    if not report_data:
+        abort(404)
+    return _render_report(report_data, json.loads(record.get("config_json") or "{}"), record)
+
+
+@app.route("/admin")
+@admin_required
+def admin_dashboard():
+    stats, practices = mvp_store.admin_summary()
+    return render_template("admin.html", stats=stats, practices=practices, user=_current_user())
 
 
 @app.route("/config")
 def config_page():
     if "slide_key" not in session and "slides" not in session:
         return redirect(url_for("index"))
-    return render_template("config.html", slides=_load_slides(session), ai_enabled=AI_ENABLED)
+    return render_template("config.html", slides=_load_slides(session), ai_enabled=AI_ENABLED, user=_current_user())
 
 
 @app.route("/sandbox")
@@ -5030,6 +5165,7 @@ def sandbox():
         ai_enabled=AI_ENABLED,
         has_file=has_file,
         deck_version=deck_version,
+        user=_current_user(),
     )
 
 
@@ -5390,13 +5526,20 @@ def report():
         # Cookie lost or file missing — restart from home
         app.logger.warning(f"[Report] No report data found for key={report_key!r} — redirecting home")
         return redirect(url_for("index"))
+    return _render_report(report_data, session.get("config", {}), None)
+
+
+def _render_report(report_data, config, practice):
+    """Render the current report or an authorised historical report."""
     return render_template(
         "report.html",
         evaluation=report_data.get("evaluation"),
         qa_bank=report_data.get("qa_bank", []),
-        config=session.get("config", {}),
+        config=config,
         answers=report_data.get("answers", []),
         ai_enabled=AI_ENABLED,
+        user=_current_user(),
+        practice=practice,
     )
 
 
@@ -5622,6 +5765,10 @@ def api_start_session():
         "chat_history":        [],
         "max_follow_up_rounds": max_rounds,
     }
+    user = _current_user()
+    session["practice_id"] = mvp_store.create_practice(
+        user["id"], session.get("file_key", ""), session.get("filename", ""), session["config"]
+    )
 
     return jsonify({"success": True, "redirect": "/sandbox"})
 
@@ -6079,6 +6226,9 @@ def api_finish_presentation():
     # Prevents Flask session cookie overflow (4KB limit).
     report_key = _save_report(evaluation, qa_bank, answers)
     session["report_key"] = report_key
+    practice_id = session.get("practice_id")
+    if practice_id:
+        mvp_store.finish_practice(practice_id, report_key, total_time_seconds)
     # Remove stale large keys that would push the cookie over limit
     session.pop("evaluation", None)
     session.pop("qa_bank", None)
@@ -6104,6 +6254,10 @@ def api_submit_survey():
         "q4_emails":         data.get("q4_emails", ""),
         "submitted_at":      _dt.datetime.utcnow().isoformat(),
     }
+    user = _current_user()
+    practice_id = session.get("practice_id")
+    if user and practice_id:
+        mvp_store.save_survey(practice_id, user["id"], session["survey_response"])
     app.logger.info(
         f"[SURVEY] response recorded — "
         f"q1={session['survey_response']['q1_barrier']} | "

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}PerspeakAI — 我的记录{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 py-12">
+  <p class="text-xs font-mono uppercase tracking-wider mb-3" style="color:#15803D">My practice history</p>
+  <h1 class="text-4xl font-extrabold mb-8">我的演练记录</h1>
+  {% if practices %}
+  <div class="overflow-x-auto bg-white border rounded-xl" style="border-color:#E2E8F0"><table class="w-full text-sm"><thead style="background:#F8FAFC;color:#64748B"><tr><th class="text-left p-4">开始时间</th><th class="text-left p-4">PPT</th><th class="text-left p-4">场景</th><th class="text-left p-4">时长</th><th class="text-left p-4">状态</th><th class="p-4"></th></tr></thead><tbody>{% for p in practices %}{% set cfg = p.config_json|fromjson %}<tr class="border-t" style="border-color:#E2E8F0"><td class="p-4 font-mono text-xs">{{ p.started_at|replace('T', ' ')|replace('+00:00', ' UTC') }}</td><td class="p-4">{{ p.deck_filename or '未命名 PPT' }}</td><td class="p-4">{{ cfg.get('scenario', '—') }}</td><td class="p-4">{{ '%d:%02d'|format((p.duration_seconds|int)//60, (p.duration_seconds|int)%60) }}</td><td class="p-4">{{ '已完成' if p.status == 'completed' else '未完成' }}</td><td class="p-4 text-right">{% if p.report_key %}<a href="/history/{{ p.id }}" class="font-semibold" style="color:#15803D">查看报告</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<div class="bg-white border rounded-xl p-10 text-center" style="border-color:#E2E8F0"><p class="font-semibold mb-4">还没有演练记录</p><a href="/" class="btn-primary inline-block px-5 py-3 rounded-lg font-semibold">开始第一次演练</a></div>{% endif %}
+</div>
+{% endblock %}
