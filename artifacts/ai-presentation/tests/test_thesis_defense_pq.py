@@ -13,6 +13,7 @@ sys.path.insert(0, APP_DIR)
 
 from app import (  # noqa: E402
     _normalize_thesis_pq_result,
+    _thesis_snap_evidence_quotes,
     _thesis_pq_unavailable,
     _validate_thesis_pq_result,
 )
@@ -103,6 +104,19 @@ class TestThesisDefensePQ(unittest.TestCase):
         ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
         self.assertFalse(ok)
         self.assertIn("transcript substring", error)
+
+    def test_snaps_a_near_verbatim_quote_to_the_exact_transcript(self):
+        result = copy.deepcopy(VALID_RESULT)
+        result["what_i_did_well"][0]["evidence_quote"] = (
+            "This study explores how first generation students access mental health support at university"
+        )
+        repaired = _thesis_snap_evidence_quotes(result, SEGMENTS)
+        self.assertEqual(
+            repaired["what_i_did_well"][0]["evidence_quote"],
+            "This study examines how first generation students access mental health support at university",
+        )
+        ok, error = _validate_thesis_pq_result(repaired, SEGMENTS, 190)
+        self.assertTrue(ok, error)
 
     def test_rejects_old_ted_language(self):
         result = copy.deepcopy(VALID_RESULT)

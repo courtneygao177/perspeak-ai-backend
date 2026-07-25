@@ -7,6 +7,7 @@ import re
 import traceback
 import uuid
 import concurrent.futures
+from difflib import SequenceMatcher
 try:
     from json_repair import repair_json as _repair_json
     _HAS_JSON_REPAIR = True
@@ -4433,6 +4434,61 @@ def _thesis_normalize_quote(value):
     return re.sub(r"[^\w\s]", "", str(value or "").lower()).strip()
 
 
+def _thesis_snap_evidence_quotes(result, transcript_segments):
+    """Replace a near-verbatim model quote with the exact transcript span.
+
+    Speech recognition punctuation and a one-word model normalisation should not
+    discard a genuine analysis. This helper is deliberately conservative: it
+    only repairs a quote when a long contiguous transcript span has both strong
+    sequence similarity and substantial word overlap. Otherwise the validator
+    still rejects it instead of accepting a paraphrase.
+    """
+    if not isinstance(result, dict):
+        return result
+    transcript_text = _thesis_normalize_quote(" ".join(
+        segment.get("text", "") for segment in transcript_segments
+    ))
+
+    def best_exact_span(quote):
+        normalized = _thesis_normalize_quote(quote)
+        if normalized in transcript_text:
+            return quote
+        query_tokens = re.findall(r"[\w']+", str(quote or "").lower())
+        if len(query_tokens) < 5:
+            return None
+        best = (0.0, 0, "")
+        for segment in transcript_segments:
+            source = str(segment.get("text") or "")
+            matches = list(re.finditer(r"[\w']+", source.lower()))
+            tokens = [match.group(0) for match in matches]
+            if len(tokens) < 5:
+                continue
+            minimum = max(5, int(len(query_tokens) * 0.65))
+            maximum = min(len(tokens), int(len(query_tokens) * 1.35) + 2)
+            for start in range(len(tokens)):
+                for size in range(minimum, maximum + 1):
+                    end = start + size
+                    if end > len(tokens):
+                        break
+                    candidate_tokens = tokens[start:end]
+                    overlap = len(set(query_tokens) & set(candidate_tokens))
+                    ratio = SequenceMatcher(None, query_tokens, candidate_tokens).ratio()
+                    if ratio >= 0.68 and overlap >= max(4, int(len(query_tokens) * 0.65)):
+                        if ratio > best[0] or (ratio == best[0] and overlap > best[1]):
+                            exact = source[matches[start].start():matches[end - 1].end()].strip()
+                            best = (ratio, overlap, exact)
+        return best[2] or None
+
+    for key in ("what_i_did_well", "areas_for_improvement"):
+        for item in result.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            repaired = best_exact_span(item.get("evidence_quote"))
+            if repaired:
+                item["evidence_quote"] = repaired
+    return result
+
+
 def _validate_thesis_pq_result(result, transcript_segments, total_words):
     """Reject fabricated, legacy, or structurally invalid Thesis PQ output."""
     if not isinstance(result, dict):
@@ -4680,6 +4736,7 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
     ]
     try:
         raw, result = call_llm(messages)
+        result = _thesis_snap_evidence_quotes(result, transcript_segments)
         ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
         if not ok:
             app.logger.warning("[THESIS PQ] First validation failed: %s", error)
@@ -4691,6 +4748,7 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
                     "and no TED or Q&A feedback. Return JSON only."
                 )},
             ])
+            result = _thesis_snap_evidence_quotes(result, transcript_segments)
             ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
             if not ok:
                 app.logger.error("[THESIS PQ] Retry validation failed: %s", error)
