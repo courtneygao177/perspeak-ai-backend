@@ -3654,7 +3654,10 @@ structure * 0.30 + fluency * 0.25 + relevance * 0.25 + delivery * 0.20
 
 改写规则：
 - 保持学习者原本意图和主题。
-- 使用清楚、可口头表达的英语，约 IELTS 5.5 / CEFR B1 难度。
+- how_to_fix 必须用中文说明具体的改进策略；spoken_example 必须只用英文，绝不能夹杂中文。
+- spoken_example 应是可直接说出口的一段完整英文，并在不改变学习者原意的前提下，
+  比学习者当前表达略高一级（约 CEFR B1+ 到 B2）：提升用词、句式衔接和演讲引导，
+  但不能写成过度书面的文章。
 - 不得编造事实、例子、数据或幻灯片内容。
 - 改写必须短而可说，不能变成润色过度的文章。
 - 对语速建议，可以用 / 标记有意义的停顿。
@@ -4045,6 +4048,63 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
         return _class_pq_unavailable(f"llm_error: {type(e).__name__}")
 
 
+def _split_class_pq_fix_and_example(how_to_fix, spoken_example):
+    """Keep Class Presentation coaching separate from its ready-to-say example."""
+    fix = str(how_to_fix or "").strip()
+    spoken = str(spoken_example or "").strip()
+
+    # Older prompts used a single `how_to_fix` field such as
+    # "中文建议。 Say this instead: 'English example.'". Preserve the coaching
+    # text, but never render the example twice in the rich report.
+    parts = re.split(r"\s*Say this instead\s*:\s*", fix, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) == 2:
+        fix = parts[0].strip()
+        if not spoken:
+            spoken = parts[1].strip().strip("'\"“”")
+
+    return fix, spoken
+
+
+def _dedupe_cross_slide_transcript_carryover(narration_entries):
+    """Drop an exact transcript residue copied into the next slide.
+
+    Web Speech can finalise the final phrase from slide N after the learner has
+    clicked Next Slide. An identical, consecutive transcript on a different
+    slide is therefore capture residue, not evidence that the learner repeated
+    the phrase. We deliberately limit this guard to exact multi-word copies
+    across a page boundary so genuine repetitions remain available to feedback.
+    """
+    cleaned = []
+    previous_tokens = None
+    previous_page = None
+
+    for entry in narration_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        copied = dict(entry)
+        text = (copied.get("text") or "").strip()
+        page = copied.get("page")
+        tokens = re.findall(r"[a-z0-9]+", text.lower())
+
+        if (
+            previous_tokens is not None
+            and page != previous_page
+            and len(tokens) >= 6
+            and tokens == previous_tokens
+        ):
+            app.logger.info(
+                "[Transcript] Dropped exact cross-slide carryover on page %s", page
+            )
+            continue
+
+        cleaned.append(copied)
+        if tokens:
+            previous_tokens = tokens
+            previous_page = page
+
+    return cleaned
+
+
 def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuristic):
     """
     Normalise the new class_presentation PQ schema to be backward-compatible
@@ -4137,6 +4197,12 @@ def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuris
         spoken   = item.get("spoken_example") or ""
         priority = item.get("priority") or "medium"
 
+        # The rich Class Presentation report renders coaching and the ready-to-say
+        # example in separate blocks. Some model responses (and legacy fixtures)
+        # still append "Say this instead:" to how_to_fix, which previously made
+        # the same example appear both inline and in the green callout.
+        fix, spoken = _split_class_pq_fix_and_example(fix, spoken)
+
         # Legacy fields for backward-compat rendering
         issue = f"[{pillar}] {title}" if pillar else title
         quote_parts = [
@@ -4144,7 +4210,7 @@ def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuris
             for e in evidence[:2] if e.get("quote")
         ]
         example    = " / ".join(quote_parts) if quote_parts else li
-        how_to_fix = fix + (f' Say this instead: "{spoken}"' if spoken else "")
+        how_to_fix = fix
 
         normalized.append({
             "dimension":       pillar,
@@ -5867,7 +5933,9 @@ def api_finish_presentation():
 
     # ── Read real performance data sent by the frontend ────────────────────────
     req_data           = request.get_json(silent=True) or {}
-    fe_transcripts     = req_data.get("presentation_transcripts", [])   # [{page,text,words}]
+    fe_transcripts     = _dedupe_cross_slide_transcript_carryover(
+        req_data.get("presentation_transcripts", [])
+    )  # [{page,text,words}]
     fe_qa_history      = req_data.get("qa_chat_history", [])            # [{role,text,type}]
     total_time_seconds = int(req_data.get("total_time_seconds", 0) or 0)
     scene_slug         = req_data.get("scene",    None)                  # 'thesis_defense' | 'case_pitch' | 'class_presentation'

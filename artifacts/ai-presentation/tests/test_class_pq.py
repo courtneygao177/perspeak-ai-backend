@@ -113,13 +113,15 @@ def _import_app_helpers():
 try:
     _app = _import_app_helpers()
     _normalize = getattr(_app, "_normalize_class_pq_result", None)
+    _split_fix = getattr(_app, "_split_class_pq_fix_and_example", None)
+    _dedupe_transcripts = getattr(_app, "_dedupe_cross_slide_transcript_carryover", None)
     _validate  = getattr(_app, "_validate_class_pq_result", None)
     _unavail   = getattr(_app, "_class_pq_unavailable", None)
     _LEGACY    = getattr(_app, "_LEGACY_CONTAMINATION_PHRASES", [])
     _APP_IMPORTABLE = True
 except Exception as e:
     _APP_IMPORTABLE = False
-    _normalize = _validate = _unavail = None
+    _normalize = _split_fix = _dedupe_transcripts = _validate = _unavail = None
     _LEGACY = []
 
 
@@ -242,6 +244,60 @@ class TestEvidenceBinding(unittest.TestCase):
         for item in VALID_LLM_RESPONSE["areas_for_improvement"]:
             self.assertIn("spoken_example", item,
                 f"Item '{item.get('title')}' missing spoken_example field")
+
+    def test_spoken_example_is_not_appended_to_coaching_text(self):
+        """The rich UI must show the rewrite only in its green callout."""
+        if not _normalize:
+            self.skipTest("app not importable")
+        result = json.loads(json.dumps(VALID_LLM_RESPONSE))
+        item = result["areas_for_improvement"][0]
+        item["how_to_fix"] = (
+            "用一句过渡句说明两部分的关系。 "
+            "Say this instead: 'Now that we have seen the problem, let us look at the solutions.'"
+        )
+        normalized = _normalize(result, wpm_estimate=130, difficulty="Medium", jaw_drop_heuristic=False)
+        out = normalized["areas_for_improvement"][0]
+        self.assertEqual(out["how_to_fix"], "用一句过渡句说明两部分的关系。")
+        self.assertEqual(
+            out["spoken_example"],
+            "Now that we have seen the problem, let us look at the solutions.",
+        )
+
+    def test_legacy_inline_example_is_preserved_as_the_callout(self):
+        """Old single-field responses still map cleanly to the separated layout."""
+        if not _split_fix:
+            self.skipTest("app not importable")
+        fix, example = _split_fix(
+            "先用一句话交代这一页与上一页的关系。 Say this instead: 'This next example shows why the change matters.'",
+            "",
+        )
+        self.assertEqual(fix, "先用一句话交代这一页与上一页的关系。")
+        self.assertEqual(example, "This next example shows why the change matters.")
+
+
+class TestSlideBoundaryTranscriptHandling(unittest.TestCase):
+    """A late final-result from the prior slide must not become fake repetition."""
+
+    def test_drops_exact_carryover_only_across_slide_boundary(self):
+        if not _dedupe_transcripts:
+            self.skipTest("app not importable")
+        original = [
+            {"page": 1, "text": "So today we will take a ride through China to witness an evolving nation."},
+            {"page": 2, "text": "So today we will take a ride through China to witness an evolving nation."},
+            {"page": 3, "text": "First, let us compare the cities shown on the screen."},
+        ]
+        cleaned = _dedupe_transcripts(original)
+        self.assertEqual([entry["page"] for entry in cleaned], [1, 3])
+
+    def test_keeps_real_repeat_on_the_same_slide(self):
+        if not _dedupe_transcripts:
+            self.skipTest("app not importable")
+        original = [
+            {"page": 1, "text": "This is an important point for every student in this class."},
+            {"page": 1, "text": "This is an important point for every student in this class."},
+        ]
+        cleaned = _dedupe_transcripts(original)
+        self.assertEqual(len(cleaned), 2)
 
 
 class TestLegacyContamination(unittest.TestCase):
