@@ -45,3 +45,29 @@ immutable, rollback-safe releases managed by GitHub Actions.
 The release switcher automatically rolls back a failed deployment. To manually
 return to an older release, point `/opt/apps/perspeak-current` at its directory
 and restart `perspeak-ai`; do this only with a reviewed operational change.
+
+## Pull-request preview site
+
+The optional preview site is `https://test.perspeakai.cn`. It runs separately
+from production:
+
+- systemd service: `perspeak-staging` on `127.0.0.1:8001`
+- code releases: `/opt/apps/perspeak-staging-releases`
+- persistent data: `/var/lib/perspeak-staging`
+- environment: `/etc/perspeak-staging.env` (separate session secret and data
+  directory; API configuration remains only on the server)
+
+To enable it after this configuration is merged:
+
+1. Add an Alibaba Cloud DNS **A** record for `test.perspeakai.cn` pointing to
+   the same server public IP as `perspeakai.cn`.
+2. Run the production workflow once manually with `bootstrap_server=true`.
+   This installs the isolated preview service and HTTP Nginx configuration; it
+   does not restart the production service during bootstrap.
+3. After DNS has propagated, obtain the test-site TLS certificate on the
+   server: `sudo certbot --nginx -d test.perspeakai.cn`.
+4. Set repository variable `PERSPEAK_STAGING_DEPLOY` to `true`.
+
+Thereafter every same-repository PR targeting `main` automatically tests and
+updates the single preview site. PRs from forks cannot access deployment
+secrets and are never deployed. Merging a PR still deploys only to production.
