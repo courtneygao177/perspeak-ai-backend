@@ -119,6 +119,7 @@
 
 {% block content %}
 {% set pillar     = evaluation.pillar %}
+{% set pq_unavailable = pillar.analysis_unavailable is defined and pillar.analysis_unavailable %}
 {% set scores     = pillar.scores %}
 {% set diminfo    = pillar.dimensions_info %}
 {% set pitch_data = pillar.pitch_data if pillar.pitch_data else [] %}
@@ -185,7 +186,11 @@
   <div class="relative z-10 flex border-b border-slate-200 mb-8 overflow-x-auto">
     <button id="tab-btn-pq" onclick="switchTab('pq')" class="tab-btn active">
       Presentation Quality
+      {% if pq_unavailable %}
+      <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">Unavailable</span>
+      {% else %}
       <span class="tab-badge">PQ {{ avg_score }}</span>
+      {% endif %}
     </button>
     <button id="tab-btn-cq" onclick="switchTab('cq')"
             class="tab-btn{% if not (cq and cq.has_data) %} opacity-40 cursor-not-allowed{% endif %}">
@@ -212,6 +217,7 @@
   <div id="tab-pane-pq">
 
   <!-- Overall Score + Radar -->
+  {% if not pq_unavailable %}
   <div class="relative z-10 grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
 
     <!-- Left: Overall + 4 dim cards -->
@@ -280,6 +286,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Filler Word Log -->
   {% if pillar.filler_log %}
@@ -319,7 +326,7 @@
   {% set rich_good = pillar.what_i_did_well_rich if pillar.what_i_did_well_rich is defined else [] %}
   {% set good_count = rich_good | length if rich_good else (pillar.what_i_did_good | length if pillar.what_i_did_good is defined else 0) %}
   {% set fix_count  = pillar.areas_for_improvement | length if pillar.areas_for_improvement is defined else 0 %}
-  {% set is_unavailable = pillar.analysis_unavailable is defined and pillar.analysis_unavailable %}
+  {% set is_unavailable = pq_unavailable %}
   {% set has_coverage_warn = pillar.coverage is defined and pillar.coverage.coverage_warning is defined and pillar.coverage.coverage_warning %}
   {% set pillar_order = ['structure', 'fluency', 'relevance', 'delivery'] %}
 
