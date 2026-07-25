@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}PerspeakAI — 管理后台{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-6 py-12">
+  <p class="text-xs font-mono uppercase tracking-wider mb-3" style="color:#15803D">Admin only</p><h1 class="text-4xl font-extrabold mb-8">内测数据后台</h1>
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-9">{% for label, value in [('注册用户', stats.users), ('演练总数', stats.sessions), ('完成报告', stats.completed), ('累计时长', '%d:%02d'|format((stats.seconds|int)//60, (stats.seconds|int)%60))] %}<div class="bg-white border rounded-xl p-5" style="border-color:#E2E8F0"><p class="text-xs" style="color:#64748B">{{ label }}</p><p class="text-3xl font-extrabold mt-2">{{ value }}</p></div>{% endfor %}</div>
+  <div class="overflow-x-auto bg-white border rounded-xl" style="border-color:#E2E8F0"><table class="w-full text-sm"><thead style="background:#F8FAFC;color:#64748B"><tr><th class="text-left p-4">用户</th><th class="text-left p-4">时间</th><th class="text-left p-4">PPT</th><th class="text-left p-4">时长</th><th class="text-left p-4">状态</th><th class="p-4"></th></tr></thead><tbody>{% for p in practices %}<tr class="border-t" style="border-color:#E2E8F0"><td class="p-4">{{ p.email }}</td><td class="p-4 font-mono text-xs">{{ p.started_at|replace('T',' ')|replace('+00:00',' UTC') }}</td><td class="p-4">{{ p.deck_filename or '未命名 PPT' }}</td><td class="p-4">{{ '%d:%02d'|format((p.duration_seconds|int)//60, (p.duration_seconds|int)%60) }}</td><td class="p-4">{{ '已完成' if p.status == 'completed' else '未完成' }}</td><td class="p-4 text-right">{% if p.report_key %}<a href="/history/{{ p.id }}" class="font-semibold" style="color:#15803D">报告</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

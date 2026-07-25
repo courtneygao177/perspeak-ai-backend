@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}PerspeakAI — {{ '注册' if mode == 'register' else '登录' }}{% endblock %}
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-6 py-16">
+  <div class="w-full max-w-md bg-white border rounded-2xl p-8" style="border-color:#E2E8F0">
+    <p class="text-xs font-mono uppercase tracking-wider mb-3" style="color:#15803D">Closed beta</p>
+    <h1 class="text-3xl font-extrabold mb-2">{{ '创建帐号' if mode == 'register' else '欢迎回来' }}</h1>
+    <p class="text-sm mb-6" style="color:#64748B">{{ '注册后即可开始并保存自己的演练记录。' if mode == 'register' else '登录后继续你的演练。' }}</p>
+    {% if error %}<div class="mb-5 px-4 py-3 text-sm rounded-lg" style="background:#FEF2F2;color:#B91C1C">{{ error }}</div>{% endif %}
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="block text-sm font-semibold">邮箱<input required type="email" name="email" autocomplete="email" class="mt-1.5 w-full rounded-lg border px-3 py-2.5 font-normal" style="border-color:#CBD5E1"></label>
+      <label class="block text-sm font-semibold">密码<input required type="password" name="password" minlength="8" autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}" class="mt-1.5 w-full rounded-lg border px-3 py-2.5 font-normal" style="border-color:#CBD5E1"></label>
+      {% if mode == 'register' %}<p class="text-xs" style="color:#64748B">至少 8 位；内测阶段暂不提供自助找回密码。</p>{% endif %}
+      <button class="w-full btn-primary rounded-lg py-3 font-bold">{{ '注册并开始' if mode == 'register' else '登录' }}</button>
+    </form>
+    <p class="mt-6 text-sm text-center" style="color:#64748B">{% if mode == 'register' %}已有帐号？<a class="font-semibold" style="color:#15803D" href="/login{% if next_url %}?next={{ next_url|urlencode }}{% endif %}">登录</a>{% else %}没有帐号？<a class="font-semibold" style="color:#15803D" href="/register{% if next_url %}?next={{ next_url|urlencode }}{% endif %}">注册</a>{% endif %}</p>
+  </div>
+</div>
+{% endblock %}
