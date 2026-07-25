@@ -4341,6 +4341,11 @@ EVIDENCE RULES (STRICT)
 FEEDBACK RULES
 - When evidence is sufficient, return at least two strengths and two to three
   improvements for every dimension, with 8-12 improvements in total.
+- Write all learner-facing fields in Simplified Chinese: score_rationale, titles,
+  analyses, impacts, actionable_next_steps, coverage_warning and next_actions.
+  The only English exceptions are evidence_quote (the learner's exact original
+  words) and say_this_instead (an improved English phrase). Do not translate,
+  paraphrase, or mix Chinese into either exception.
 - Be specific, concise, supportive, and suitable for an IELTS 5.5-6.0 English
   learner. An improvement identifies one observable behaviour, listener impact,
   and one small presentation-only next step.
@@ -4375,6 +4380,33 @@ Return valid JSON only, following this exact schema:
 _THESIS_DIMENSIONS = ("structure", "fluency", "relevance", "delivery")
 _THESIS_LABELS = {dim: dim.title() for dim in _THESIS_DIMENSIONS}
 _THESIS_SECTIONS = {"opening", "early_body", "late_body", "conclusion"}
+_THESIS_FULL_MIN_SECONDS = 8 * 60
+_THESIS_FULL_MIN_WORDS = 650
+_THESIS_SCORE_COMPONENTS = {
+    "structure": (
+        ("research_focus_opening", "研究主线与开场定位", 8),
+        ("research_chain", "研究链条完整性", 10),
+        ("explicit_links_transitions", "显性连接与转场", 7),
+        ("conclusion_closure", "有效收束", 5),
+    ),
+    "fluency": (
+        ("complete_natural_expression", "完整、自然的口语表达", 7),
+        ("connection_pacing", "衔接与分段节奏", 6),
+        ("comprehension_first_pace", "清晰度优先的语速", 4),
+        ("self_repair", "自我修复与继续表达", 3),
+    ),
+    "relevance": (
+        ("research_focus_visible", "研究焦点持续可见", 8),
+        ("key_information_prioritisation", "关键信息取舍", 8),
+        ("findings_contribution_meaning", "发现、贡献与意义可见性", 8),
+        ("committee_appropriate_explanation", "适合委员会的解释层级", 6),
+    ),
+    "delivery": (
+        ("audible_clarity_emphasis", "语音清晰与重点可辨", 7),
+        ("professional_stable_presence", "专业而稳定的呈现感", 6),
+        ("audience_guidance", "听众导向的表达", 4),
+    ),
+}
 _THESIS_LEGACY_PHRASES = _LEGACY_CONTAMINATION_PHRASES + [
     "twitter-style headline", "picture superiority", "jaw-dropping",
     "script-reading", "TED Talk methodology",
@@ -4428,6 +4460,40 @@ def _thesis_segment_section(index, total):
     if ratio < 0.80:
         return "late_body"
     return "conclusion"
+
+
+def _thesis_dimension_score(dimension, subscores):
+    """Convert rubric-point subscores into the four 0-100 radar scores."""
+    components = _THESIS_SCORE_COMPONENTS[dimension]
+    earned = sum(int(subscores.get(key, 0)) for key, _, _ in components)
+    available = sum(maximum for _, _, maximum in components)
+    if dimension == "delivery":
+        non_verbal = subscores.get("non_verbal") or {}
+        if non_verbal.get("status") != "not_assessed":
+            earned += int(non_verbal.get("score") or 0)
+            available += 3
+    return round((earned / available) * 100) if available else 0
+
+
+def _thesis_score_calculation(dimension, subscores):
+    """Create the Chinese, auditable score basis shown in the dimension modal."""
+    components = _THESIS_SCORE_COMPONENTS[dimension]
+    parts = [
+        f"{label} {int(subscores.get(key, 0))}/{maximum}"
+        for key, label, maximum in components
+    ]
+    earned = sum(int(subscores.get(key, 0)) for key, _, _ in components)
+    available = sum(maximum for _, _, maximum in components)
+    if dimension == "delivery":
+        non_verbal = subscores.get("non_verbal") or {}
+        if non_verbal.get("status") == "not_assessed":
+            parts.append("非语言呈现：未评估（本次无视频）")
+            return "；".join(parts) + f"。已按可评估的 {available} 分换算为 {round((earned / available) * 100) if available else 0}/100。"
+        non_verbal_score = int(non_verbal.get("score") or 0)
+        parts.append(f"非语言呈现 {non_verbal_score}/3")
+        earned += non_verbal_score
+        available += 3
+    return "；".join(parts) + f"。原始得分 {earned}/{available}，换算为 {round((earned / available) * 100) if available else 0}/100。"
 
 
 def _thesis_normalize_quote(value):
@@ -4501,6 +4567,12 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
     if status == "unavailable":
         return True, None
 
+    duration_seconds = max((float(segment.get("timestamp_end") or 0) for segment in transcript_segments), default=0)
+    # A short rehearsal can still receive a useful, evidence-limited diagnostic,
+    # but it must never be represented as a full four-dimension audit.
+    if (total_words < _THESIS_FULL_MIN_WORDS or duration_seconds < _THESIS_FULL_MIN_SECONDS) and status != "insufficient_evidence":
+        return False, "short Thesis Defense rehearsal must use insufficient_evidence"
+
     scores = result.get("radar_scores")
     if not isinstance(scores, dict):
         return False, "radar_scores is missing"
@@ -4522,6 +4594,19 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
         detail = dimensions_info.get(dim)
         if not isinstance(detail, dict) or not isinstance(detail.get("subscores"), dict):
             return False, f"missing subscores for {dim}"
+        subscores = detail["subscores"]
+        for key, _, maximum in _THESIS_SCORE_COMPONENTS[dim]:
+            value = subscores.get(key)
+            if not isinstance(value, int) or not 0 <= value <= maximum:
+                return False, f"invalid {dim} subscore: {key}"
+        if dim == "delivery":
+            non_verbal = subscores.get("non_verbal")
+            if not isinstance(non_verbal, dict) or non_verbal.get("status") != "not_assessed" or non_verbal.get("score") is not None:
+                return False, "delivery must mark non_verbal as not_assessed without video"
+        if scores[dim] != _thesis_dimension_score(dim, subscores):
+            return False, f"{dim} score does not match its rubric subscores"
+        if not isinstance(detail.get("score_rationale"), str) or not detail["score_rationale"].strip():
+            return False, f"missing score rationale for {dim}"
 
     good = result.get("what_i_did_well")
     improvements = result.get("areas_for_improvement")
@@ -4554,10 +4639,11 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
                 if example is not None and len(str(example).split()) > 24:
                     return False, "say_this_instead exceeds 24 words"
 
-    # Only require the full 4 x 2 distribution for a sufficiently long,
-    # sectioned presentation. Short transcripts must remain honestly partial.
+    # Only require the full 4 x 2 distribution for an eight-minute, sufficiently
+    # substantial presentation. Short rehearsals must remain honestly partial.
     sections_present = {segment.get("section") for segment in transcript_segments}
-    if status == "complete" and total_words >= 500 and len(sections_present) == 4:
+    if (status == "complete" and total_words >= _THESIS_FULL_MIN_WORDS
+            and duration_seconds >= _THESIS_FULL_MIN_SECONDS and len(sections_present) == 4):
         if len(good) < 8 or not 8 <= len(improvements) <= 12:
             return False, "complete long presentation has invalid feedback quantity"
         for label in valid_labels:
@@ -4590,7 +4676,9 @@ def _normalize_thesis_pq_result(result, transcript_segments):
     result["dimensions_info"] = {
         dim: {
             "explanation": (dimensions_info.get(dim) or {}).get("score_rationale") or "",
-            "calculation": "Evidence-based Thesis Defense rubric.",
+            "calculation": _thesis_score_calculation(
+                dim, (dimensions_info.get(dim) or {}).get("subscores") or {}
+            ),
         }
         for dim in _THESIS_DIMENSIONS
     }
@@ -4642,7 +4730,8 @@ def _normalize_thesis_pq_result(result, transcript_segments):
         "summary": "",
         "top_next_steps": result.get("next_actions") or [],
     }
-    # This scenario has no real acoustic pitch analysis. Never fabricate a chart.
+    # The browser may append real microphone-derived pitch samples at report-save
+    # time. This evaluator must never fabricate a chart from score or WPM.
     result["pitch_data"] = []
     result["jaw_dropping_moment"] = False
     result["filler_log"] = []
@@ -4712,7 +4801,7 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
             "This is a short diagnostic rehearsal. Set analysis_status to "
             "insufficient_evidence and return only distinct, supportable feedback "
             "items; do not try to fill an 8-12-card target."
-            if elapsed < 360 or clean_words < 500 else
+            if elapsed < _THESIS_FULL_MIN_SECONDS or clean_words < _THESIS_FULL_MIN_WORDS else
             "This is a sufficiently long presentation. Apply the full evidence-based "
             "feedback quantity rules."
         ),
@@ -6584,6 +6673,7 @@ def api_finish_presentation():
     total_time_seconds = int(req_data.get("total_time_seconds", 0) or 0)
     scene_slug         = req_data.get("scene",    None)                  # 'thesis_defense' | 'case_pitch' | 'class_presentation'
     pronunciation_data = req_data.get("pronunciation_data", {})          # {str(page): diagnostic_dict}
+    raw_pitch_samples  = req_data.get("pitch_samples", [])
 
     # Merge frontend transcripts into session answers (fill gaps from voice/type)
     if fe_transcripts:
@@ -6648,6 +6738,16 @@ def api_finish_presentation():
         pillar_eval          = _fut_pillar.result()
         cq_eval              = _fut_cq.result()
         content_quality_eval = _fut_cqual.result()
+
+    # Pitch is displayed only when the browser supplied real microphone-derived
+    # samples. Never derive it from WPM or a presentation score.
+    if scenario == "Thesis Defense":
+        pitch_samples = []
+        if isinstance(raw_pitch_samples, list):
+            for value in raw_pitch_samples[:120]:
+                if isinstance(value, (int, float)) and 65 <= value <= 400:
+                    pitch_samples.append(round(float(value), 1))
+        pillar_eval["pitch_data"] = pitch_samples
 
     app.logger.info(
         f"[Eval] All done | "

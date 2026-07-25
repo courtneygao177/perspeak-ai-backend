@@ -71,11 +71,11 @@ def _item(dimension, quote, index, improvement=False):
 
 
 VALID_RESULT = {
-    "analysis_status": "complete",
+    "analysis_status": "insufficient_evidence",
     "analysis_scope": "thesis_defense_presentation_only",
     "coverage_warning": None,
-    "radar_scores": {"structure": 75, "fluency": 72, "relevance": 78, "delivery": 74},
-    "overall_score": 75,
+    "radar_scores": {"structure": 80, "fluency": 80, "relevance": 83, "delivery": 82},
+    "overall_score": 81,
     "dimensions_info": {
         "structure": {"subscores": {"research_focus_opening": 6, "research_chain": 8, "explicit_links_transitions": 6, "conclusion_closure": 4}, "score_rationale": "A clear research path is present.", "evidence_coverage": {}},
         "fluency": {"subscores": {"complete_natural_expression": 6, "connection_pacing": 5, "comprehension_first_pace": 3, "self_repair": 2}, "score_rationale": "The speech is mostly understandable.", "evidence_coverage": {}},
@@ -124,6 +124,13 @@ class TestThesisDefensePQ(unittest.TestCase):
         ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
         self.assertFalse(ok)
         self.assertIn("legacy contamination", error)
+
+    def test_short_rehearsal_cannot_claim_a_complete_audit(self):
+        result = copy.deepcopy(VALID_RESULT)
+        result["analysis_status"] = "complete"
+        ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
+        self.assertFalse(ok)
+        self.assertIn("short Thesis Defense rehearsal", error)
 
     def test_normalizer_preserves_four_dimension_card_contract(self):
         output = _normalize_thesis_pq_result(copy.deepcopy(VALID_RESULT), SEGMENTS)
