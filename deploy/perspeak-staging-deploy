@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Root-owned release switcher for the isolated PerspeakAI preview environment.
+# Called only by GitHub Actions through a narrowly scoped sudo rule.
+set -Eeuo pipefail
+
+readonly APP_ROOT="/opt/apps"
+readonly RELEASES_DIR="${APP_ROOT}/perspeak-staging-releases"
+readonly CURRENT_LINK="${APP_ROOT}/perspeak-staging-current"
+readonly APP_DIR_REL="artifacts/ai-presentation"
+readonly WHEELS_DIR_REL=".deploy-wheels"
+readonly SERVICE_NAME="perspeak-staging"
+readonly SERVICE_USER="perspeak-staging"
+readonly BASE_PYTHON="${APP_ROOT}/perspeak-venv311-local/bin/python"
+readonly DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
+readonly DROPIN_FILE="${DROPIN_DIR}/release-path.conf"
+readonly SERVICE_PORT="8001"
+
+fail() {
+  echo "Preview deployment failed: $*" >&2
+  exit 1
+}
+
+[[ ${EUID} -eq 0 ]] || fail "must run as root"
+[[ $# -eq 2 ]] || fail "usage: $0 <40-char-git-sha> <release-archive>"
+
+revision="$1"
+archive="$2"
+[[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail "invalid Git revision"
+[[ "$archive" == "/tmp/perspeak-staging-release-${revision}.tgz" ]] || fail "unexpected archive path"
+[[ -f "$archive" ]] || fail "release archive is missing"
+[[ -x "$BASE_PYTHON" ]] || fail "base Python runtime is missing: $BASE_PYTHON"
+id "$SERVICE_USER" >/dev/null || fail "service user is missing: $SERVICE_USER"
+
+install -d -m 0755 -o root -g root "$RELEASES_DIR"
+release_dir="${RELEASES_DIR}/${revision}"
+[[ ! -e "$release_dir" ]] || fail "release already exists: $revision"
+install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_USER" "$release_dir"
+
+cleanup_release() {
+  rm -rf "$release_dir"
+}
+trap cleanup_release EXIT
+
+tar -xzf "$archive" -C "$release_dir" --no-same-owner --no-same-permissions
+[[ -f "${release_dir}/${APP_DIR_REL}/app.py" ]] || fail "app.py is absent from the release"
+[[ -f "${release_dir}/${APP_DIR_REL}/requirements.txt" ]] || fail "requirements.txt is absent from the release"
+[[ -d "${release_dir}/${WHEELS_DIR_REL}" ]] || fail "offline dependency wheels are absent from the release"
+chown -R "${SERVICE_USER}:${SERVICE_USER}" "$release_dir"
+
+# A virtual environment embeds absolute interpreter paths, so it is created
+# directly inside its final release directory and is never moved afterwards.
+runuser -u "$SERVICE_USER" -- "$BASE_PYTHON" -m venv "${release_dir}/.venv"
+runuser -u "$SERVICE_USER" -- "${release_dir}/.venv/bin/python" -m pip install \
+  --no-index --find-links "${release_dir}/${WHEELS_DIR_REL}" \
+  -r "${release_dir}/${APP_DIR_REL}/requirements.txt"
+runuser -u "$SERVICE_USER" -- "${release_dir}/.venv/bin/python" -m py_compile \
+  "${release_dir}/${APP_DIR_REL}/app.py" \
+  "${release_dir}/${APP_DIR_REL}/server_store.py" \
+  "${release_dir}/${APP_DIR_REL}/audio_engine.py"
+
+trap - EXIT
+
+previous_target="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+next_link="${CURRENT_LINK}.next"
+rm -f "$next_link"
+ln -s "$release_dir" "$next_link"
+mv -Tf "$next_link" "$CURRENT_LINK"
+
+install -d -m 0755 -o root -g root "$DROPIN_DIR"
+cat >"$DROPIN_FILE" <<'EOF'
+[Service]
+WorkingDirectory=/opt/apps/perspeak-staging-current/artifacts/ai-presentation
+ExecStart=
+ExecStart=/opt/apps/perspeak-staging-current/.venv/bin/gunicorn --workers 2 --threads 2 --bind 127.0.0.1:8001 --timeout 180 --access-logfile - --error-logfile - --no-control-socket app:app
+EOF
+
+rollback() {
+  echo "Preview health check failed; restoring the previous release." >&2
+  if [[ -n "$previous_target" ]]; then
+    rm -f "$next_link"
+    ln -s "$previous_target" "$next_link"
+    mv -Tf "$next_link" "$CURRENT_LINK"
+  else
+    rm -f "$CURRENT_LINK" "$DROPIN_FILE"
+    rmdir "$DROPIN_DIR" 2>/dev/null || true
+  fi
+  systemctl daemon-reload
+  systemctl restart "$SERVICE_NAME" || true
+}
+
+systemctl daemon-reload
+if ! systemctl restart "$SERVICE_NAME"; then
+  rollback
+  fail "systemd could not start the new release"
+fi
+
+healthy=0
+for _ in {1..15}; do
+  if curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${SERVICE_PORT}/" >/dev/null; then
+    healthy=1
+    break
+  fi
+  sleep 1
+done
+if [[ $healthy -ne 1 ]]; then
+  rollback
+  fail "the new release did not pass its local health check"
+fi
+
+rm -f "$archive"
+echo "PerspeakAI preview release ${revision} is live."

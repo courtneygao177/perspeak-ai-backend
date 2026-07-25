@@ -1,0 +1,73 @@
+name: Deploy PerspeakAI preview
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - artifacts/ai-presentation/**
+      - deploy/**
+      - .github/workflows/deploy-staging.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perspeak-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Pull requests from forks never receive deployment secrets. The repository
+    # variable is enabled only after the one-time server and DNS setup succeeds.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      vars.PERSPEAK_STAGING_DEPLOY == 'true')
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install and test
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r artifacts/ai-presentation/requirements.txt pytest
+          python -m py_compile artifacts/ai-presentation/app.py artifacts/ai-presentation/server_store.py artifacts/ai-presentation/audio_engine.py
+          python -m pytest artifacts/ai-presentation/tests/test_class_pq.py -q
+
+      - name: Build a self-contained preview package
+        run: |
+          python -m pip wheel --wheel-dir .deploy-wheels -r artifacts/ai-presentation/requirements.txt
+          tar -czf "/tmp/perspeak-staging-release-${GITHUB_SHA}.tgz" artifacts/ai-presentation .deploy-wheels
+
+      - name: Configure SSH
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+          test -n "$DEPLOY_SSH_PRIVATE_KEY"
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Upload and activate the preview
+        run: |
+          archive="/tmp/perspeak-staging-release-${GITHUB_SHA}.tgz"
+          remote_archive="/tmp/perspeak-staging-release-${GITHUB_SHA}.tgz"
+          scp -q "$archive" "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_archive}"
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "sudo /usr/local/sbin/perspeak-staging-deploy '${GITHUB_SHA}' '${remote_archive}'"
+
+      - name: Verify the active preview service
+        run: ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8001/ >/dev/null"

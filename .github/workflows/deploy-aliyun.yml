@@ -67,7 +67,7 @@ jobs:
         if: inputs.bootstrap_server
         run: |
           ssh-keygen -y -f ~/.ssh/id_ed25519 > /tmp/perspeak-github-actions.pub
-          scp -q deploy/perspeak-deploy deploy/bootstrap-aliyun.sh /tmp/perspeak-github-actions.pub "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
+          scp -q deploy/perspeak-deploy deploy/perspeak-staging-deploy deploy/perspeak-staging-nginx.conf deploy/bootstrap-aliyun.sh /tmp/perspeak-github-actions.pub "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "sudo bash /tmp/bootstrap-aliyun.sh /tmp/perspeak-github-actions.pub"
 
       - name: Upload and activate the release
