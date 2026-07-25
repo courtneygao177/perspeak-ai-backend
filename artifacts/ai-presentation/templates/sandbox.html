@@ -716,14 +716,20 @@
           page: state.current_page, text: narration,
           words: narration.split(/\s+/).filter(Boolean).length,
         });
+        // SpeechRecognition can deliver the previous slide's final result a
+        // moment after Next Slide is clicked. Detach that recognizer before
+        // clearing the text box, then start a fresh recognizer for the next
+        // slide so old words cannot be recorded as a new-slide repetition.
+        const restartNarrationForNextSlide = _sealNarrationAtSlideBoundary();
         state.current_page = data.page;
         updateSlideDisplay(data.slide);
-        // ── Reset per-slide transcript accumulator; keep SpeechRecognition running ──
         currentSlideTranscript = '';
         document.getElementById('narrationInput').value = '';
+        if (restartNarrationForNextSlide) {
+          setTimeout(() => _startNarrationRec(true), 0);
+        }
         addLog(`✓ Slide ${state.current_page - 1} → ${state.current_page}`);
         resetBtn();
-        // Narration recording stays active across slides — no stop/restart needed.
 
       } else if (data.action === 'ACADEMIC_QA_START') {
         _onSlideCapture(state.current_page, narration);
@@ -1369,8 +1375,21 @@
   }
 
   // ── Narration STT: full-page accumulation (isFinal segments append, interim previews) ──
-  function _startNarrationRec() {
-    if (audioMode !== 'idle') return;
+  function _sealNarrationAtSlideBoundary() {
+    if (audioMode !== 'narration' || !_narrationRec) return false;
+    const rec = _narrationRec;
+    _narrationRec = null;
+    // Do not let a late final-result or onend callback from the old slide
+    // mutate the freshly cleared transcript for the next slide.
+    rec.onresult = null;
+    rec.onend = null;
+    rec.onerror = null;
+    try { rec.abort(); } catch(e) { try { rec.stop(); } catch(_) {} }
+    return true;
+  }
+
+  function _startNarrationRec(fromSlideBoundary = false) {
+    if (audioMode !== 'idle' && !(fromSlideBoundary && audioMode === 'narration')) return;
     const rec = _makeSR(); if (!rec) return;
     if (!_mediaRecorder) _startMediaRecorder();
 
@@ -1399,7 +1418,7 @@
         _narrationRec = null;
         setTimeout(() => {
           if (audioMode === 'idle') return;
-          _startNarrationRec();
+          _startNarrationRec(true);
         }, 150);
       } else if (audioMode === 'narration') {
         audioMode = 'idle'; _syncAudioButtons();
