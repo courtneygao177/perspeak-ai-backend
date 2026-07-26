@@ -1524,12 +1524,12 @@
 
   function _recordingGuidanceCopy() {
     if (scenarioType === 'Thesis Defense') {
-      return '答辩 Presentation Quality 的完整四维报告建议连续陈述至少 8 分钟，并覆盖研究动机、研究问题、方法、主要发现和贡献/意义。';
+      return '答辩 Presentation Quality 的完整四维报告建议连续陈述至少 4 分钟，并覆盖研究动机、研究问题、方法、主要发现和贡献/意义。';
     }
     if (scenarioType === 'Class Presentation' || scenarioType === 'Academic Presentation') {
-      return 'Class Presentation 的完整四维报告建议连续陈述至少 4 分钟，并覆盖开场、主体论证和结尾。';
+      return 'Class Presentation 的完整四维报告建议连续陈述至少 2 分钟，并覆盖开场、主体论证和结尾。';
     }
-    return '为获得更完整的演讲分析，建议连续陈述至少 4 分钟，并覆盖开场、主体和结尾。';
+    return '为获得更完整的演讲分析，建议连续陈述至少 2 分钟，并覆盖开场、主体和结尾。';
   }
 
   function requestNarrationRecording() {

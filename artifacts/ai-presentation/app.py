@@ -4380,8 +4380,10 @@ Return valid JSON only, following this exact schema:
 _THESIS_DIMENSIONS = ("structure", "fluency", "relevance", "delivery")
 _THESIS_LABELS = {dim: dim.title() for dim in _THESIS_DIMENSIONS}
 _THESIS_SECTIONS = {"opening", "early_body", "late_body", "conclusion"}
-_THESIS_FULL_MIN_SECONDS = 8 * 60
-_THESIS_FULL_MIN_WORDS = 650
+# A four-minute answer is long enough for a practical Thesis Defense rehearsal.
+# The word floor prevents a silent timer from being mistaken for evidence.
+_THESIS_FULL_MIN_SECONDS = 4 * 60
+_THESIS_FULL_MIN_WORDS = 320
 _THESIS_SCORE_COMPONENTS = {
     "structure": (
         ("research_focus_opening", "研究主线与开场定位", 8),
@@ -4639,7 +4641,7 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
                 if example is not None and len(str(example).split()) > 24:
                     return False, "say_this_instead exceeds 24 words"
 
-    # Only require the full 4 x 2 distribution for an eight-minute, sufficiently
+    # Only require the full 4 x 2 distribution for a four-minute, sufficiently
     # substantial presentation. Short rehearsals must remain honestly partial.
     sections_present = {segment.get("section") for segment in transcript_segments}
     if (status == "complete" and total_words >= _THESIS_FULL_MIN_WORDS
