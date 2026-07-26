@@ -4330,10 +4330,17 @@ EVIDENCE RULES (STRICT)
 - Use ONLY exact words from PRESENTER TRANSCRIPT as evidence_quote. Never quote
   slide/thesis context, metrics, instructions, or your own advice as user speech.
 - Copy evidence verbatim and use its supplied timestamps. Each feedback item needs
-  a distinct and relevant quote; do not reuse one quote for unrelated dimensions.
+  a distinct and relevant quote. Quote one focused clause or sentence (normally
+  6-25 words), never an entire slide transcript.
+- Treat the two feedback lists as one evidence set: never reuse or substantially
+  overlap a clause, sentence, or time window across strengths and improvements.
+  A statement cannot be praised in one card and criticised in another.
 - Sample the full presentation fairly. Cite opening, early body, late body and
   conclusion when available. At least 60% of cited evidence must come from the
   middle 60%; opening plus conclusion may not exceed 40%.
+- Before writing, spread the cards across the full chronological presentation.
+  When the transcript supports it, use every temporal quarter and do not place
+  more than two cards in any one short evidence window.
 - If a claim lacks transcript evidence, do not make it. Return
   analysis_status="insufficient_evidence" with only supportable items instead of
   inventing feedback.
@@ -4557,6 +4564,52 @@ def _thesis_snap_evidence_quotes(result, transcript_segments):
     return result
 
 
+def _thesis_annotate_evidence_timing(result, transcript_segments):
+    """Anchor each exact quote to its own approximate position in the transcript.
+
+    The model receives slide-level timestamps, so several distinct quotes from one
+    slide otherwise inherit the same broad timestamp range. Anchoring lets the
+    validator reject genuinely overlapping evidence while preserving different
+    sentences from the same slide as separate, time-specific evidence.
+    """
+    if not isinstance(result, dict):
+        return result
+    for key in ("what_i_did_well", "areas_for_improvement"):
+        for item in result.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            quote = _thesis_normalize_quote(item.get("evidence_quote"))
+            if not quote:
+                continue
+            for segment in transcript_segments:
+                source = _thesis_normalize_quote(segment.get("text"))
+                position = source.find(quote)
+                if position < 0:
+                    continue
+                start = float(segment.get("timestamp_start") or 0)
+                end = float(segment.get("timestamp_end") or start)
+                duration = max(1.0, end - start)
+                quote_words = max(1, len(quote.split()))
+                source_words = max(1, len(source.split()))
+                anchored_start = start + duration * (position / max(1, len(source)))
+                anchored_end = min(end, anchored_start + duration * (quote_words / source_words))
+                item["timestamp_start"] = round(anchored_start, 1)
+                item["timestamp_end"] = round(max(anchored_start + 0.8, anchored_end), 1)
+                break
+    return result
+
+
+def _thesis_quotes_substantially_overlap(first, second):
+    """Return true when two evidence quotes are the same clause in disguise."""
+    if first == second or first in second or second in first:
+        return True
+    first_words = set(first.split())
+    second_words = set(second.split())
+    if len(first_words) < 4 or len(second_words) < 4:
+        return False
+    return len(first_words & second_words) / min(len(first_words), len(second_words)) >= 0.75
+
+
 def _validate_thesis_pq_result(result, transcript_segments, total_words):
     """Reject fabricated, legacy, or structurally invalid Thesis PQ output."""
     if not isinstance(result, dict):
@@ -4568,6 +4621,8 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
         return False, "analysis_scope must be thesis_defense_presentation_only"
     if status == "unavailable":
         return True, None
+
+    _thesis_annotate_evidence_timing(result, transcript_segments)
 
     duration_seconds = max((float(segment.get("timestamp_end") or 0) for segment in transcript_segments), default=0)
     # A short rehearsal can still receive a useful, evidence-limited diagnostic,
@@ -4619,7 +4674,8 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
     transcript_text = _thesis_normalize_quote(" ".join(
         segment.get("text", "") for segment in transcript_segments
     ))
-    seen_quotes = set()
+    seen_quotes = []
+    evidence_windows = []
     for kind, items in (("strength", good), ("improvement", improvements)):
         for item in items:
             if not isinstance(item, dict):
@@ -4631,15 +4687,36 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
             quote = _thesis_normalize_quote(item.get("evidence_quote"))
             if len(quote.split()) < 3 or quote not in transcript_text:
                 return False, f"{kind} evidence_quote is not a transcript substring"
-            if quote in seen_quotes:
-                return False, "an evidence quote was reused across feedback items"
-            seen_quotes.add(quote)
+            if any(_thesis_quotes_substantially_overlap(quote, prior) for prior in seen_quotes):
+                return False, "an evidence quote or clause was reused across feedback items"
+            seen_quotes.append(quote)
             if not isinstance(item.get("timestamp_start"), (int, float)) or not isinstance(item.get("timestamp_end"), (int, float)):
                 return False, f"missing numeric timestamps in {kind}"
+            start = float(item["timestamp_start"])
+            end = float(item["timestamp_end"])
+            if end <= start:
+                return False, f"invalid evidence time range in {kind}"
+            for prior_start, prior_end in evidence_windows:
+                overlap = max(0.0, min(end, prior_end) - max(start, prior_start))
+                if overlap / min(end - start, prior_end - prior_start) >= 0.60:
+                    return False, "feedback cards reuse the same evidence time window"
+            evidence_windows.append((start, end))
             if kind == "improvement":
                 example = item.get("say_this_instead")
                 if example is not None and len(str(example).split()) > 24:
                     return False, "say_this_instead exceeds 24 words"
+
+    # A multi-card report should span the rehearsal rather than repeatedly mine
+    # one long slide transcript. Short rehearsals may remain partial, but still
+    # need at least two distinct temporal regions once four cards are shown.
+    if len(evidence_windows) >= 4 and duration_seconds > 0:
+        occupied_quarters = {
+            min(3, int((((start + end) / 2) / duration_seconds) * 4))
+            for start, end in evidence_windows
+        }
+        minimum_regions = 3 if len(evidence_windows) >= 6 else 2
+        if len(occupied_quarters) < minimum_regions:
+            return False, "feedback evidence is not distributed across the presentation"
 
     # Only require the full 4 x 2 distribution for a four-minute, sufficiently
     # substantial presentation. Short rehearsals must remain honestly partial.
@@ -4836,6 +4913,7 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
     try:
         raw, result = call_llm(messages)
         result = _thesis_snap_evidence_quotes(result, transcript_segments)
+        result = _thesis_annotate_evidence_timing(result, transcript_segments)
         ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
         if not ok:
             app.logger.warning("[THESIS PQ] First validation failed: %s", error)
@@ -4852,6 +4930,7 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
                 )},
             ])
             result = _thesis_snap_evidence_quotes(result, transcript_segments)
+            result = _thesis_annotate_evidence_timing(result, transcript_segments)
             ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
             if not ok:
                 app.logger.error("[THESIS PQ] Retry validation failed: %s", error)

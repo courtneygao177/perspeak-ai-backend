@@ -87,9 +87,9 @@ VALID_RESULT = {
     "next_actions": [{"priority": 1, "action": "Rehearse links between the findings and contribution.", "why": "This keeps the research story visible."}],
 }
 
-for idx, dimension in enumerate(("Structure", "Structure", "Fluency", "Fluency", "Relevance", "Relevance", "Delivery", "Delivery")):
+for idx, dimension in enumerate(("Structure", "Fluency", "Relevance", "Delivery")):
     VALID_RESULT["what_i_did_well"].append(_item(dimension, QUOTES[idx], idx))
-for idx, dimension in enumerate(("Structure", "Structure", "Fluency", "Fluency", "Relevance", "Relevance", "Delivery", "Delivery"), start=8):
+for idx, dimension in enumerate(("Structure", "Fluency", "Relevance", "Delivery"), start=4):
     VALID_RESULT["areas_for_improvement"].append(_item(dimension, QUOTES[idx], idx, improvement=True))
 
 
@@ -104,6 +104,15 @@ class TestThesisDefensePQ(unittest.TestCase):
         ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
         self.assertFalse(ok)
         self.assertIn("transcript substring", error)
+
+    def test_rejects_a_short_clause_reused_from_a_longer_quote(self):
+        result = copy.deepcopy(VALID_RESULT)
+        result["areas_for_improvement"][0]["evidence_quote"] = (
+            "first generation students access mental health support at university"
+        )
+        ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
+        self.assertFalse(ok)
+        self.assertIn("reused", error)
 
     def test_snaps_a_near_verbatim_quote_to_the_exact_transcript(self):
         result = copy.deepcopy(VALID_RESULT)
@@ -135,8 +144,8 @@ class TestThesisDefensePQ(unittest.TestCase):
     def test_normalizer_preserves_four_dimension_card_contract(self):
         output = _normalize_thesis_pq_result(copy.deepcopy(VALID_RESULT), SEGMENTS)
         self.assertEqual(set(output["scores"]), {"structure", "fluency", "relevance", "delivery"})
-        self.assertEqual(len(output["what_i_did_well_rich"]), 8)
-        self.assertEqual(len(output["areas_for_improvement"]), 8)
+        self.assertEqual(len(output["what_i_did_well_rich"]), 4)
+        self.assertEqual(len(output["areas_for_improvement"]), 4)
         self.assertEqual(output["pitch_data"], [])
         self.assertFalse(output["analysis_unavailable"])
 
