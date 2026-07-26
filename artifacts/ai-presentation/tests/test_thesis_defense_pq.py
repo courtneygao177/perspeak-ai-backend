@@ -108,6 +108,23 @@ class TestThesisDefensePQ(unittest.TestCase):
         self.assertEqual(result["radar_scores"]["structure"], 80)
         self.assertEqual(result["overall_score"], 81)
 
+    def test_normalizes_whole_number_rubric_formats_before_scoring(self):
+        result = copy.deepcopy(VALID_RESULT)
+        result["dimensions_info"]["structure"]["subscores"]["research_focus_opening"] = "6"
+        result["dimensions_info"]["fluency"]["subscores"]["connection_pacing"] = 5.0
+        result["dimensions_info"]["delivery"]["subscores"]["non_verbal"] = {
+            "status": "assessed", "score": 3
+        }
+        ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
+        self.assertTrue(ok, error)
+        self.assertEqual(
+            result["dimensions_info"]["structure"]["subscores"]["research_focus_opening"], 6
+        )
+        self.assertEqual(
+            result["dimensions_info"]["delivery"]["subscores"]["non_verbal"],
+            {"status": "not_assessed", "score": None},
+        )
+
     def test_full_rehearsal_repair_prompt_requires_full_card_distribution(self):
         instruction = _thesis_validation_repair_instruction("invalid quantity", True)
         self.assertIn("analysis_status=complete", instruction)

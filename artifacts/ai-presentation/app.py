@@ -4326,6 +4326,10 @@ SCORING MODEL (0-100 per dimension)
    first 17 points proportionally to the 20-point Delivery score. Never infer eye
    contact, posture, gestures, facial expression, or confidence from transcript.
 
+All rubric subscores must be raw JSON integer points in the stated component
+range (for example 6, not "6", 6.0, "6/8", or a percentage). radar_scores and
+overall_score are calculated from those component points.
+
 EVIDENCE RULES (STRICT)
 - Use ONLY exact words from PRESENTER TRANSCRIPT as evidence_quote. Never quote
   slide/thesis context, metrics, instructions, or your own advice as user speech.
@@ -4545,6 +4549,36 @@ def _thesis_reconcile_scores_from_subscores(result):
     return result
 
 
+def _thesis_normalize_rubric_subscore_types(result):
+    """Repair harmless JSON number formatting before validating the rubric.
+
+    Some otherwise valid model responses serialise a rubric point as ``"6"`` or
+    ``6.0``. Those mean the same discrete point and can be safely converted. We
+    do not coerce fractions, descriptive text, percentages, or out-of-range
+    values. Non-verbal delivery is deterministically not assessed because this
+    product flow has no video input.
+    """
+    if not isinstance(result, dict):
+        return result
+    dimensions_info = result.get("dimensions_info")
+    if not isinstance(dimensions_info, dict):
+        return result
+    for dimension in _THESIS_DIMENSIONS:
+        detail = dimensions_info.get(dimension)
+        subscores = detail.get("subscores") if isinstance(detail, dict) else None
+        if not isinstance(subscores, dict):
+            continue
+        for key, _, _ in _THESIS_SCORE_COMPONENTS[dimension]:
+            value = subscores.get(key)
+            if isinstance(value, float) and value.is_integer():
+                subscores[key] = int(value)
+            elif isinstance(value, str) and re.fullmatch(r"\s*\d+\s*", value):
+                subscores[key] = int(value.strip())
+        if dimension == "delivery":
+            subscores["non_verbal"] = {"status": "not_assessed", "score": None}
+    return result
+
+
 def _thesis_validation_repair_instruction(error, is_complete_rehearsal):
     """Give the model a correction brief that matches the actual rehearsal.
 
@@ -4558,7 +4592,9 @@ def _thesis_validation_repair_instruction(error, is_complete_rehearsal):
         "Do not reuse or substantially overlap a quote, clause, sentence, or time "
         "window across any feedback cards. Keep all learner-facing explanations in "
         "Simplified Chinese, except the original English quote and optional English "
-        "say_this_instead. Do not include TED or Q&A feedback. "
+        "say_this_instead. Every rubric subscore must be a raw JSON integer in its "
+        "component range, not text, a fraction, or a percentage. Do not include TED "
+        "or Q&A feedback. "
     )
     if is_complete_rehearsal:
         return shared + (
@@ -4694,6 +4730,7 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
         return True, None
 
     _thesis_annotate_evidence_timing(result, transcript_segments)
+    _thesis_normalize_rubric_subscore_types(result)
     _thesis_reconcile_scores_from_subscores(result)
 
     duration_seconds = max((float(segment.get("timestamp_end") or 0) for segment in transcript_segments), default=0)
