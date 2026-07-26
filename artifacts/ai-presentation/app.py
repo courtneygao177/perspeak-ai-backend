@@ -4545,6 +4545,37 @@ def _thesis_reconcile_scores_from_subscores(result):
     return result
 
 
+def _thesis_validation_repair_instruction(error, is_complete_rehearsal):
+    """Give the model a correction brief that matches the actual rehearsal.
+
+    A previous version always told the model that a rejected result was a short
+    rehearsal. That contradicted the full-report rule for a real four-minute
+    presentation, making a valid repair less likely.
+    """
+    shared = (
+        f"Your previous JSON failed validation: {error}. Correct the JSON only. "
+        "Use only exact, unchanged phrases from PRESENTER TRANSCRIPT as evidence_quote. "
+        "Do not reuse or substantially overlap a quote, clause, sentence, or time "
+        "window across any feedback cards. Keep all learner-facing explanations in "
+        "Simplified Chinese, except the original English quote and optional English "
+        "say_this_instead. Do not include TED or Q&A feedback. "
+    )
+    if is_complete_rehearsal:
+        return shared + (
+            "This is a sufficiently long Thesis Defense presentation, not a short "
+            "diagnostic. Keep analysis_status=complete. Return at least 8 distinct "
+            "what_i_did_well cards (at least 2 for each of Structure, Fluency, "
+            "Relevance, and Delivery) and 8-12 distinct areas_for_improvement cards "
+            "(2 or 3 for each dimension). Spread the evidence across opening, early "
+            "body, late body, and conclusion when available. Return JSON only."
+        )
+    return shared + (
+        "This is a short diagnostic rehearsal. Set analysis_status=insufficient_evidence "
+        "and return only the distinct, supportable feedback items available; do not "
+        "invent cards to fill the full matrix. Return JSON only."
+    )
+
+
 def _thesis_normalize_quote(value):
     return re.sub(r"[^\w\s]", "", str(value or "").lower()).strip()
 
@@ -4951,32 +4982,32 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
         {"role": "system", "content": THESIS_DEFENSE_PQ_SYSTEM_PROMPT},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
+    is_complete_rehearsal = (
+        elapsed >= _THESIS_FULL_MIN_SECONDS
+        and clean_words >= _THESIS_FULL_MIN_WORDS
+        and len({segment.get("section") for segment in transcript_segments}) == 4
+    )
     try:
-        raw, result = call_llm(messages)
-        result = _thesis_snap_evidence_quotes(result, transcript_segments)
-        result = _thesis_annotate_evidence_timing(result, transcript_segments)
-        ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
-        if not ok:
-            app.logger.warning("[THESIS PQ] First validation failed: %s", error)
-            raw, result = call_llm(messages + [
-                {"role": "assistant", "content": raw},
-                {"role": "user", "content": (
-                    f"Your previous JSON failed validation: {error}. Correct it. Use only "
-                    "verbatim transcript quotes, the Thesis Defense schema and weighting, "
-                    "and no TED or Q&A feedback. Copy each evidence_quote as a complete, "
-                    "unchanged sentence or phrase from PRESENTER TRANSCRIPT. This is a short "
-                    "diagnostic rehearsal, so use analysis_status=insufficient_evidence and "
-                    "return only distinct items you can support if the full matrix is not "
-                    "evidenced. Return JSON only."
-                )},
-            ])
+        attempt_messages = messages
+        for attempt in range(3):
+            raw, result = call_llm(attempt_messages)
             result = _thesis_snap_evidence_quotes(result, transcript_segments)
             result = _thesis_annotate_evidence_timing(result, transcript_segments)
             ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
-            if not ok:
-                app.logger.error("[THESIS PQ] Retry validation failed: %s", error)
-                return _thesis_pq_unavailable(f"validation_failed: {error}")
-        return _normalize_thesis_pq_result(result, transcript_segments)
+            if ok:
+                return _normalize_thesis_pq_result(result, transcript_segments)
+            app.logger.warning(
+                "[THESIS PQ] Validation attempt %s/3 failed: %s", attempt + 1, error
+            )
+            if attempt < 2:
+                attempt_messages = attempt_messages + [
+                    {"role": "assistant", "content": raw},
+                    {"role": "user", "content": _thesis_validation_repair_instruction(
+                        error, is_complete_rehearsal
+                    )},
+                ]
+        app.logger.error("[THESIS PQ] All validation attempts failed: %s", error)
+        return _thesis_pq_unavailable(f"validation_failed: {error}")
     except Exception as exc:
         app.logger.exception("[THESIS PQ] %s", type(exc).__name__)
         return _thesis_pq_unavailable(f"llm_error: {type(exc).__name__}")

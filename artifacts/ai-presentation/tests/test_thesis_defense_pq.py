@@ -15,6 +15,7 @@ from app import (  # noqa: E402
     _normalize_thesis_pq_result,
     _thesis_snap_evidence_quotes,
     _thesis_pq_unavailable,
+    _thesis_validation_repair_instruction,
     _validate_thesis_pq_result,
 )
 import app as app_module  # noqa: E402
@@ -106,6 +107,17 @@ class TestThesisDefensePQ(unittest.TestCase):
         self.assertTrue(ok, error)
         self.assertEqual(result["radar_scores"]["structure"], 80)
         self.assertEqual(result["overall_score"], 81)
+
+    def test_full_rehearsal_repair_prompt_requires_full_card_distribution(self):
+        instruction = _thesis_validation_repair_instruction("invalid quantity", True)
+        self.assertIn("analysis_status=complete", instruction)
+        self.assertIn("at least 8 distinct", instruction)
+        self.assertNotIn("short diagnostic rehearsal", instruction)
+
+    def test_short_rehearsal_repair_prompt_does_not_require_full_matrix(self):
+        instruction = _thesis_validation_repair_instruction("invalid quantity", False)
+        self.assertIn("analysis_status=insufficient_evidence", instruction)
+        self.assertIn("short diagnostic rehearsal", instruction)
 
     def test_rejects_question_and_answer_text_as_evidence(self):
         result = copy.deepcopy(VALID_RESULT)
