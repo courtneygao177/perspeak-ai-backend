@@ -98,6 +98,15 @@ class TestThesisDefensePQ(unittest.TestCase):
         ok, error = _validate_thesis_pq_result(copy.deepcopy(VALID_RESULT), SEGMENTS, 190)
         self.assertTrue(ok, error)
 
+    def test_reconciles_radar_and_overall_totals_from_valid_rubric_subscores(self):
+        result = copy.deepcopy(VALID_RESULT)
+        result["radar_scores"]["structure"] = 36
+        result["overall_score"] = 0
+        ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
+        self.assertTrue(ok, error)
+        self.assertEqual(result["radar_scores"]["structure"], 80)
+        self.assertEqual(result["overall_score"], 81)
+
     def test_rejects_question_and_answer_text_as_evidence(self):
         result = copy.deepcopy(VALID_RESULT)
         result["what_i_did_well"][0]["evidence_quote"] = "Professor, that is a very important question"

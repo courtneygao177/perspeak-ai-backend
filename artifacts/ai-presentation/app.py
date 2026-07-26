@@ -4505,6 +4505,46 @@ def _thesis_score_calculation(dimension, subscores):
     return "；".join(parts) + f"。原始得分 {earned}/{available}，换算为 {round((earned / available) * 100) if available else 0}/100。"
 
 
+def _thesis_reconcile_scores_from_subscores(result):
+    """Use valid rubric subscores as the single source of truth for totals.
+
+    The model returns both detailed rubric points and convenience radar totals.
+    The latter are deterministic arithmetic, so repair them when their source
+    subscores are valid instead of discarding an otherwise usable report.
+    Invalid component scores remain untouched for the validator to reject.
+    """
+    if not isinstance(result, dict):
+        return result
+    dimensions_info = result.get("dimensions_info")
+    if not isinstance(dimensions_info, dict):
+        return result
+
+    reconciled = {}
+    for dimension in _THESIS_DIMENSIONS:
+        detail = dimensions_info.get(dimension)
+        subscores = detail.get("subscores") if isinstance(detail, dict) else None
+        if not isinstance(subscores, dict):
+            return result
+        for key, _, maximum in _THESIS_SCORE_COMPONENTS[dimension]:
+            value = subscores.get(key)
+            if not isinstance(value, int) or not 0 <= value <= maximum:
+                return result
+        if dimension == "delivery":
+            non_verbal = subscores.get("non_verbal")
+            if (not isinstance(non_verbal, dict)
+                    or non_verbal.get("status") != "not_assessed"
+                    or non_verbal.get("score") is not None):
+                return result
+        reconciled[dimension] = _thesis_dimension_score(dimension, subscores)
+
+    result["radar_scores"] = reconciled
+    result["overall_score"] = round(
+        reconciled["structure"] * 0.30 + reconciled["fluency"] * 0.20
+        + reconciled["relevance"] * 0.30 + reconciled["delivery"] * 0.20
+    )
+    return result
+
+
 def _thesis_normalize_quote(value):
     return re.sub(r"[^\w\s]", "", str(value or "").lower()).strip()
 
@@ -4623,6 +4663,7 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
         return True, None
 
     _thesis_annotate_evidence_timing(result, transcript_segments)
+    _thesis_reconcile_scores_from_subscores(result)
 
     duration_seconds = max((float(segment.get("timestamp_end") or 0) for segment in transcript_segments), default=0)
     # A short rehearsal can still receive a useful, evidence-limited diagnostic,
