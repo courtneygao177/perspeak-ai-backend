@@ -119,6 +119,10 @@
 
 {% block content %}
 {% set pillar     = evaluation.pillar %}
+{% set pq_unavailable = pillar.analysis_unavailable is defined and pillar.analysis_unavailable %}
+{% set is_thesis  = evaluation.scenario == 'Thesis Defense' %}
+{% set dim_labels_zh = {'structure':'结构', 'fluency':'流利度', 'relevance':'相关性', 'delivery':'呈现表达'} %}
+{% set dim_levels_zh = {'expert':'优秀', 'competent':'良好', 'developing':'发展中', 'novice':'待加强'} %}
 {% set scores     = pillar.scores %}
 {% set diminfo    = pillar.dimensions_info %}
 {% set pitch_data = pillar.pitch_data if pillar.pitch_data else [] %}
@@ -185,7 +189,11 @@
   <div class="relative z-10 flex border-b border-slate-200 mb-8 overflow-x-auto">
     <button id="tab-btn-pq" onclick="switchTab('pq')" class="tab-btn active">
       Presentation Quality
+      {% if pq_unavailable %}
+      <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">Unavailable</span>
+      {% else %}
       <span class="tab-badge">PQ {{ avg_score }}</span>
+      {% endif %}
     </button>
     <button id="tab-btn-cq" onclick="switchTab('cq')"
             class="tab-btn{% if not (cq and cq.has_data) %} opacity-40 cursor-not-allowed{% endif %}">
@@ -212,6 +220,7 @@
   <div id="tab-pane-pq">
 
   <!-- Overall Score + Radar -->
+  {% if not pq_unavailable %}
   <div class="relative z-10 grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
 
     <!-- Left: Overall + 4 dim cards -->
@@ -245,14 +254,14 @@
         ('delivery',  'Delivery',   '#C98A2D')
       ] %}
       {% set sc = scores[key] %}
-      {% if sc >= 85 %}{% set tag = 'Excellent' %}
-      {% elif sc >= 70 %}{% set tag = 'Good' %}
-      {% elif sc >= 55 %}{% set tag = 'Getting There' %}
-      {% elif sc >= 40 %}{% set tag = 'Developing' %}
-      {% else %}{% set tag = 'Needs Work' %}{% endif %}
+      {% if sc >= 85 %}{% set tag = '优秀' if is_thesis else 'Excellent' %}
+      {% elif sc >= 70 %}{% set tag = '良好' if is_thesis else 'Good' %}
+      {% elif sc >= 55 %}{% set tag = '有进步空间' if is_thesis else 'Getting There' %}
+      {% elif sc >= 40 %}{% set tag = '发展中' if is_thesis else 'Developing' %}
+      {% else %}{% set tag = '待加强' if is_thesis else 'Needs Work' %}{% endif %}
       <div class="dim-card p-4" onclick="openModal('{{ key }}')" data-dim="{{ key }}">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-semibold uppercase tracking-widest" style="color:{{ color }}">{{ label }}</span>
+          <span class="text-xs font-semibold uppercase tracking-widest" style="color:{{ color }}">{{ dim_labels_zh[key] if is_thesis else label }}</span>
           <span class="text-xs text-gray-600 font-mono">{{ sc }}/100</span>
         </div>
         <div class="flex items-end justify-between">
@@ -280,6 +289,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Filler Word Log -->
   {% if pillar.filler_log %}
@@ -319,7 +329,7 @@
   {% set rich_good = pillar.what_i_did_well_rich if pillar.what_i_did_well_rich is defined else [] %}
   {% set good_count = rich_good | length if rich_good else (pillar.what_i_did_good | length if pillar.what_i_did_good is defined else 0) %}
   {% set fix_count  = pillar.areas_for_improvement | length if pillar.areas_for_improvement is defined else 0 %}
-  {% set is_unavailable = pillar.analysis_unavailable is defined and pillar.analysis_unavailable %}
+  {% set is_unavailable = pq_unavailable %}
   {% set has_coverage_warn = pillar.coverage is defined and pillar.coverage.coverage_warning is defined and pillar.coverage.coverage_warning %}
   {% set pillar_order = ['structure', 'fluency', 'relevance', 'delivery'] %}
 
@@ -372,9 +382,9 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
             </svg>
           </div>
-          <span class="text-sm font-bold" style="color:#15803D">What I did well</span>
+          <span class="text-sm font-bold" style="color:#15803D">做得好的地方</span>
         </div>
-        <p class="text-xs ml-10.5" style="color:#166534">{{ good_count }} strengths identified</p>
+        <p class="text-xs ml-10.5" style="color:#166534">已识别 {{ good_count }} 条优势</p>
       </button>
 
       <!-- Amber: Areas for Improvement -->
@@ -388,9 +398,9 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
             </svg>
           </div>
-          <span class="text-sm font-bold text-amber-800">Areas for Improvement</span>
+          <span class="text-sm font-bold text-amber-800">需要改进的地方</span>
         </div>
-        <p class="text-xs text-amber-700 ml-10.5">{{ fix_count }} items to work on</p>
+        <p class="text-xs text-amber-700 ml-10.5">{{ fix_count }} 项待练习</p>
       </button>
     </div>
 
@@ -405,8 +415,8 @@
           {% set ptag = 'pillar-structure' if pillar_name == 'structure' else ('pillar-fluency' if pillar_name == 'fluency' else ('pillar-relevance' if pillar_name == 'relevance' else 'pillar-delivery')) %}
           <div>
             <div class="flex items-center gap-2 mb-2">
-              <span class="pillar-tag {{ ptag }} text-[10px] font-bold uppercase tracking-wider">{{ pillar_name | title }}</span>
-              <span class="text-[10px] text-slate-400">{{ pillar_items | length }} strength{{ 's' if pillar_items | length != 1 }}</span>
+              <span class="pillar-tag {{ ptag }} text-[10px] font-bold uppercase tracking-wider">{{ dim_labels_zh[pillar_name] if is_thesis else pillar_name | title }}</span>
+              <span class="text-[10px] text-slate-400">{{ pillar_items | length }} 条优势</span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {% for item in pillar_items %}
@@ -481,8 +491,8 @@
           {% set ptag = 'pillar-structure' if pillar_name == 'structure' else ('pillar-fluency' if pillar_name == 'fluency' else ('pillar-relevance' if pillar_name == 'relevance' else 'pillar-delivery')) %}
           <div>
             <div class="flex items-center gap-2 mb-2">
-              <span class="pillar-tag {{ ptag }} text-[10px] font-bold uppercase tracking-wider">{{ pillar_name | title }}</span>
-              <span class="text-[10px] text-slate-400">{{ pillar_fix_items | length }} item{{ 's' if pillar_fix_items | length != 1 }} to work on</span>
+              <span class="pillar-tag {{ ptag }} text-[10px] font-bold uppercase tracking-wider">{{ dim_labels_zh[pillar_name] if is_thesis else pillar_name | title }}</span>
+              <span class="text-[10px] text-slate-400">{{ pillar_fix_items | length }} 项待改进</span>
             </div>
             <div class="space-y-3">
             {% for item in pillar_fix_items %}
@@ -497,10 +507,10 @@
                   </div>
                   {% if priority == 'high' %}
                   <span class="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                        style="background:#FEE2E2;color:#B91C1C;">High</span>
+                        style="background:#FEE2E2;color:#B91C1C;">高</span>
                   {% elif priority == 'medium' %}
                   <span class="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                        style="background:#FEF3C7;color:#92400E;">Med</span>
+                        style="background:#FEF3C7;color:#92400E;">中</span>
                   {% endif %}
                 </div>
               </div>
@@ -924,10 +934,11 @@
 ] %}
 {% set sc  = scores[key] %}
 {% set info = diminfo[key] if key in diminfo else {} %}
-{% if sc >= 90 %}{% set tag = 'Expert' %}
-{% elif sc >= 75 %}{% set tag = 'Competent' %}
-{% elif sc >= 60 %}{% set tag = 'Developing' %}
-{% else %}{% set tag = 'Novice' %}{% endif %}
+{% if sc >= 90 %}{% set tag_key = 'expert' %}
+{% elif sc >= 75 %}{% set tag_key = 'competent' %}
+{% elif sc >= 60 %}{% set tag_key = 'developing' %}
+{% else %}{% set tag_key = 'novice' %}{% endif %}
+{% set tag = dim_levels_zh[tag_key] if is_thesis else tag_key | title %}
 <div id="modal-{{ key }}" class="modal-bg" onclick="if(event.target===this)closeModal('{{ key }}')">
   <div class="modal-box" style="max-width:520px">
     <button onclick="closeModal('{{ key }}')"
@@ -936,7 +947,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
       </svg>
     </button>
-    <p class="text-xs font-bold uppercase tracking-widest mb-2" style="color:{{ color }}">{{ label }}</p>
+    <p class="text-xs font-bold uppercase tracking-widest mb-2" style="color:{{ color }}">{{ dim_labels_zh[key] if is_thesis else label }}</p>
     <div class="flex items-baseline gap-3 mb-3">
       <span class="text-5xl font-bold text-[#0F172A]">{{ sc }}</span>
       <span class="text-xl font-semibold" style="color:{{ color }}">{{ tag }}</span>
@@ -951,7 +962,7 @@
       <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">评分依据</p>
       <p class="text-slate-400 text-sm leading-relaxed">{{ info.calculation if info else '' }}</p>
     </div>
-    {% if key == 'delivery' %}
+    {% if key == 'delivery' and not is_thesis %}
     <!-- WPM golden zone legend -->
     <div class="mb-3 rounded-xl overflow-hidden border border-gray-800/40">
       <div class="grid grid-cols-3 text-center text-xs py-0.5">
@@ -980,9 +991,20 @@
       </div>
     </div>
     {% endif %}
+    {% if key == 'delivery' and is_thesis %}
+    <div class="bg-gray-900/60 rounded-xl p-4 border border-gray-800/40">
+      <p class="text-xs font-semibold text-amber-400 uppercase tracking-widest mb-2">音高变化（Pitch Variance）</p>
+      {% if pitch_data | length >= 5 %}
+      <p class="text-xs text-slate-400 mb-3">基于本次麦克风实际采集的音高数据。起伏更明显通常表示声音强调更丰富；不单独作为评分依据。</p>
+      <div style="height:120px"><canvas id="pitchChart"></canvas></div>
+      {% else %}
+      <p class="text-xs leading-relaxed text-slate-400">本次未采集到足够的真实音高数据，因此不展示曲线。呈现表达仍只根据可用的逐字稿与语音证据评分；无视频时，非语言呈现不参与评分。</p>
+      {% endif %}
+    </div>
+    {% endif %}
     <div class="mt-3">
       <div class="flex justify-between text-xs text-gray-600 mb-1.5">
-        <span>Novice</span><span>Expert</span>
+        <span>{{ '待加强' if is_thesis else 'Novice' }}</span><span>{{ '优秀' if is_thesis else 'Expert' }}</span>
       </div>
       <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
         <div class="h-full rounded-full" style="width:{{ sc }}%;background:{{ color }};transition:width 0.8s ease;"></div>

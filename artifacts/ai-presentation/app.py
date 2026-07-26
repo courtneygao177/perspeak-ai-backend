@@ -7,6 +7,7 @@ import re
 import traceback
 import uuid
 import concurrent.futures
+from difflib import SequenceMatcher
 try:
     from json_repair import repair_json as _repair_json
     _HAS_JSON_REPAIR = True
@@ -4289,6 +4290,766 @@ def _normalize_class_pq_result(result, wpm_estimate, difficulty, jaw_drop_heuris
     return result
 
 
+# ─────────────────────────────────────────────
+# THESIS DEFENSE: EVIDENCE-FIRST PRESENTATION QUALITY
+# ─────────────────────────────────────────────
+# This is deliberately separate from the Class Presentation and MBA Case Pitch
+# branches. A thesis defense presentation is a concise research narrative, not a
+# TED talk, and its presentation evaluation must never consume Q&A transcript.
+THESIS_DEFENSE_PQ_SYSTEM_PROMPT = """\
+You are Perspeak AI's Thesis Defense Presentation Quality evaluator.
+
+Evaluate ONLY the candidate's continuous thesis presentation before Q&A begins.
+This is not a TED Talk, a class presentation, or an MBA case pitch.
+
+DO NOT evaluate examiner questions, Q&A answers, pressure handling, disagreement,
+rebuttal, academic correctness, slide visual design, slide keyword coverage, or
+script rewriting. Evaluate how clearly and professionally the candidate presents
+the research story: why the study matters, what it investigates, how it was
+conducted, what it found, and what the findings mean.
+
+SCORING MODEL (0-100 per dimension)
+1. Structure (30%): research focus/opening (8), research chain (10), explicit
+   links/transitions (7), conclusion/closure (5). Assess a followable research
+   narrative. A Rule of Three is optional and never earns an automatic bonus.
+2. Fluency (20%): complete/natural expression (7), connection and pacing (6),
+   comprehension-first pace (4), concise self-repair (3). Thinking pauses can be
+   positive. WPM and filler events are weak evidence only; never use a fixed WPM
+   target or deduct points from filler counts alone.
+3. Relevance (30%): research focus visible (8), key-information prioritisation
+   (8), findings-contribution-meaning (8), committee-appropriate explanation
+   (6). Do not score slide-by-slide coverage, word overlap with slides, metaphors,
+   vividness, or academic correctness.
+4. Delivery (20%): audible clarity/emphasis (7), professional/stable presence
+   (6), audience guidance (4), non-verbal delivery (3 only if video is available).
+   If video is unavailable, mark non_verbal as not_assessed and normalize the
+   first 17 points proportionally to the 20-point Delivery score. Never infer eye
+   contact, posture, gestures, facial expression, or confidence from transcript.
+
+All rubric subscores must be raw JSON integer points in the stated component
+range (for example 6, not "6", 6.0, "6/8", or a percentage). radar_scores and
+overall_score are calculated from those component points.
+
+EVIDENCE RULES (STRICT)
+- Use ONLY exact words from PRESENTER TRANSCRIPT as evidence_quote. Never quote
+  slide/thesis context, metrics, instructions, or your own advice as user speech.
+- Copy evidence verbatim and use its supplied timestamps. Each feedback item needs
+  a distinct and relevant quote. Quote one focused clause or sentence (normally
+  6-25 words), never an entire slide transcript.
+- Treat the two feedback lists as one evidence set: never reuse or substantially
+  overlap a clause, sentence, or time window across strengths and improvements.
+  A statement cannot be praised in one card and criticised in another.
+- Sample the full presentation fairly. Cite opening, early body, late body and
+  conclusion when available. At least 60% of cited evidence must come from the
+  middle 60%; opening plus conclusion may not exceed 40%.
+- Before writing, spread the cards across the full chronological presentation.
+  When the transcript supports it, use every temporal quarter and do not place
+  more than two cards in any one short evidence window.
+- If a claim lacks transcript evidence, do not make it. Return
+  analysis_status="insufficient_evidence" with only supportable items instead of
+  inventing feedback.
+
+FEEDBACK RULES
+- When evidence is sufficient, return at least two strengths and two to three
+  improvements for every dimension, with 8-12 improvements in total.
+- Write all learner-facing fields in Simplified Chinese: score_rationale, titles,
+  analyses, impacts, actionable_next_steps, coverage_warning and next_actions.
+  The only English exceptions are evidence_quote (the learner's exact original
+  words) and say_this_instead (an improved English phrase). Do not translate,
+  paraphrase, or mix Chinese into either exception.
+- Be specific, concise, supportive, and suitable for an IELTS 5.5-6.0 English
+  learner. An improvement identifies one observable behaviour, listener impact,
+  and one small presentation-only next step.
+- say_this_instead is optional. Use it only for a local phrase that can improve
+  without changing a research claim; it must be English only, under 25 words,
+  and must not invent research facts.
+- Never require or mention Rule of Three, Twitter-style headlines, conversational
+  markers, TED golden zones, jaw-dropping moments, filler quotas, slide keyword
+  coverage, Picture Superiority Effect, Q&A, academic correctness, or PPT redesign.
+- Never use generic completion praise such as Rehearsal Completed, Session
+  Finished, Topic Covered, or Steady Pace.
+
+Return valid JSON only, following this exact schema:
+{
+  "analysis_status": "complete|insufficient_evidence|unavailable",
+  "analysis_scope": "thesis_defense_presentation_only",
+  "coverage_warning": null,
+  "radar_scores": {"structure": 0, "fluency": 0, "relevance": 0, "delivery": 0},
+  "overall_score": 0,
+  "dimensions_info": {
+    "structure": {"subscores":{"research_focus_opening":0,"research_chain":0,"explicit_links_transitions":0,"conclusion_closure":0},"score_rationale":"","evidence_coverage":{"opening":0,"early_body":0,"late_body":0,"conclusion":0}},
+    "fluency": {"subscores":{"complete_natural_expression":0,"connection_pacing":0,"comprehension_first_pace":0,"self_repair":0},"score_rationale":"","evidence_coverage":{"opening":0,"early_body":0,"late_body":0,"conclusion":0}},
+    "relevance": {"subscores":{"research_focus_visible":0,"key_information_prioritisation":0,"findings_contribution_meaning":0,"committee_appropriate_explanation":0},"score_rationale":"","evidence_coverage":{"opening":0,"early_body":0,"late_body":0,"conclusion":0}},
+    "delivery": {"subscores":{"audible_clarity_emphasis":0,"professional_stable_presence":0,"audience_guidance":0,"non_verbal":{"status":"not_assessed","score":null}},"score_rationale":"","evidence_coverage":{"opening":0,"early_body":0,"late_body":0,"conclusion":0}}
+  },
+  "what_i_did_well": [{"dimension":"Structure|Fluency|Relevance|Delivery","title":"","evidence_quote":"","timestamp_start":0,"timestamp_end":0,"transcript_section":"opening|early_body|late_body|conclusion","analysis":""}],
+  "areas_for_improvement": [{"dimension":"Structure|Fluency|Relevance|Delivery","priority":"high|medium|low","title":"","evidence_quote":"","timestamp_start":0,"timestamp_end":0,"transcript_section":"opening|early_body|late_body|conclusion","impact":"","actionable_next_step":"","say_this_instead":null}],
+  "next_actions": [{"priority":1,"action":"","why":""}]
+}
+"""
+
+_THESIS_DIMENSIONS = ("structure", "fluency", "relevance", "delivery")
+_THESIS_LABELS = {dim: dim.title() for dim in _THESIS_DIMENSIONS}
+_THESIS_SECTIONS = {"opening", "early_body", "late_body", "conclusion"}
+# A four-minute answer is long enough for a practical Thesis Defense rehearsal.
+# The word floor prevents a silent timer from being mistaken for evidence.
+_THESIS_FULL_MIN_SECONDS = 4 * 60
+_THESIS_FULL_MIN_WORDS = 320
+_THESIS_SCORE_COMPONENTS = {
+    "structure": (
+        ("research_focus_opening", "研究主线与开场定位", 8),
+        ("research_chain", "研究链条完整性", 10),
+        ("explicit_links_transitions", "显性连接与转场", 7),
+        ("conclusion_closure", "有效收束", 5),
+    ),
+    "fluency": (
+        ("complete_natural_expression", "完整、自然的口语表达", 7),
+        ("connection_pacing", "衔接与分段节奏", 6),
+        ("comprehension_first_pace", "清晰度优先的语速", 4),
+        ("self_repair", "自我修复与继续表达", 3),
+    ),
+    "relevance": (
+        ("research_focus_visible", "研究焦点持续可见", 8),
+        ("key_information_prioritisation", "关键信息取舍", 8),
+        ("findings_contribution_meaning", "发现、贡献与意义可见性", 8),
+        ("committee_appropriate_explanation", "适合委员会的解释层级", 6),
+    ),
+    "delivery": (
+        ("audible_clarity_emphasis", "语音清晰与重点可辨", 7),
+        ("professional_stable_presence", "专业而稳定的呈现感", 6),
+        ("audience_guidance", "听众导向的表达", 4),
+    ),
+}
+_THESIS_LEGACY_PHRASES = _LEGACY_CONTAMINATION_PHRASES + [
+    "twitter-style headline", "picture superiority", "jaw-dropping",
+    "script-reading", "TED Talk methodology",
+]
+
+
+def _thesis_pq_unavailable(reason="llm_error"):
+    """The only safe fallback for a Thesis Defense PQ result."""
+    return {
+        "analysis_unavailable": True,
+        "unavailable_reason": reason,
+        "analysis_status": "unavailable",
+        "analysis_scope": "thesis_defense_presentation_only",
+        "coverage_warning": (
+            "Presentation analysis is unavailable because no usable presentation "
+            "transcript was received."
+        ),
+        # The report template expects a score map even while its unavailable state
+        # hides all score UI. These are display placeholders, not a score.
+        "scores": {dim: 0 for dim in _THESIS_DIMENSIONS},
+        "dimensions_info": {dim: {"explanation": "", "calculation": ""}
+                            for dim in _THESIS_DIMENSIONS},
+        "radar_scores": None,
+        "overall_score": None,
+        "pq_overall": {"score": None, "score_status": "not_assessed", "summary": "", "top_next_steps": []},
+        "filler_log": [],
+        "pitch_data": [],
+        "jaw_dropping_moment": False,
+        "what_i_did_well_rich": [],
+        "what_i_did_good": [],
+        "areas_for_improvement": [],
+        "next_actions": [],
+        "not_assessed": [{
+            "item": "non_verbal_delivery",
+            "reason": "No video evidence was supplied.",
+            "required_input": "Video recording",
+        }],
+        "coverage": {"coverage_warning": True, "coverage_note": reason},
+    }
+
+
+def _thesis_segment_section(index, total):
+    """Map evidence to the four report sections without relying on slide count."""
+    if total <= 1:
+        return "opening"
+    ratio = index / max(total - 1, 1)
+    if ratio < 0.20:
+        return "opening"
+    if ratio < 0.55:
+        return "early_body"
+    if ratio < 0.80:
+        return "late_body"
+    return "conclusion"
+
+
+def _thesis_dimension_score(dimension, subscores):
+    """Convert rubric-point subscores into the four 0-100 radar scores."""
+    components = _THESIS_SCORE_COMPONENTS[dimension]
+    earned = sum(int(subscores.get(key, 0)) for key, _, _ in components)
+    available = sum(maximum for _, _, maximum in components)
+    if dimension == "delivery":
+        non_verbal = subscores.get("non_verbal") or {}
+        if non_verbal.get("status") != "not_assessed":
+            earned += int(non_verbal.get("score") or 0)
+            available += 3
+    return round((earned / available) * 100) if available else 0
+
+
+def _thesis_score_calculation(dimension, subscores):
+    """Create the Chinese, auditable score basis shown in the dimension modal."""
+    components = _THESIS_SCORE_COMPONENTS[dimension]
+    parts = [
+        f"{label} {int(subscores.get(key, 0))}/{maximum}"
+        for key, label, maximum in components
+    ]
+    earned = sum(int(subscores.get(key, 0)) for key, _, _ in components)
+    available = sum(maximum for _, _, maximum in components)
+    if dimension == "delivery":
+        non_verbal = subscores.get("non_verbal") or {}
+        if non_verbal.get("status") == "not_assessed":
+            parts.append("非语言呈现：未评估（本次无视频）")
+            return "；".join(parts) + f"。已按可评估的 {available} 分换算为 {round((earned / available) * 100) if available else 0}/100。"
+        non_verbal_score = int(non_verbal.get("score") or 0)
+        parts.append(f"非语言呈现 {non_verbal_score}/3")
+        earned += non_verbal_score
+        available += 3
+    return "；".join(parts) + f"。原始得分 {earned}/{available}，换算为 {round((earned / available) * 100) if available else 0}/100。"
+
+
+def _thesis_reconcile_scores_from_subscores(result):
+    """Use valid rubric subscores as the single source of truth for totals.
+
+    The model returns both detailed rubric points and convenience radar totals.
+    The latter are deterministic arithmetic, so repair them when their source
+    subscores are valid instead of discarding an otherwise usable report.
+    Invalid component scores remain untouched for the validator to reject.
+    """
+    if not isinstance(result, dict):
+        return result
+    dimensions_info = result.get("dimensions_info")
+    if not isinstance(dimensions_info, dict):
+        return result
+
+    reconciled = {}
+    for dimension in _THESIS_DIMENSIONS:
+        detail = dimensions_info.get(dimension)
+        subscores = detail.get("subscores") if isinstance(detail, dict) else None
+        if not isinstance(subscores, dict):
+            return result
+        for key, _, maximum in _THESIS_SCORE_COMPONENTS[dimension]:
+            value = subscores.get(key)
+            if not isinstance(value, int) or not 0 <= value <= maximum:
+                return result
+        if dimension == "delivery":
+            non_verbal = subscores.get("non_verbal")
+            if (not isinstance(non_verbal, dict)
+                    or non_verbal.get("status") != "not_assessed"
+                    or non_verbal.get("score") is not None):
+                return result
+        reconciled[dimension] = _thesis_dimension_score(dimension, subscores)
+
+    result["radar_scores"] = reconciled
+    result["overall_score"] = round(
+        reconciled["structure"] * 0.30 + reconciled["fluency"] * 0.20
+        + reconciled["relevance"] * 0.30 + reconciled["delivery"] * 0.20
+    )
+    return result
+
+
+def _thesis_normalize_rubric_subscore_types(result):
+    """Repair harmless JSON number formatting before validating the rubric.
+
+    Some otherwise valid model responses serialise a rubric point as ``"6"`` or
+    ``6.0``. Those mean the same discrete point and can be safely converted. We
+    do not coerce fractions, descriptive text, percentages, or out-of-range
+    values. Non-verbal delivery is deterministically not assessed because this
+    product flow has no video input.
+    """
+    if not isinstance(result, dict):
+        return result
+    dimensions_info = result.get("dimensions_info")
+    if not isinstance(dimensions_info, dict):
+        return result
+    for dimension in _THESIS_DIMENSIONS:
+        detail = dimensions_info.get(dimension)
+        subscores = detail.get("subscores") if isinstance(detail, dict) else None
+        if not isinstance(subscores, dict):
+            continue
+        for key, _, _ in _THESIS_SCORE_COMPONENTS[dimension]:
+            value = subscores.get(key)
+            if isinstance(value, float) and value.is_integer():
+                subscores[key] = int(value)
+            elif isinstance(value, str) and re.fullmatch(r"\s*\d+\s*", value):
+                subscores[key] = int(value.strip())
+        if dimension == "delivery":
+            subscores["non_verbal"] = {"status": "not_assessed", "score": None}
+    return result
+
+
+def _thesis_validation_repair_instruction(error, is_complete_rehearsal):
+    """Give the model a correction brief that matches the actual rehearsal.
+
+    A previous version always told the model that a rejected result was a short
+    rehearsal. That contradicted the full-report rule for a real four-minute
+    presentation, making a valid repair less likely.
+    """
+    shared = (
+        f"Your previous JSON failed validation: {error}. Correct the JSON only. "
+        "Use only exact, unchanged phrases from PRESENTER TRANSCRIPT as evidence_quote. "
+        "Do not reuse or substantially overlap a quote, clause, sentence, or time "
+        "window across any feedback cards. Keep all learner-facing explanations in "
+        "Simplified Chinese, except the original English quote and optional English "
+        "say_this_instead. Every rubric subscore must be a raw JSON integer in its "
+        "component range, not text, a fraction, or a percentage. Do not include TED "
+        "or Q&A feedback. "
+    )
+    if is_complete_rehearsal:
+        return shared + (
+            "This is a sufficiently long Thesis Defense presentation, not a short "
+            "diagnostic. Keep analysis_status=complete. Return at least 8 distinct "
+            "what_i_did_well cards (at least 2 for each of Structure, Fluency, "
+            "Relevance, and Delivery) and 8-12 distinct areas_for_improvement cards "
+            "(2 or 3 for each dimension). Spread the evidence across opening, early "
+            "body, late body, and conclusion when available. Return JSON only."
+        )
+    return shared + (
+        "This is a short diagnostic rehearsal. Set analysis_status=insufficient_evidence "
+        "and return only the distinct, supportable feedback items available; do not "
+        "invent cards to fill the full matrix. Return JSON only."
+    )
+
+
+def _thesis_normalize_quote(value):
+    return re.sub(r"[^\w\s]", "", str(value or "").lower()).strip()
+
+
+def _thesis_snap_evidence_quotes(result, transcript_segments):
+    """Replace a near-verbatim model quote with the exact transcript span.
+
+    Speech recognition punctuation and a one-word model normalisation should not
+    discard a genuine analysis. This helper is deliberately conservative: it
+    only repairs a quote when a long contiguous transcript span has both strong
+    sequence similarity and substantial word overlap. Otherwise the validator
+    still rejects it instead of accepting a paraphrase.
+    """
+    if not isinstance(result, dict):
+        return result
+    transcript_text = _thesis_normalize_quote(" ".join(
+        segment.get("text", "") for segment in transcript_segments
+    ))
+
+    def best_exact_span(quote):
+        normalized = _thesis_normalize_quote(quote)
+        if normalized in transcript_text:
+            return quote
+        query_tokens = re.findall(r"[\w']+", str(quote or "").lower())
+        if len(query_tokens) < 5:
+            return None
+        best = (0.0, 0, "")
+        for segment in transcript_segments:
+            source = str(segment.get("text") or "")
+            matches = list(re.finditer(r"[\w']+", source.lower()))
+            tokens = [match.group(0) for match in matches]
+            if len(tokens) < 5:
+                continue
+            minimum = max(5, int(len(query_tokens) * 0.65))
+            maximum = min(len(tokens), int(len(query_tokens) * 1.35) + 2)
+            for start in range(len(tokens)):
+                for size in range(minimum, maximum + 1):
+                    end = start + size
+                    if end > len(tokens):
+                        break
+                    candidate_tokens = tokens[start:end]
+                    overlap = len(set(query_tokens) & set(candidate_tokens))
+                    ratio = SequenceMatcher(None, query_tokens, candidate_tokens).ratio()
+                    if ratio >= 0.60 and overlap >= max(4, int(len(query_tokens) * 0.55)):
+                        if ratio > best[0] or (ratio == best[0] and overlap > best[1]):
+                            exact = source[matches[start].start():matches[end - 1].end()].strip()
+                            best = (ratio, overlap, exact)
+        return best[2] or None
+
+    for key in ("what_i_did_well", "areas_for_improvement"):
+        for item in result.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            repaired = best_exact_span(item.get("evidence_quote"))
+            if repaired:
+                item["evidence_quote"] = repaired
+    return result
+
+
+def _thesis_annotate_evidence_timing(result, transcript_segments):
+    """Anchor each exact quote to its own approximate position in the transcript.
+
+    The model receives slide-level timestamps, so several distinct quotes from one
+    slide otherwise inherit the same broad timestamp range. Anchoring lets the
+    validator reject genuinely overlapping evidence while preserving different
+    sentences from the same slide as separate, time-specific evidence.
+    """
+    if not isinstance(result, dict):
+        return result
+    for key in ("what_i_did_well", "areas_for_improvement"):
+        for item in result.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            quote = _thesis_normalize_quote(item.get("evidence_quote"))
+            if not quote:
+                continue
+            for segment in transcript_segments:
+                source = _thesis_normalize_quote(segment.get("text"))
+                position = source.find(quote)
+                if position < 0:
+                    continue
+                start = float(segment.get("timestamp_start") or 0)
+                end = float(segment.get("timestamp_end") or start)
+                duration = max(1.0, end - start)
+                quote_words = max(1, len(quote.split()))
+                source_words = max(1, len(source.split()))
+                anchored_start = start + duration * (position / max(1, len(source)))
+                anchored_end = min(end, anchored_start + duration * (quote_words / source_words))
+                item["timestamp_start"] = round(anchored_start, 1)
+                item["timestamp_end"] = round(max(anchored_start + 0.8, anchored_end), 1)
+                break
+    return result
+
+
+def _thesis_quotes_substantially_overlap(first, second):
+    """Return true when two evidence quotes are the same clause in disguise."""
+    if first == second or first in second or second in first:
+        return True
+    first_words = set(first.split())
+    second_words = set(second.split())
+    if len(first_words) < 4 or len(second_words) < 4:
+        return False
+    return len(first_words & second_words) / min(len(first_words), len(second_words)) >= 0.75
+
+
+def _validate_thesis_pq_result(result, transcript_segments, total_words):
+    """Reject fabricated, legacy, or structurally invalid Thesis PQ output."""
+    if not isinstance(result, dict):
+        return False, "response is not an object"
+    status = result.get("analysis_status")
+    if status not in {"complete", "insufficient_evidence", "unavailable"}:
+        return False, f"invalid analysis_status: {status!r}"
+    if result.get("analysis_scope") != "thesis_defense_presentation_only":
+        return False, "analysis_scope must be thesis_defense_presentation_only"
+    if status == "unavailable":
+        return True, None
+
+    _thesis_annotate_evidence_timing(result, transcript_segments)
+    _thesis_normalize_rubric_subscore_types(result)
+    _thesis_reconcile_scores_from_subscores(result)
+
+    duration_seconds = max((float(segment.get("timestamp_end") or 0) for segment in transcript_segments), default=0)
+    # A short rehearsal can still receive a useful, evidence-limited diagnostic,
+    # but it must never be represented as a full four-dimension audit.
+    if (total_words < _THESIS_FULL_MIN_WORDS or duration_seconds < _THESIS_FULL_MIN_SECONDS) and status != "insufficient_evidence":
+        return False, "short Thesis Defense rehearsal must use insufficient_evidence"
+
+    scores = result.get("radar_scores")
+    if not isinstance(scores, dict):
+        return False, "radar_scores is missing"
+    for dim in _THESIS_DIMENSIONS:
+        value = scores.get(dim)
+        if not isinstance(value, int) or not 0 <= value <= 100:
+            return False, f"invalid {dim} score"
+    expected_overall = round(
+        scores["structure"] * 0.30 + scores["fluency"] * 0.20
+        + scores["relevance"] * 0.30 + scores["delivery"] * 0.20
+    )
+    if result.get("overall_score") != expected_overall:
+        return False, "overall_score does not match Thesis Defense weighting"
+
+    dimensions_info = result.get("dimensions_info")
+    if not isinstance(dimensions_info, dict):
+        return False, "dimensions_info is missing"
+    for dim in _THESIS_DIMENSIONS:
+        detail = dimensions_info.get(dim)
+        if not isinstance(detail, dict) or not isinstance(detail.get("subscores"), dict):
+            return False, f"missing subscores for {dim}"
+        subscores = detail["subscores"]
+        for key, _, maximum in _THESIS_SCORE_COMPONENTS[dim]:
+            value = subscores.get(key)
+            if not isinstance(value, int) or not 0 <= value <= maximum:
+                return False, f"invalid {dim} subscore: {key}"
+        if dim == "delivery":
+            non_verbal = subscores.get("non_verbal")
+            if not isinstance(non_verbal, dict) or non_verbal.get("status") != "not_assessed" or non_verbal.get("score") is not None:
+                return False, "delivery must mark non_verbal as not_assessed without video"
+        if scores[dim] != _thesis_dimension_score(dim, subscores):
+            return False, f"{dim} score does not match its rubric subscores"
+        if not isinstance(detail.get("score_rationale"), str) or not detail["score_rationale"].strip():
+            return False, f"missing score rationale for {dim}"
+
+    good = result.get("what_i_did_well")
+    improvements = result.get("areas_for_improvement")
+    if not isinstance(good, list) or not isinstance(improvements, list):
+        return False, "feedback arrays are missing"
+
+    valid_labels = set(_THESIS_LABELS.values())
+    transcript_text = _thesis_normalize_quote(" ".join(
+        segment.get("text", "") for segment in transcript_segments
+    ))
+    seen_quotes = []
+    evidence_windows = []
+    for kind, items in (("strength", good), ("improvement", improvements)):
+        for item in items:
+            if not isinstance(item, dict):
+                return False, f"{kind} item is not an object"
+            if item.get("dimension") not in valid_labels:
+                return False, f"invalid {kind} dimension"
+            if item.get("transcript_section") not in _THESIS_SECTIONS:
+                return False, f"invalid transcript section in {kind}"
+            quote = _thesis_normalize_quote(item.get("evidence_quote"))
+            if len(quote.split()) < 3 or quote not in transcript_text:
+                return False, f"{kind} evidence_quote is not a transcript substring"
+            if any(_thesis_quotes_substantially_overlap(quote, prior) for prior in seen_quotes):
+                return False, "an evidence quote or clause was reused across feedback items"
+            seen_quotes.append(quote)
+            if not isinstance(item.get("timestamp_start"), (int, float)) or not isinstance(item.get("timestamp_end"), (int, float)):
+                return False, f"missing numeric timestamps in {kind}"
+            start = float(item["timestamp_start"])
+            end = float(item["timestamp_end"])
+            if end <= start:
+                return False, f"invalid evidence time range in {kind}"
+            for prior_start, prior_end in evidence_windows:
+                overlap = max(0.0, min(end, prior_end) - max(start, prior_start))
+                if overlap / min(end - start, prior_end - prior_start) >= 0.60:
+                    return False, "feedback cards reuse the same evidence time window"
+            evidence_windows.append((start, end))
+            if kind == "improvement":
+                example = item.get("say_this_instead")
+                if example is not None and len(str(example).split()) > 24:
+                    return False, "say_this_instead exceeds 24 words"
+
+    # A multi-card report should span the rehearsal rather than repeatedly mine
+    # one long slide transcript. Short rehearsals may remain partial, but still
+    # need at least two distinct temporal regions once four cards are shown.
+    if len(evidence_windows) >= 4 and duration_seconds > 0:
+        occupied_quarters = {
+            min(3, int((((start + end) / 2) / duration_seconds) * 4))
+            for start, end in evidence_windows
+        }
+        minimum_regions = 3 if len(evidence_windows) >= 6 else 2
+        if len(occupied_quarters) < minimum_regions:
+            return False, "feedback evidence is not distributed across the presentation"
+
+    # Only require the full 4 x 2 distribution for a four-minute, sufficiently
+    # substantial presentation. Short rehearsals must remain honestly partial.
+    sections_present = {segment.get("section") for segment in transcript_segments}
+    if (status == "complete" and total_words >= _THESIS_FULL_MIN_WORDS
+            and duration_seconds >= _THESIS_FULL_MIN_SECONDS and len(sections_present) == 4):
+        if len(good) < 8 or not 8 <= len(improvements) <= 12:
+            return False, "complete long presentation has invalid feedback quantity"
+        for label in valid_labels:
+            if sum(item.get("dimension") == label for item in good) < 2:
+                return False, f"fewer than two strengths for {label}"
+            improvement_count = sum(item.get("dimension") == label for item in improvements)
+            if not 2 <= improvement_count <= 3:
+                return False, f"invalid improvement count for {label}"
+
+    full_text = json.dumps(result, ensure_ascii=False).lower()
+    for phrase in _THESIS_LEGACY_PHRASES:
+        if phrase.lower() in full_text:
+            return False, f"legacy contamination: {phrase}"
+    return True, None
+
+
+def _seconds_label(value):
+    value = max(0, int(round(float(value or 0))))
+    return f"{value // 60}:{value % 60:02d}"
+
+
+def _normalize_thesis_pq_result(result, transcript_segments):
+    """Map the Thesis schema into the existing four-pillar report card contract."""
+    if result.get("analysis_status") == "unavailable":
+        return _thesis_pq_unavailable(result.get("coverage_warning") or "llm_unavailable")
+
+    scores = {dim: int(result["radar_scores"][dim]) for dim in _THESIS_DIMENSIONS}
+    dimensions_info = result.get("dimensions_info") or {}
+    result["scores"] = scores
+    result["dimensions_info"] = {
+        dim: {
+            "explanation": (dimensions_info.get(dim) or {}).get("score_rationale") or "",
+            "calculation": _thesis_score_calculation(
+                dim, (dimensions_info.get(dim) or {}).get("subscores") or {}
+            ),
+        }
+        for dim in _THESIS_DIMENSIONS
+    }
+
+    rich_good = []
+    for item in result.get("what_i_did_well") or []:
+        rich_good.append({
+            "pillar": (item.get("dimension") or "").lower(),
+            "title": item.get("title") or "",
+            "evidence": [{
+                "timestamp": f"{_seconds_label(item.get('timestamp_start'))}–{_seconds_label(item.get('timestamp_end'))}",
+                "quote": item.get("evidence_quote") or "",
+            }],
+            "why_it_works": item.get("analysis") or "",
+        })
+    result["what_i_did_well_rich"] = rich_good
+    result["what_i_did_good"] = [
+        f"[{item['pillar'].title()}] {item['title']}: {item['why_it_works']}"
+        for item in rich_good
+    ]
+
+    normalized_areas = []
+    for item in result.get("areas_for_improvement") or []:
+        dimension = item.get("dimension") or ""
+        normalized_areas.append({
+            "dimension": dimension,
+            "issue": f"[{dimension}] {item.get('title') or ''}".strip(),
+            "example": item.get("evidence_quote") or "",
+            "how_to_fix": item.get("actionable_next_step") or "",
+            "title": item.get("title") or "",
+            "priority": item.get("priority") or "medium",
+            "listener_impact": item.get("impact") or "",
+            "evidence_rich": [{
+                "timestamp": f"{_seconds_label(item.get('timestamp_start'))}–{_seconds_label(item.get('timestamp_end'))}",
+                "quote": item.get("evidence_quote") or "",
+            }],
+            "spoken_example": item.get("say_this_instead") or "",
+        })
+    result["areas_for_improvement"] = normalized_areas
+    result["analysis_unavailable"] = False
+    result["unavailable_reason"] = None
+    result["coverage"] = {
+        "coverage_warning": bool(result.get("coverage_warning")) or result.get("analysis_status") == "insufficient_evidence",
+        "coverage_note": result.get("coverage_warning"),
+    }
+    result["pq_overall"] = {
+        "score": result.get("overall_score"),
+        "score_status": "assessed" if result.get("analysis_status") == "complete" else "partial",
+        "summary": "",
+        "top_next_steps": result.get("next_actions") or [],
+    }
+    # The browser may append real microphone-derived pitch samples at report-save
+    # time. This evaluator must never fabricate a chart from score or WPM.
+    result["pitch_data"] = []
+    result["jaw_dropping_moment"] = False
+    result["filler_log"] = []
+    result.setdefault("not_assessed", [{
+        "item": "non_verbal_delivery",
+        "reason": "No video evidence was supplied.",
+        "required_input": "Video recording",
+    }])
+    return result
+
+
+def _run_thesis_defense_presentation_quality(slides, narration_entries, audience,
+                                             total_words, wpm_estimate,
+                                             filler_matches, total_time_seconds):
+    """Run the Thesis Defense PQ branch on presentation narration only."""
+    if total_words < 5:
+        return _thesis_pq_unavailable("presentation_not_evaluable")
+    if not AI_ENABLED:
+        return _thesis_pq_unavailable("ai_disabled")
+
+    clean_entries = _dedupe_cross_slide_transcript_carryover(narration_entries)
+    clean_words = len(" ".join((entry.get("text") or "") for entry in clean_entries).split())
+    if clean_words < 5:
+        return _thesis_pq_unavailable("presentation_not_evaluable")
+
+    transcript_segments = []
+    elapsed = 0.0
+    for entry in clean_entries:
+        text = (entry.get("text") or "").strip()
+        if not text:
+            continue
+        word_count = len(text.split())
+        duration = (
+            max(5.0, round((word_count / clean_words) * total_time_seconds, 1))
+            if total_time_seconds > 30 else max(5.0, round(word_count * 60 / 135, 1))
+        )
+        transcript_segments.append({
+            "timestamp_start": round(elapsed, 1),
+            "timestamp_end": round(elapsed + duration, 1),
+            "slide_number": entry.get("page", 1),
+            "text": text,
+        })
+        elapsed += duration
+    for index, segment in enumerate(transcript_segments):
+        segment["section"] = _thesis_segment_section(index, len(transcript_segments))
+
+    slide_context = [
+        {"slide_number": s.get("page", 1), "title": s.get("title", ""), "content": s.get("content", "")}
+        for s in (slides or [])
+    ]
+    payload = {
+        "task": "Evaluate only the Thesis Defense presentation phase using the supplied rubric.",
+        "session_metadata": {
+            "scenario": "Thesis Defense",
+            "audience": audience or "thesis examination committee",
+            "video_available": False,
+            "presentation_start_seconds": 0,
+            "presentation_end_seconds": round(elapsed, 1),
+        },
+        "available_auxiliary_signals": {
+            "total_spoken_words": clean_words,
+            "presentation_duration_seconds": round(elapsed, 1),
+            "wpm": wpm_estimate or None,
+            "filler_events": [{"word": word} for word in filler_matches[:30]],
+        },
+        "feedback_quantity_policy": (
+            "This is a short diagnostic rehearsal. Set analysis_status to "
+            "insufficient_evidence and return only distinct, supportable feedback "
+            "items; do not try to fill an 8-12-card target."
+            if elapsed < _THESIS_FULL_MIN_SECONDS or clean_words < _THESIS_FULL_MIN_WORDS else
+            "This is a sufficiently long presentation. Apply the full evidence-based "
+            "feedback quantity rules."
+        ),
+        "slide_thesis_context_background_only": slide_context,
+        "presenter_transcript_presentation_phase_only": transcript_segments,
+    }
+
+    def call_llm(messages):
+        response = _ai_client.chat.completions.create(
+            model=EVAL_MODEL,
+            max_tokens=32768,
+            messages=messages,
+            extra_body={"thinking": {"budget_tokens": 0}},
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        try:
+            return raw, json.loads(raw)
+        except json.JSONDecodeError:
+            repaired = _repair_json(raw, return_objects=True)
+            if isinstance(repaired, dict):
+                return raw, repaired
+            raise
+
+    messages = [
+        {"role": "system", "content": THESIS_DEFENSE_PQ_SYSTEM_PROMPT},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    is_complete_rehearsal = (
+        elapsed >= _THESIS_FULL_MIN_SECONDS
+        and clean_words >= _THESIS_FULL_MIN_WORDS
+        and len({segment.get("section") for segment in transcript_segments}) == 4
+    )
+    try:
+        attempt_messages = messages
+        for attempt in range(3):
+            raw, result = call_llm(attempt_messages)
+            result = _thesis_snap_evidence_quotes(result, transcript_segments)
+            result = _thesis_annotate_evidence_timing(result, transcript_segments)
+            ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
+            if ok:
+                return _normalize_thesis_pq_result(result, transcript_segments)
+            app.logger.warning(
+                "[THESIS PQ] Validation attempt %s/3 failed: %s", attempt + 1, error
+            )
+            if attempt < 2:
+                attempt_messages = attempt_messages + [
+                    {"role": "assistant", "content": raw},
+                    {"role": "user", "content": _thesis_validation_repair_instruction(
+                        error, is_complete_rehearsal
+                    )},
+                ]
+        app.logger.error("[THESIS PQ] All validation attempts failed: %s", error)
+        return _thesis_pq_unavailable(f"validation_failed: {error}")
+    except Exception as exc:
+        app.logger.exception("[THESIS PQ] %s", type(exc).__name__)
+        return _thesis_pq_unavailable(f"llm_error: {type(exc).__name__}")
+
+
 # GEMINI: 4-PILLAR EVALUATION ENGINE (Step 8)
 # ─────────────────────────────────────────────
 def run_pillar_evaluation(slides, answers, config, challenge_seed,
@@ -4330,6 +5091,21 @@ def run_pillar_evaluation(slides, answers, config, challenge_seed,
     filler_matches  = re.findall(FILLER_RE, all_narration_text.lower())
     filler_count    = len(filler_matches)
     filler_density  = round(filler_count / max(total_words, 1) * 100, 1)
+
+    # Thesis Defense has a dedicated, evidence-first presentation rubric. It is
+    # intentionally called before the legacy TED preprocessing below, so Q&A,
+    # slide-overlap checks, fixed WPM ranges and TED heuristics cannot leak into
+    # this scenario.
+    if scenario == "Thesis Defense":
+        return _run_thesis_defense_presentation_quality(
+            slides=slides,
+            narration_entries=narration_entries,
+            audience=audience,
+            total_words=total_words,
+            wpm_estimate=wpm_estimate,
+            filler_matches=filler_matches,
+            total_time_seconds=total_time_seconds,
+        )
 
     # ── TED Talk Like TED: Rule of Three detection ─────────────────────────────
     # Check opening (~first 120 words) for explicit 3-point framing
@@ -6087,6 +6863,7 @@ def api_finish_presentation():
     total_time_seconds = int(req_data.get("total_time_seconds", 0) or 0)
     scene_slug         = req_data.get("scene",    None)                  # 'thesis_defense' | 'case_pitch' | 'class_presentation'
     pronunciation_data = req_data.get("pronunciation_data", {})          # {str(page): diagnostic_dict}
+    raw_pitch_samples  = req_data.get("pitch_samples", [])
 
     # Merge frontend transcripts into session answers (fill gaps from voice/type)
     if fe_transcripts:
@@ -6151,6 +6928,16 @@ def api_finish_presentation():
         pillar_eval          = _fut_pillar.result()
         cq_eval              = _fut_cq.result()
         content_quality_eval = _fut_cqual.result()
+
+    # Pitch is displayed only when the browser supplied real microphone-derived
+    # samples. Never derive it from WPM or a presentation score.
+    if scenario == "Thesis Defense":
+        pitch_samples = []
+        if isinstance(raw_pitch_samples, list):
+            for value in raw_pitch_samples[:120]:
+                if isinstance(value, (int, float)) and 65 <= value <= 400:
+                    pitch_samples.append(round(float(value), 1))
+        pillar_eval["pitch_data"] = pitch_samples
 
     app.logger.info(
         f"[Eval] All done | "

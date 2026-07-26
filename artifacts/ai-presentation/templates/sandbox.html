@@ -301,7 +301,7 @@
                   rows="7"></textarea>
 
         <!-- Voice recording button -->
-        <button onclick="toggleNarrationVoice()" id="narrationVoiceBtn"
+        <button onclick="requestNarrationRecording()" id="narrationVoiceBtn"
                 class="w-full rounded-xl text-xs py-2.5 transition-all flex items-center justify-center gap-2 border font-medium"
                 style="color:#16A34A;background:rgba(217,72,31,0.06);border-color:rgba(217,72,31,0.2)">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -602,6 +602,27 @@
   </div>
 </div><!-- /surveyOverlay -->
 
+<!-- Recording guidance: shown before microphone permission / first narration -->
+<div id="recordingGuidanceModal" class="hidden fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm px-4 items-center justify-center">
+  <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 p-6">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <p class="text-xs font-bold tracking-widest uppercase text-emerald-700 mb-1">演练提示</p>
+        <h2 class="text-xl font-bold text-slate-900">先完成一段完整陈述，再获取完整报告</h2>
+      </div>
+      <button type="button" onclick="closeRecordingGuidance()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none" aria-label="关闭">×</button>
+    </div>
+    <p id="recordingGuidanceText" class="text-sm leading-relaxed text-slate-600"></p>
+    <div class="mt-5 rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-xs leading-relaxed text-emerald-800">
+      较短的练习也会生成反馈，但只会展示有充分原话证据的项目；不会为了凑数量而给出不可靠结论。
+    </div>
+    <div class="mt-5 flex justify-end gap-3">
+      <button type="button" onclick="closeRecordingGuidance()" class="px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100">稍后再说</button>
+      <button type="button" onclick="confirmNarrationRecording()" class="px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700">开始录音</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -644,6 +665,10 @@
   let _pronunciationCache = {};   // page (int) → diagnostic dict from /api/speechace-score
   let _speechacePending   = {};   // page (int) → Promise
   let _currentStrategy    = '';   // answering strategy for the active Q&A question
+  let _pitchSamples = [];
+  let _pitchAudioContext = null;
+  let _pitchAnalyser = null;
+  let _pitchSampler = null;
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   let timerSeconds  = 0;
@@ -1065,6 +1090,7 @@
     });
 
     _stopAllRecording();
+    _stopPitchSampling();
     // Await any in-flight Speechace pronunciation uploads (max 10s)
     const _pendingCount = Object.keys(_speechacePending).length;
     if (_pendingCount > 0) {
@@ -1099,6 +1125,7 @@
         slide_logic_tree:         slides,
         total_time_seconds:       timerSeconds,
         pronunciation_data:       _pronunciationCache,
+        pitch_samples:            _pitchSamples,
         scene: ({
           'Thesis Defense':       'thesis_defense',
           'MBA Case Pitch':       'case_pitch',
@@ -1287,7 +1314,60 @@
       : 'text-xs font-mono text-gray-600';
   }
 
-  // ── MediaRecorder: runs parallel to Web Speech API for pronunciation scoring ─
+  // ── MediaRecorder: pronunciation scoring + real pitch samples ──────────────
+  function _estimatePitchHz(samples, sampleRate) {
+    let energy = 0;
+    for (let i = 0; i < samples.length; i++) energy += samples[i] * samples[i];
+    if (Math.sqrt(energy / samples.length) < 0.012) return 0;
+    const minLag = Math.floor(sampleRate / 300);
+    const maxLag = Math.min(Math.floor(sampleRate / 75), Math.floor(samples.length / 2));
+    let bestLag = 0, bestCorrelation = 0;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let correlation = 0;
+      for (let i = 0; i < samples.length - lag; i++) correlation += samples[i] * samples[i + lag];
+      if (correlation > bestCorrelation) { bestCorrelation = correlation; bestLag = lag; }
+    }
+    if (!bestLag) return 0;
+    let normA = 0, normB = 0;
+    for (let i = 0; i < samples.length - bestLag; i++) {
+      normA += samples[i] * samples[i]; normB += samples[i + bestLag] * samples[i + bestLag];
+    }
+    if (bestCorrelation / Math.sqrt(normA * normB) < 0.55) return 0;
+    const pitch = sampleRate / bestLag;
+    return pitch >= 65 && pitch <= 400 ? pitch : 0;
+  }
+
+  function _startPitchSampling(stream) {
+    if (!window.AudioContext || _pitchAudioContext) return;
+    try {
+      _pitchAudioContext = new AudioContext();
+      const source = _pitchAudioContext.createMediaStreamSource(stream);
+      _pitchAnalyser = _pitchAudioContext.createAnalyser();
+      _pitchAnalyser.fftSize = 2048;
+      source.connect(_pitchAnalyser);
+      const samples = new Float32Array(_pitchAnalyser.fftSize);
+      _pitchAudioContext.resume().catch(() => {});
+      _pitchSampler = setInterval(() => {
+        if (!_pitchAnalyser || !_pitchAudioContext) return;
+        _pitchAnalyser.getFloatTimeDomainData(samples);
+        const pitch = _estimatePitchHz(samples, _pitchAudioContext.sampleRate);
+        if (pitch) _pitchSamples.push(Math.round(pitch * 10) / 10);
+      }, 1000);
+    } catch (e) {
+      console.warn('[AudioEngine] Pitch sampling unavailable:', e);
+      _stopPitchSampling();
+    }
+  }
+
+  function _stopPitchSampling() {
+    if (_pitchSampler) clearInterval(_pitchSampler);
+    _pitchSampler = null;
+    const context = _pitchAudioContext;
+    _pitchAudioContext = null;
+    _pitchAnalyser = null;
+    if (context) context.close().catch(() => {});
+  }
+
   function _startMediaRecorder() {
     if (!navigator.mediaDevices || !window.MediaRecorder) return;
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -1298,6 +1378,7 @@
       _mediaRecorder.ondataavailable = e => {
         if (e.data && e.data.size > 0) _audioChunks.push(e.data);
       };
+      _startPitchSampling(stream);
       _mediaRecorder.start(1000);
     }).catch(e => console.warn('[AudioEngine] MediaRecorder unavailable:', e));
   }
@@ -1305,7 +1386,7 @@
   function _stopMediaRecorder() {
     return new Promise(resolve => {
       if (!_mediaRecorder || _mediaRecorder.state === 'inactive') {
-        _audioChunks = []; _mediaRecorder = null; resolve(null); return;
+        _audioChunks = []; _mediaRecorder = null; _stopPitchSampling(); resolve(null); return;
       }
       const mr = _mediaRecorder;
       _mediaRecorder = null;
@@ -1314,6 +1395,7 @@
           ? new Blob(_audioChunks, { type: mr.mimeType || 'audio/webm' })
           : null;
         _audioChunks = [];
+        _stopPitchSampling();
         try { mr.stream.getTracks().forEach(t => t.stop()); } catch(e) {}
         resolve(blob);
       };
@@ -1440,6 +1522,36 @@
     _startNarrationRec();
   }
 
+  function _recordingGuidanceCopy() {
+    if (scenarioType === 'Thesis Defense') {
+      return '答辩 Presentation Quality 的完整四维报告建议连续陈述至少 4 分钟，并覆盖研究动机、研究问题、方法、主要发现和贡献/意义。';
+    }
+    if (scenarioType === 'Class Presentation' || scenarioType === 'Academic Presentation') {
+      return 'Class Presentation 的完整四维报告建议连续陈述至少 2 分钟，并覆盖开场、主体论证和结尾。';
+    }
+    return '为获得更完整的演讲分析，建议连续陈述至少 2 分钟，并覆盖开场、主体和结尾。';
+  }
+
+  function requestNarrationRecording() {
+    if (audioMode === 'narration') { _stopAllRecording(); return; }
+    if (audioMode === 'qa' || audioMode === 'acq') {
+      showToast('请先完成当前问答，再录制陈述内容。'); return;
+    }
+    document.getElementById('recordingGuidanceText').textContent = _recordingGuidanceCopy();
+    const modal = document.getElementById('recordingGuidanceModal');
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+  }
+
+  function closeRecordingGuidance() {
+    const modal = document.getElementById('recordingGuidanceModal');
+    modal.classList.add('hidden'); modal.classList.remove('flex');
+  }
+
+  function confirmNarrationRecording() {
+    closeRecordingGuidance();
+    toggleNarrationVoice();
+  }
+
   function audioSuspendForQa(wasActive = false) {
     // Q&A starts — always stop narration recording; never auto-resume after Q&A.
     _narrationWasActiveBeforeQA = false;
@@ -1500,18 +1612,5 @@
 
   // Init sidebar highlight on load
   updateSidebar(state.current_page);
-
-  // ── Auto-start recording on first user interaction ────────────────────────
-  // Arms MediaRecorder (pronunciation scoring) AND SpeechRecognition (live
-  // transcript) together. Recording stays on until a Q&A session begins.
-  (function _armMic() {
-    function _tryArm() {
-      if (!_mediaRecorder) _startMediaRecorder();
-      // Auto-start narration voice transcription
-      if (audioMode === 'idle') _startNarrationRec();
-    }
-    document.addEventListener('click',   _tryArm, { once: true });
-    document.addEventListener('keydown', _tryArm, { once: true });
-  })();
 </script>
 {% endblock %}
