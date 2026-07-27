@@ -80,8 +80,10 @@ def _question(id_, question_type, question):
     }
 
 
-# Two reviewed neutral templates for each question type.  The runtime may make
-# one more specific only when that detail is visible in the supplied slides.
+# Reviewed neutral templates derived from common thesis-defense questions. The
+# runtime may make one more specific only when that detail is visible in the
+# supplied slides.  Each item retains a stable communication question type so
+# the evaluator can select the corresponding answering strategy reliably.
 DEFENSE_QUESTION_BANK = [
     _question("anchor_td_concept_01", "definition_concept", "You use a key term centrally in your thesis. What does it mean in this study, and why is that definition important to your analysis?"),
     _question("anchor_td_concept_02", "definition_concept", "Could you define one core concept in your thesis and illustrate how you apply it in the study?"),
@@ -97,6 +99,22 @@ DEFENSE_QUESTION_BANK = [
     _question("anchor_td_result_02", "result_interpretation", "Was there a result that surprised you? How do you explain it without overstating the evidence?"),
     _question("anchor_td_followup_01", "multipart_followup", "You have explained one part of your argument. Could you now clarify a second part and explain how it changes the implication of your finding?"),
     _question("anchor_td_followup_02", "multipart_followup", "Could you address both the practical implication of your finding and the question it leaves for future research?"),
+    # Research motivation, significance, scope, and thesis architecture.
+    _question("anchor_td_motivation_01", "contribution_originality", "Why did you choose this research topic, and what research problem made it worth investigating?"),
+    _question("anchor_td_significance_01", "contribution_originality", "What is the academic or practical significance of this study, and who could use its contribution?"),
+    _question("anchor_td_framework_01", "multipart_followup", "Could you briefly outline the overall framework of your thesis and explain how the main sections support your central argument?"),
+    _question("anchor_td_logic_01", "multipart_followup", "How are the main sections of your thesis logically connected, and why is that sequence necessary for your conclusion?"),
+    # Literature, theory, and evidence.
+    _question("anchor_td_review_01", "literature_comparison", "How did you select and organise the literature review, and how did it help you identify the gap addressed by this thesis?"),
+    _question("anchor_td_views_01", "literature_comparison", "Where do important scholars disagree on this topic, and how does your thesis position itself in relation to those views?"),
+    _question("anchor_td_theory_01", "definition_concept", "What theoretical foundation guides your analysis, and how does it shape the way you interpret the evidence?"),
+    _question("anchor_td_evidence_01", "result_interpretation", "What is the main evidential basis for your central argument, and how did you decide that it supports your interpretation?"),
+    # Design, method, and boundaries.
+    _question("anchor_td_method_03", "method_choice", "Could you explain the main stages of your research method and why this sequence was appropriate for the study?"),
+    _question("anchor_td_scope_01", "limitation_challenge", "Which closely related issue did you deliberately leave outside the scope of this thesis, and why was that boundary necessary?"),
+    _question("anchor_td_gap_01", "limitation_challenge", "What remains insufficiently explored after this study, and what would be the most useful next step for future research?"),
+    _question("anchor_td_visual_01", "method_choice", "How did you decide which figures, tables, or other visual evidence to include, and how do they support rather than merely illustrate your argument?"),
+    _question("anchor_td_innovation_01", "contribution_originality", "What is innovative about the way this thesis frames the problem, uses evidence, or reaches its conclusion?"),
 ]
 
 DEFENSE_STRATEGY_BY_ID = {q["id"]: q["answering_strategy"] for q in DEFENSE_QUESTION_BANK}

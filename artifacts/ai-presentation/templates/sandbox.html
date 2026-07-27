@@ -789,13 +789,12 @@
     const lines = [];
     if (strategy.title_zh) lines.push(strategy.title_zh);
     if (strategy.purpose_zh) lines.push(strategy.purpose_zh);
-    if (Array.isArray(strategy.steps_zh) && strategy.steps_zh.length) {
-      lines.push('步骤：' + strategy.steps_zh.map((step, i) => `${i + 1}. ${step}`).join(' '));
-    }
+    // Detailed steps and a tailored English example are deliberately withheld
+    // until after the answer, where the CQ report can connect them to the
+    // candidate's actual response rather than encouraging script reading.
     if (Array.isArray(strategy.phrase_starters_en) && strategy.phrase_starters_en.length) {
       lines.push('可用句式：' + strategy.phrase_starters_en.join(' / '));
     }
-    if (strategy.answer_example_en) lines.push('英文示例：' + strategy.answer_example_en);
     return lines.join('\n');
   }
 

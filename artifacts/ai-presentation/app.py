@@ -989,16 +989,20 @@ def _build_thesis_context(slides):
 
 
 def _strategy_display_text(strategy):
-    """Compact, user-visible strategy text for the rehearsal popover."""
+    """Compact, user-visible strategy text for the rehearsal popover.
+
+    The detailed steps and tailored English model answer belong in the
+    post-session Communication Quality coaching, after we have the
+    candidate's actual answer.  Showing them before an answer would turn the
+    rehearsal into a script-reading exercise.
+    """
     if isinstance(strategy, str):
         return strategy
     if not isinstance(strategy, dict):
         return ""
-    steps = "；".join(strategy.get("steps_zh") or [])
     starters = " / ".join(strategy.get("phrase_starters_en") or [])
     return "\n".join(part for part in (
         strategy.get("title_zh", ""), strategy.get("purpose_zh", ""),
-        f"步骤：{steps}" if steps else "",
         f"可用句式：{starters}" if starters else "",
     ) if part)
 
@@ -1021,7 +1025,7 @@ def _generate_dynamic_defense_question(thesis_context, used_types, ordinal):
             model=TEXT_MODEL, max_tokens=240, messages=[{"role": "user", "content": prompt}],
         )
         raw = (response.choices[0].message.content or "").strip()
-        raw = re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw)
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
         generated = json.loads(raw)
         question_type = generated.get("question_type")
         text = (generated.get("question_text") or "").strip()
@@ -1039,10 +1043,15 @@ def _generate_dynamic_defense_question(thesis_context, used_types, ordinal):
 
 
 def build_thesis_defense_qa_bank(slides, difficulty):
-    """Build the B-model Q&A sequence: Easy 1 free; Medium free+anchor; Hard 2 free+anchor."""
+    """Build the Thesis Defense Q&A sequence shown in the difficulty UI.
+
+    Easy / Medium / Hard must respectively deliver 3 / 5 / 8 questions.  We
+    prefer varied question types first, then safely reuse a *type* (never an
+    identical question) when Hard needs an eighth item.
+    """
     thesis_context = _build_thesis_context(slides)
-    count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
-    desired_free = 2 if difficulty == "Hard" else 1
+    count = {"Easy": 3, "Medium": 5, "Hard": 8}.get(difficulty, 5)
+    desired_free = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
     used_types, questions = set(), []
     for ordinal in range(1, desired_free + 1):
         item = _generate_dynamic_defense_question(thesis_context, used_types, ordinal)
@@ -1052,10 +1061,14 @@ def build_thesis_defense_qa_bank(slides, difficulty):
 
     # AI failure is honest about the source: we use a reviewed anchor rather
     # than pretending that a context-specific free question was generated.
-    pool = [dict(q) for q in DEFENSE_QUESTION_BANK if q["question_type"] not in used_types]
+    pool = [dict(q) for q in DEFENSE_QUESTION_BANK]
     random.shuffle(pool)
     while len(questions) < count and pool:
-        item = pool.pop(0)
+        # Cover distinct communication challenges before taking another item
+        # from a category.  This is necessary for the eight-question Hard
+        # session because the rubric deliberately has seven question types.
+        position = next((i for i, q in enumerate(pool) if q["question_type"] not in used_types), 0)
+        item = pool.pop(position)
         item["answering_strategy"] = dict(item["answering_strategy"])
         questions.append(item)
         used_types.add(item["question_type"])
@@ -2632,9 +2645,24 @@ def _thesis_cq_unavailable(message):
 
 
 def _thesis_cq_exact_quote(value, answer):
-    """Accept quotes only when they are a non-empty exact contiguous answer substring."""
+    """Return the source-verbatim quote when a model quote is safely mappable.
+
+    The model sometimes changes line breaks or spacing while copying a valid
+    quote.  We accept that superficial transport difference only when it maps
+    back to one contiguous span of the candidate's answer, and always return
+    the original source span for display.  A paraphrase still fails.
+    """
     value = (value or "").strip()
-    return value if value and value in (answer or "") else None
+    answer = answer or ""
+    if not value:
+        return None
+    if value in answer:
+        return value
+    tokens = value.split()
+    if not tokens:
+        return None
+    match = re.search(r"\s+".join(re.escape(token) for token in tokens), answer, flags=re.IGNORECASE)
+    return match.group(0) if match else None
 
 
 def _thesis_cq_valid_timestamp_range(start, end, unit):
@@ -2699,16 +2727,17 @@ def _thesis_cq_complete_priorities(priorities, scores, coverage):
 
 
 def _thesis_cq_strategy_for_unit(candidate, unit):
-    """Keep the routed strategy ID immutable while allowing Chinese coaching to adapt."""
-    if not isinstance(candidate, dict):
-        return None
-    expected = unit["answering_strategy"]
-    if candidate.get("strategy_id") != expected.get("strategy_id"):
+    """Return the server-routed strategy, never a model-rewritten variant.
+
+    The question type is already selected by the application.  Allowing an
+    evaluator to rewrite this object caused harmless schema drift to suppress
+    otherwise evidence-backed reports.  Dynamic, answer-specific English
+    coaching is carried by ``say_this_instead`` instead.
+    """
+    expected = unit.get("answering_strategy")
+    if not isinstance(expected, dict):
         return None
     result = dict(expected)
-    for key in ("title_zh", "purpose_zh", "steps_zh", "phrase_starters_en", "answer_example_en"):
-        if key in candidate:
-            result[key] = candidate[key]
     if not all(isinstance(result.get(key), str) and result[key].strip()
                for key in ("title_zh", "purpose_zh", "answer_example_en")):
         return None
@@ -2778,6 +2807,9 @@ def _thesis_cq_prompt(units, config, slides):
             "answer examples, and say_this_instead. Never mention TED, WPM, Carnegie, Yes-Response, slide ideal answers, or generic praise. "
             "Every strength/improvement quote must be a contiguous exact substring of that question's candidate answer. "
             "Question text must be copied exactly. The strategy object must be retained for its original question type. "
+            "For EVERY question provide at least one concrete area_for_improvement. Its say_this_instead must be a complete, "
+            "specific English answer of 25-90 words, tailored to that exact examiner question and the candidate's actual answer; "
+            "do not use brackets, placeholders, or a generic template. "
             "If evidence for a session dimension is thin, mark limited_evidence. Return JSON only."
         ),
         "session_metadata": {
@@ -2800,7 +2832,7 @@ def _thesis_cq_prompt(units, config, slides):
                 "answer_timestamp_start": 0, "answer_timestamp_end": 0,
                 "dimensions_assessed": ["one or two dimension keys"],
                 "what_i_did_well": [{"dimension": "key", "criterion_zh": "Chinese", "title_zh": "Chinese", "presenter_answer_quote": "exact answer substring", "timestamp_start": 0, "timestamp_end": 0, "analysis_zh": "Chinese"}],
-                "areas_for_improvement": [{"dimension": "key", "criterion_zh": "Chinese", "priority": "low medium or high", "title_zh": "Chinese", "presenter_answer_quote": "exact answer substring", "timestamp_start": 0, "timestamp_end": 0, "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "English under 25 words or null"}],
+                "areas_for_improvement": [{"dimension": "key", "criterion_zh": "Chinese", "priority": "low medium or high", "title_zh": "Chinese", "presenter_answer_quote": "exact answer substring", "timestamp_start": 0, "timestamp_end": 0, "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "required tailored English answer, 25-90 words"}],
                 "answering_strategy": "copy the input object for this question",
             }],
             "session_strengths": [{"dimension": "key", "question_id": "id", "title_zh": "Chinese", "presenter_answer_quote": "exact answer substring", "timestamp_start": 0, "timestamp_end": 0, "analysis_zh": "Chinese"}],
@@ -2810,7 +2842,13 @@ def _thesis_cq_prompt(units, config, slides):
 
 
 def _normalize_thesis_cq_result(result, units):
-    """Validate a model response before it reaches the report. Invalid means unavailable."""
+    """Validate model evidence while repairing safe transport-only omissions.
+
+    We never invent a quote, score, or coaching claim.  However, the server
+    already knows the question text, full answer, routed strategy and answer
+    turn boundaries.  Those deterministic fields are reattached here instead
+    of letting a model's copy-formatting mistake discard a whole report.
+    """
     if not isinstance(result, dict) or result.get("analysis_status") != "complete":
         return None
     raw_scores = result.get("communication_scores")
@@ -2842,13 +2880,19 @@ def _normalize_thesis_cq_result(result, units):
         if not isinstance(item, dict) or item.get("question_id") not in unit_by_id:
             return None
         unit = unit_by_id[item["question_id"]]
-        if item["question_id"] in seen or item.get("question_type") != unit["question_type"]:
+        if item["question_id"] in seen:
             return None
         seen.add(item["question_id"])
-        if item.get("examiner_question_quote") != unit["examiner_question"]:
-            return None
-        if item.get("presenter_answer_quote") != unit["candidate_answer"]:
-            return None
+        # These full-text fields are echoes of trusted session data, not
+        # evaluator evidence.  Canonicalise them instead of rejecting harmless
+        # quote-mark, whitespace, or strategy-object differences.
+        item["question_type"] = unit["question_type"]
+        item["examiner_question_quote"] = unit["examiner_question"]
+        item["presenter_answer_quote"] = unit["candidate_answer"]
+        item["question_timestamp_start"] = unit["question_timestamp_start"]
+        item["question_timestamp_end"] = unit["question_timestamp_end"]
+        item["answer_timestamp_start"] = unit["answer_timestamp_start"]
+        item["answer_timestamp_end"] = unit["answer_timestamp_end"]
         assessed = list(dict.fromkeys(item.get("dimensions_assessed") or []))
         if not 1 <= len(assessed) <= 2 or any(key not in _THESIS_CQ_DIMENSIONS for key in assessed):
             return None
@@ -2877,11 +2921,15 @@ def _normalize_thesis_cq_result(result, units):
             values = item.get(field)
             if not isinstance(values, list) or len(values) > 2:
                 return None
+            if field == "areas_for_improvement" and not values:
+                return None
             for feedback in values:
                 if not isinstance(feedback, dict) or feedback.get("dimension") not in assessed:
                     return None
-                if not _thesis_cq_exact_quote(feedback.get(quote_key), unit["candidate_answer"]):
+                source_quote = _thesis_cq_exact_quote(feedback.get(quote_key), unit["candidate_answer"])
+                if not source_quote:
                     return None
+                feedback[quote_key] = source_quote
                 if not _thesis_cq_valid_timestamp_range(feedback.get("timestamp_start"), feedback.get("timestamp_end"), unit):
                     # The quote itself is exact. When the model's word-level
                     # timing drifts outside a recorded answer turn, anchor the
@@ -2893,12 +2941,16 @@ def _normalize_thesis_cq_result(result, units):
                     return None
                 if field == "areas_for_improvement":
                     repair = feedback.get("say_this_instead")
-                    if repair is not None and (not isinstance(repair, str) or len(repair.split()) >= 25):
+                    if (not isinstance(repair, str) or not 25 <= len(repair.split()) <= 90
+                            or "[" in repair or "]" in repair):
                         return None
         normalized.append(item)
-    coverage = result.get("dimension_evidence_status") or {}
-    if any(coverage.get(key) not in {"sufficient", "limited_evidence"} for key in _THESIS_CQ_DIMENSIONS):
-        return None
+    raw_coverage = result.get("dimension_evidence_status") or {}
+    coverage = {
+        key: raw_coverage.get(key) if raw_coverage.get(key) in {"sufficient", "limited_evidence"}
+        else "limited_evidence"
+        for key in _THESIS_CQ_DIMENSIONS
+    }
     priorities = _thesis_cq_complete_priorities(
         result.get("session_priorities"), scores, coverage
     )
@@ -2907,16 +2959,21 @@ def _normalize_thesis_cq_result(result, units):
     strengths = result.get("session_strengths") or []
     if not isinstance(strengths, list) or len(strengths) > 2:
         return None
+    verified_strengths = []
     for strength in strengths:
         if not isinstance(strength, dict) or strength.get("dimension") not in _THESIS_CQ_DIMENSIONS:
-            return None
+            continue
         unit = unit_by_id.get(strength.get("question_id"))
-        if not unit or not _thesis_cq_exact_quote(strength.get("presenter_answer_quote"), unit["candidate_answer"]):
-            return None
+        source_quote = _thesis_cq_exact_quote(strength.get("presenter_answer_quote"), unit["candidate_answer"]) if unit else None
+        if not source_quote:
+            continue
+        strength["presenter_answer_quote"] = source_quote
         if not _thesis_cq_valid_timestamp_range(strength.get("timestamp_start"), strength.get("timestamp_end"), unit):
-            return None
+            strength["timestamp_start"] = unit["answer_timestamp_start"]
+            strength["timestamp_end"] = unit["answer_timestamp_end"]
         if not all(isinstance(strength.get(key), str) and strength[key].strip() for key in ("title_zh", "analysis_zh")):
-            return None
+            continue
+        verified_strengths.append(strength)
     for priority in priorities:
         if not isinstance(priority, dict) or priority.get("dimension") not in _THESIS_CQ_DIMENSIONS:
             return None
@@ -2932,8 +2989,8 @@ def _normalize_thesis_cq_result(result, units):
             _THESIS_CQ_DIMENSIONS[key][0]: scores[key] for key in _THESIS_CQ_DIMENSIONS
         }, "dim_names": [_THESIS_CQ_DIMENSIONS[key][0] for key in _THESIS_CQ_DIMENSIONS],
         "weights": [_THESIS_CQ_DIMENSIONS[key][1] for key in _THESIS_CQ_DIMENSIONS],
-        "exchange_count": len(units), "what_i_did_good": strengths,
-        "areas_for_improvement": [], "session_strengths": strengths,
+        "exchange_count": len(units), "what_i_did_good": verified_strengths,
+        "areas_for_improvement": [], "session_strengths": verified_strengths,
         "session_priorities": priorities,
         "communication_quality_report": {"overall_cq_score": overall, "per_question_analysis": normalized},
     }
@@ -7008,9 +7065,9 @@ def api_start_session():
         _scene_for_qa = "class_presentation"
         session["qa_bank"] = build_dual_track_qa(slides, audience, _scene_for_qa, difficulty)
     elif scenario == "Thesis Defense":
-        # Communication Quality's B-model: 1 / 2 / 3 deliberate exchanges,
-        # rather than a long generic quiz.  Each question has a typed strategy
-        # card that the candidate can see before answering.
+        # The selector explicitly promises 3 / 5 / 8 deliberate exchanges.
+        # Each question has a typed strategy card that the candidate can see
+        # before answering; detailed coaching appears in the report.
         session["qa_bank"] = build_thesis_defense_qa_bank(slides, difficulty)
     else:
         session["qa_bank"] = []
@@ -7095,7 +7152,7 @@ def api_check_slide():
             qa_bank = session.get("qa_bank", [])
             difficulty = config.get("difficulty", "Medium")
             if scenario == "Thesis Defense":
-                qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
+                qa_count = {"Easy": 3, "Medium": 5, "Hard": 8}.get(difficulty, 5)
             else:
                 qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
             questions = [q for q in qa_bank if isinstance(q, dict)][:qa_count]

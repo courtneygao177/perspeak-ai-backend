@@ -43,7 +43,7 @@ def valid_response():
             "answer_timestamp_start": item["answer_timestamp_start"], "answer_timestamp_end": item["answer_timestamp_end"],
             "dimensions_assessed": [dim],
             "what_i_did_well": [{"dimension": dim, "criterion_zh": "回应结构", "title_zh": "回答有清楚重点", "presenter_answer_quote": item["text"], "timestamp_start": item["answer_timestamp_start"], "timestamp_end": item["answer_timestamp_end"], "analysis_zh": "你用一句理由说明了研究选择。"}],
-            "areas_for_improvement": [{"dimension": dim, "criterion_zh": "论证更完整", "priority": "medium", "title_zh": "补充一项依据", "presenter_answer_quote": item["text"], "timestamp_start": item["answer_timestamp_start"], "timestamp_end": item["answer_timestamp_end"], "impact_zh": "补充依据能让评委更容易理解你的推理。", "actionable_next_step_zh": "练习在理由后补充一个具体研究细节。", "say_this_instead": "I chose this method because it addressed the research question directly."}],
+            "areas_for_improvement": [{"dimension": dim, "criterion_zh": "论证更完整", "priority": "medium", "title_zh": "补充一项依据", "presenter_answer_quote": item["text"], "timestamp_start": item["answer_timestamp_start"], "timestamp_end": item["answer_timestamp_end"], "impact_zh": "补充依据能让评委更容易理解你的推理。", "actionable_next_step_zh": "练习在理由后补充一个具体研究细节。", "say_this_instead": "I chose interviews because they let participants explain their experiences in detail, which directly addressed the research question while keeping the analysis focused on the study's defined participant group."}],
             "answering_strategy": {"strategy_id": item["answering_strategy"]["strategy_id"]},
         })
     return {
@@ -63,7 +63,7 @@ def valid_response():
 class TestThesisDefenseCQ(unittest.TestCase):
     def test_bank_uses_new_question_types_and_session_counts(self):
         with mock.patch.object(app_module, "AI_ENABLED", False):
-            for difficulty, expected in (("Easy", 1), ("Medium", 2), ("Hard", 3)):
+            for difficulty, expected in (("Easy", 3), ("Medium", 5), ("Hard", 8)):
                 bank = app_module.build_thesis_defense_qa_bank([], difficulty)
                 self.assertEqual(len(bank), expected)
                 self.assertTrue(all(q["question_type"] in app_module.DEFENSE_STRATEGY_BY_TYPE for q in bank))
