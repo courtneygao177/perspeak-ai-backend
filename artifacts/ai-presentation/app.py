@@ -2652,6 +2652,52 @@ def _thesis_cq_valid_timestamp_range(start, end, unit):
     return (unit_start == unit_end == 0) or (unit_start <= start <= end <= unit_end)
 
 
+def _thesis_cq_complete_priorities(priorities, scores, coverage):
+    """Keep two actionable priorities without trusting model arithmetic or omissions.
+
+    The model supplies the qualitative coaching. The server owns the weighted
+    total and can safely complete a missing second priority from the two lowest
+    scored rubric dimensions. This adds no invented quote, score, or evidence.
+    """
+    completed = []
+    used_dimensions = set()
+    for priority in priorities if isinstance(priorities, list) else []:
+        if not isinstance(priority, dict):
+            continue
+        dimension = priority.get("dimension")
+        if (dimension not in _THESIS_CQ_DIMENSIONS or dimension in used_dimensions
+                or not all(isinstance(priority.get(key), str) and priority[key].strip()
+                           for key in ("action_zh", "why_zh"))):
+            continue
+        completed.append({
+            "dimension": dimension,
+            "priority": len(completed) + 1,
+            "action_zh": priority["action_zh"].strip(),
+            "why_zh": priority["why_zh"].strip(),
+        })
+        used_dimensions.add(dimension)
+        if len(completed) == 2:
+            return completed
+
+    for dimension in sorted(_THESIS_CQ_DIMENSIONS, key=lambda key: scores[key]):
+        if dimension in used_dimensions:
+            continue
+        label = _THESIS_CQ_DIMENSIONS[dimension][0]
+        evidence_limited = coverage.get(dimension) == "limited_evidence"
+        completed.append({
+            "dimension": dimension,
+            "priority": len(completed) + 1,
+            "action_zh": f"下一轮问答围绕「{label}」练习先给出结论，再补充理由、依据或必要边界。",
+            "why_zh": (
+                "本次该维度的问答证据有限，需要通过更多完整回答继续确认。"
+                if evidence_limited else f"该维度得分为 {scores[dimension]}，是本次相对需要优先加强的环节。"
+            ),
+        })
+        if len(completed) == 2:
+            return completed
+    return completed
+
+
 def _thesis_cq_strategy_for_unit(candidate, unit):
     """Keep the routed strategy ID immutable while allowing Chinese coaching to adapt."""
     if not isinstance(candidate, dict):
@@ -2782,8 +2828,10 @@ def _normalize_thesis_cq_result(result, units):
     except (KeyError, TypeError, ValueError):
         return None
     overall = int(round(sum(scores[key] * _THESIS_CQ_DIMENSIONS[key][1] for key in scores)))
-    if result.get("overall_cq_score") != overall:
-        return None
+    # The overall score is deterministic rubric arithmetic. Preserve the five
+    # model-produced sub-scores, but calculate their weighted total on the
+    # server so a rounding slip cannot suppress an otherwise valid report.
+    result["overall_cq_score"] = overall
     unit_by_id = {unit["question_id"]: unit for unit in units}
     analysis = result.get("per_question_analysis")
     if not isinstance(analysis, list) or len(analysis) != len(units):
@@ -2832,8 +2880,10 @@ def _normalize_thesis_cq_result(result, units):
     coverage = result.get("dimension_evidence_status") or {}
     if any(coverage.get(key) not in {"sufficient", "limited_evidence"} for key in _THESIS_CQ_DIMENSIONS):
         return None
-    priorities = result.get("session_priorities") or []
-    if not isinstance(priorities, list) or len(priorities) != 2:
+    priorities = _thesis_cq_complete_priorities(
+        result.get("session_priorities"), scores, coverage
+    )
+    if len(priorities) != 2:
         return None
     strengths = result.get("session_strengths") or []
     if not isinstance(strengths, list) or len(strengths) > 2:

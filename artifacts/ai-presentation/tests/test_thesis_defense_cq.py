@@ -118,6 +118,20 @@ class TestThesisDefenseCQ(unittest.TestCase):
             output = app_module.run_communication_quality_evaluation(UNITS, {"scenario": "Thesis Defense"}, slides=[])
         self.assertTrue(output["has_data"])
 
+    def test_normalizer_reconciles_total_and_completes_one_missing_priority(self):
+        result = valid_response()
+        result["overall_cq_score"] = 99
+        result["session_priorities"] = result["session_priorities"][:1]
+
+        output = app_module._normalize_thesis_cq_result(
+            result, app_module._thesis_cq_units(UNITS)
+        )
+
+        self.assertIsNotNone(output)
+        self.assertEqual(output["cq_total"], 68)
+        self.assertEqual(len(output["session_priorities"]), 2)
+        self.assertEqual(output["session_priorities"][1]["priority"], 2)
+
     def test_empty_primary_model_response_uses_secondary_model(self):
         class FallbackClient:
             def __init__(self):
