@@ -61,6 +61,44 @@ def valid_response():
 
 
 class TestThesisDefenseCQ(unittest.TestCase):
+    def test_gpt5_uses_new_completion_token_parameter(self):
+        class CapturingClient:
+            def __init__(self):
+                self.chat = types.SimpleNamespace(completions=self)
+                self.kwargs = None
+
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                return object()
+
+        client = CapturingClient()
+        with mock.patch.object(app_module, "_ai_client", client):
+            app_module._create_chat_completion(
+                "gpt-5.6", 6000, messages=[{"role": "user", "content": "test"}],
+            )
+        self.assertEqual(client.kwargs["max_completion_tokens"], 6000)
+        self.assertNotIn("max_tokens", client.kwargs)
+
+    def test_legacy_model_keeps_max_tokens_parameter(self):
+        class CapturingClient:
+            def __init__(self):
+                self.chat = types.SimpleNamespace(completions=self)
+                self.kwargs = None
+
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                return object()
+
+        client = CapturingClient()
+        with mock.patch.object(app_module, "_ai_client", client):
+            app_module._create_chat_completion(
+                "gemini-2.5-flash", 6000, messages=[{"role": "user", "content": "test"}],
+                extra_body={"thinking": {"budget_tokens": 0}},
+            )
+        self.assertEqual(client.kwargs["max_tokens"], 6000)
+        self.assertNotIn("max_completion_tokens", client.kwargs)
+        self.assertIn("extra_body", client.kwargs)
+
     def test_bank_uses_new_question_types_and_session_counts(self):
         with mock.patch.object(app_module, "AI_ENABLED", False):
             for difficulty, expected in (("Easy", 3), ("Medium", 5), ("Hard", 8)):

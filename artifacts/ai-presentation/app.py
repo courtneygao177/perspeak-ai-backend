@@ -190,6 +190,30 @@ MODEL        = os.environ.get("UNIFIED_MODEL", TEXT_MODEL)                   # l
 MAX_TOKENS   = 8192
 
 
+def _uses_completion_tokens(model):
+    """Return whether the relay expects the newer OpenAI token-limit field."""
+    normalized = (model or "").strip().lower()
+    return normalized.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
+def _create_chat_completion(model, max_output_tokens, **kwargs):
+    """Call the OpenAI-compatible relay with the token field its model supports.
+
+    Older Chat Completions models accept ``max_tokens``. GPT-5-class reasoning
+    models reject that field and require ``max_completion_tokens`` instead.
+    The relay is shared by every product capability, so centralising this
+    compatibility detail prevents individual report/Q&A paths from diverging.
+    """
+    request_kwargs = {"model": model, **kwargs}
+    if _uses_completion_tokens(model):
+        request_kwargs["max_completion_tokens"] = max_output_tokens
+        # This is a Gemini relay extension, not part of GPT-5's API contract.
+        request_kwargs.pop("extra_body", None)
+    else:
+        request_kwargs["max_tokens"] = max_output_tokens
+    return _ai_client.chat.completions.create(**request_kwargs)
+
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -827,9 +851,9 @@ def analyze_slides_with_claude(images_b64, filename):
                 },
             })
 
-        response = _ai_client.chat.completions.create(
-            model=VISION_MODEL,
-            max_tokens=MAX_TOKENS,
+        response = _create_chat_completion(
+            VISION_MODEL,
+            MAX_TOKENS,
             messages=[{"role": "user", "content": content_parts}],
         )
 
@@ -942,9 +966,9 @@ Return ONLY valid JSON in this exact structure (no other text, no markdown):
 }}"""
 
     try:
-        response = _ai_client.chat.completions.create(
-            model=TEXT_MODEL,
-            max_tokens=MAX_TOKENS,
+        response = _create_chat_completion(
+            TEXT_MODEL,
+            MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.choices[0].message.content.strip()
@@ -1021,8 +1045,8 @@ def _generate_dynamic_defense_question(thesis_context, used_types, ordinal):
         "Chinese text, or a required opening.\n\nTHESIS CONTEXT:\n" + thesis_context
     )
     try:
-        response = _ai_client.chat.completions.create(
-            model=TEXT_MODEL, max_tokens=240, messages=[{"role": "user", "content": prompt}],
+        response = _create_chat_completion(
+            TEXT_MODEL, 240, messages=[{"role": "user", "content": prompt}],
         )
         raw = (response.choices[0].message.content or "").strip()
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
@@ -1115,9 +1139,9 @@ def generate_custom_defense_question(base_question_obj, thesis_context):
         "user's specific topic details naturally. Keep the professional academic tone intact."
     )
     try:
-        resp = _ai_client.chat.completions.create(
-            model=TEXT_MODEL,
-            max_tokens=200,
+        resp = _create_chat_completion(
+            TEXT_MODEL,
+            200,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -1187,9 +1211,9 @@ def generate_custom_anchor_question(anchor_template, slides, audience):
         "and do NOT include any 引导 hint text (that will be appended separately)."
     )
     try:
-        resp = _ai_client.chat.completions.create(
-            model=TEXT_MODEL,
-            max_tokens=160,
+        resp = _create_chat_completion(
+            TEXT_MODEL,
+            160,
             messages=[{"role": "user", "content": prompt}],
         )
         new_body = (resp.choices[0].message.content or "").strip().strip('"')
@@ -1328,9 +1352,9 @@ TASK: Generate your NEXT follow-up question. You must:
 Return ONLY the question text with the coaching hint appended. No preamble, no labels, no markdown."""
 
     try:
-        response = _ai_client.chat.completions.create(
-            model=TEXT_MODEL,
-            max_tokens=512,
+        response = _create_chat_completion(
+            TEXT_MODEL,
+            512,
             messages=[{"role": "user", "content": prompt}],
         )
         return response.choices[0].message.content.strip()
@@ -1427,8 +1451,8 @@ def generate_free_qa_question(slides, audience, scene_slug):
         "Return ONLY the question text — no labels, no explanations."
     )
     try:
-        resp = _ai_client.chat.completions.create(
-            model=VISION_MODEL, max_tokens=120,
+        resp = _create_chat_completion(
+            VISION_MODEL, 120,
             messages=[{"role": "user", "content": prompt}],
         )
         q_text = resp.choices[0].message.content.strip().strip('"')
@@ -3025,8 +3049,8 @@ def _run_thesis_defense_communication_quality(transcripts, config, slides):
         parsed_responses = []
         for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
             try:
-                response = _ai_client.chat.completions.create(
-                    model=model, max_tokens=6000,
+                response = _create_chat_completion(
+                    model, 6000,
                     messages=[{"role": "user", "content": json.dumps(request_payload, ensure_ascii=False)}],
                 )
                 choice = response.choices[0]
@@ -3561,9 +3585,9 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     )
 
     try:
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL,
-            max_tokens=4096,
+        response = _create_chat_completion(
+            EVAL_MODEL,
+            4096,
             messages=[{"role": "user", "content": cq_prompt}],
         )
         raw = response.choices[0].message.content.strip()
@@ -3993,8 +4017,8 @@ def _run_dual_track_cq_evaluation(free_transcripts, anchor_transcripts, scene_sl
     _DIM_NAMES_BASE = ["Directness & Logic", "Conversational Resonance", "Evidence & Substantiation"]
 
     try:
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL, max_tokens=2048,
+        response = _create_chat_completion(
+            EVAL_MODEL, 2048,
             messages=[{"role": "user", "content": cq_dual_prompt}],
         )
         raw = response.choices[0].message.content.strip()
@@ -4575,9 +4599,9 @@ def _run_class_presentation_pq(slides, narration_entries, qa_entries, fe_qa_hist
         # Use 32768 tokens and disable Gemini thinking to prevent the thinking
         # budget from consuming the output token budget (causing finish_reason=length
         # at only a few hundred chars of JSON).
-        resp = _ai_client.chat.completions.create(
-            model=EVAL_MODEL,
-            max_tokens=32768,
+        resp = _create_chat_completion(
+            EVAL_MODEL,
+            32768,
             messages=messages,
             extra_body={"thinking": {"budget_tokens": 0}},
         )
@@ -5561,9 +5585,9 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
     }
 
     def call_llm(messages):
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL,
-            max_tokens=32768,
+        response = _create_chat_completion(
+            EVAL_MODEL,
+            32768,
             messages=messages,
             extra_body={"thinking": {"budget_tokens": 0}},
         )
@@ -6105,9 +6129,9 @@ Return ONLY valid JSON. No markdown fences. No text outside the JSON object.
     app.logger.info(f"=== NARRATION PREVIEW === {all_narration_text[:300]!r}")
 
     try:
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL,
-            max_tokens=MAX_TOKENS,
+        response = _create_chat_completion(
+            EVAL_MODEL,
+            MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.choices[0].message.content.strip()
@@ -6321,9 +6345,9 @@ Write the plan using these exact sections (markdown, simple IELTS 5.5 English):
 Keep every sentence short and simple. No jargon."""
 
     try:
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL,
-            max_tokens=2048,
+        response = _create_chat_completion(
+            EVAL_MODEL,
+            2048,
             messages=[{"role": "user", "content": prompt}],
         )
         return response.choices[0].message.content.strip()
@@ -6752,9 +6776,9 @@ Return ONLY a valid JSON object — no markdown, no code fences, no comments:
 }}"""
 
     try:
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL,
-            max_tokens=MAX_TOKENS,
+        response = _create_chat_completion(
+            EVAL_MODEL,
+            MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.choices[0].message.content.strip()
