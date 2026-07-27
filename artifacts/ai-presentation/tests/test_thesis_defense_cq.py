@@ -118,6 +118,22 @@ class TestThesisDefenseCQ(unittest.TestCase):
             output = app_module.run_communication_quality_evaluation(UNITS, {"scenario": "Thesis Defense"}, slides=[])
         self.assertTrue(output["has_data"])
 
+    def test_evaluator_accepts_json_with_a_provider_preamble(self):
+        class PreambleJsonClient:
+            def __init__(self):
+                self.chat = types.SimpleNamespace(completions=self)
+
+            def create(self, **kwargs):
+                content = "Here is the requested evaluation:\n" + json.dumps(valid_response()) + "\nEnd of evaluation."
+                return types.SimpleNamespace(choices=[types.SimpleNamespace(
+                    finish_reason="stop",
+                    message=types.SimpleNamespace(content=content),
+                )])
+
+        with mock.patch.object(app_module, "AI_ENABLED", True), mock.patch.object(app_module, "_ai_client", PreambleJsonClient()):
+            output = app_module.run_communication_quality_evaluation(UNITS, {"scenario": "Thesis Defense"}, slides=[])
+        self.assertTrue(output["has_data"])
+
     def test_normalizer_reconciles_total_and_completes_one_missing_priority(self):
         result = valid_response()
         result["overall_cq_score"] = 99

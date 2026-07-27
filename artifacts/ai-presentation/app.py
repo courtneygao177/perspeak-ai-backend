@@ -3003,6 +3003,23 @@ def _run_thesis_defense_communication_quality(transcripts, config, slides):
     if not AI_ENABLED:
         return _thesis_cq_unavailable("沟通质量分析服务暂不可用；系统不会生成模拟分数或虚构反馈。")
     payload = _thesis_cq_prompt(units, config, slides)
+
+    def parse_json_object(raw):
+        """Parse a model JSON object despite harmless markdown/preamble text.
+
+        The extracted payload still goes through the evidence-first normalizer;
+        this helper only prevents a valid JSON object from being discarded
+        because a provider prepended a sentence or fenced it in markdown.
+        """
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            start, end = cleaned.find("{"), cleaned.rfind("}")
+            if start < 0 or end <= start:
+                raise
+            return json.loads(cleaned[start:end + 1])
+
     def request_json(request_payload, label):
         """Try both configured text endpoints; an empty relay response is retryable."""
         parsed_responses = []
@@ -3018,7 +3035,7 @@ def _run_thesis_defense_communication_quality(transcripts, config, slides):
                     app.logger.warning("[THESIS CQ] %s returned an empty response from %s (finish=%s)", label, model, choice.finish_reason)
                     continue
                 try:
-                    parsed_responses.append(json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)))
+                    parsed_responses.append(parse_json_object(raw))
                 except json.JSONDecodeError:
                     app.logger.warning("[THESIS CQ] %s returned non-JSON output from %s", label, model)
             except Exception as exc:
