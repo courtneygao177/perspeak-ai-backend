@@ -784,10 +784,25 @@
   }
 
   // ── Academic / Class Presentation Post-Session Q&A ────────────────────────
+  function formatAnsweringStrategy(strategy) {
+    if (!strategy || typeof strategy === 'string') return strategy || '';
+    const lines = [];
+    if (strategy.title_zh) lines.push(strategy.title_zh);
+    if (strategy.purpose_zh) lines.push(strategy.purpose_zh);
+    if (Array.isArray(strategy.steps_zh) && strategy.steps_zh.length) {
+      lines.push('步骤：' + strategy.steps_zh.map((step, i) => `${i + 1}. ${step}`).join(' '));
+    }
+    if (Array.isArray(strategy.phrase_starters_en) && strategy.phrase_starters_en.length) {
+      lines.push('可用句式：' + strategy.phrase_starters_en.join(' / '));
+    }
+    if (strategy.answer_example_en) lines.push('英文示例：' + strategy.answer_example_en);
+    return lines.join('\n');
+  }
+
   function showAcademicQa(question, num, total, challengeType, category, strategy) {
     document.getElementById('acqQuestion').textContent = question;
     // Strategy hint
-    _currentStrategy = strategy || '';
+    _currentStrategy = formatAnsweringStrategy(strategy);
     const btn = document.getElementById('acqStrategyBtn');
     const pop = document.getElementById('acqStrategyPopover');
     pop.classList.add('hidden');

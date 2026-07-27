@@ -6,6 +6,7 @@ import io
 import re
 import traceback
 import uuid
+import time
 import concurrent.futures
 from difflib import SequenceMatcher
 try:
@@ -987,6 +988,88 @@ def _build_thesis_context(slides):
     return "\n".join(lines)
 
 
+def _strategy_display_text(strategy):
+    """Compact, user-visible strategy text for the rehearsal popover."""
+    if isinstance(strategy, str):
+        return strategy
+    if not isinstance(strategy, dict):
+        return ""
+    steps = "；".join(strategy.get("steps_zh") or [])
+    starters = " / ".join(strategy.get("phrase_starters_en") or [])
+    return "\n".join(part for part in (
+        strategy.get("title_zh", ""), strategy.get("purpose_zh", ""),
+        f"步骤：{steps}" if steps else "",
+        f"可用句式：{starters}" if starters else "",
+    ) if part)
+
+
+def _generate_dynamic_defense_question(thesis_context, used_types, ordinal):
+    """Generate one safe, classified free question; return None on AI failure."""
+    if not AI_ENABLED:
+        return None
+    type_list = ", ".join(sorted(DEFENSE_STRATEGY_BY_TYPE))
+    prompt = (
+        "You are a formal thesis-defense examiner. Generate one sharp English question using ONLY "
+        "the supplied thesis context. Do not invent names, numbers, findings, methods, or facts. "
+        "Return JSON only with question_text and question_type. question_type must be one of: "
+        f"{type_list}. Avoid these already-used types: {', '.join(sorted(used_types)) or 'none'}. "
+        "The question must be 1-2 sentences, professional, and must not contain advice, a model answer, "
+        "Chinese text, or a required opening.\n\nTHESIS CONTEXT:\n" + thesis_context
+    )
+    try:
+        response = _ai_client.chat.completions.create(
+            model=TEXT_MODEL, max_tokens=240, messages=[{"role": "user", "content": prompt}],
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        raw = re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw)
+        generated = json.loads(raw)
+        question_type = generated.get("question_type")
+        text = (generated.get("question_text") or "").strip()
+        if question_type not in DEFENSE_STRATEGY_BY_TYPE or not text or len(text) > 520:
+            return None
+        return {
+            "id": f"free-{ordinal:02d}", "question": text, "question_type": question_type,
+            "internal_strategy_id": DEFENSE_STRATEGY_BY_TYPE[question_type]["strategy_id"],
+            "challenge_type": question_type, "category": "Thesis Defense", "is_anchor": False,
+            "answering_strategy": DEFENSE_STRATEGY_BY_TYPE[question_type], "context_refs": [],
+        }
+    except Exception as exc:
+        app.logger.warning("[DEFENSE QA] dynamic question unavailable: %s", exc)
+        return None
+
+
+def build_thesis_defense_qa_bank(slides, difficulty):
+    """Build the B-model Q&A sequence: Easy 1 free; Medium free+anchor; Hard 2 free+anchor."""
+    thesis_context = _build_thesis_context(slides)
+    count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
+    desired_free = 2 if difficulty == "Hard" else 1
+    used_types, questions = set(), []
+    for ordinal in range(1, desired_free + 1):
+        item = _generate_dynamic_defense_question(thesis_context, used_types, ordinal)
+        if item:
+            used_types.add(item["question_type"])
+            questions.append(item)
+
+    # AI failure is honest about the source: we use a reviewed anchor rather
+    # than pretending that a context-specific free question was generated.
+    pool = [dict(q) for q in DEFENSE_QUESTION_BANK if q["question_type"] not in used_types]
+    random.shuffle(pool)
+    while len(questions) < count and pool:
+        item = pool.pop(0)
+        item["answering_strategy"] = dict(item["answering_strategy"])
+        questions.append(item)
+        used_types.add(item["question_type"])
+
+    # Hard sessions must include at least one pressure-sensitive type when the
+    # reviewed bank can provide it.
+    if difficulty == "Hard" and not any(q["question_type"] in {
+        "limitation_challenge", "result_interpretation", "multipart_followup"
+    } for q in questions):
+        pressure = next(q for q in DEFENSE_QUESTION_BANK if q["question_type"] == "limitation_challenge")
+        questions[-1] = dict(pressure, answering_strategy=dict(pressure["answering_strategy"]))
+    return questions[:count]
+
+
 def generate_custom_defense_question(base_question_obj, thesis_context):
     """
     Rewrite a single DEFENSE_QUESTION_BANK template question by deeply embedding
@@ -1012,8 +1095,8 @@ def generate_custom_defense_question(base_question_obj, thesis_context):
     )
     user_prompt = (
         f"Base Question Template: {base_text}\n"
-        f"Answering Strategy for reference only (do not repeat verbatim): "
-        f"{base_question_obj.get('answering_strategy', '')}\n\n"
+        "Answering Strategy for reference only (do not repeat verbatim): "
+        f"{_strategy_display_text(base_question_obj.get('answering_strategy', ''))}\n\n"
         f"User's Thesis Topic/PPT Content:\n{thesis_context}\n\n"
         "Task: Rewrite the Base Question Template into a customized question. Inject the "
         "user's specific topic details naturally. Keep the professional academic tone intact."
@@ -2525,6 +2608,306 @@ def _fallback_per_question_analysis(comm_transcripts, slides=None, scene_slug=No
     return items
 
 
+_THESIS_CQ_DIMENSIONS = {
+    "question_alignment": ("问题理解与回应对齐", 0.20, "是否回应评委实际的问题、范围和各个部分。"),
+    "answer_structure_completeness": ("回答结构与完整性", 0.20, "是否给出立场、理由、必要依据或限定，并清楚收束。"),
+    "reasoning_specificity": ("推理可见性与学术具体性", 0.25, "是否说清判断路径、研究依据、术语用法和必要细节。"),
+    "interaction_regulation": ("互动调节与答辩策略", 0.15, "是否能处理澄清、复合问题、追问或不确定性。"),
+    "professional_assertiveness": ("高压下的专业坚定", 0.20, "是否在质疑下保持尊重、清楚和有依据的立场。"),
+}
+
+
+def _thesis_cq_unavailable(message):
+    """The only valid Thesis Defense CQ fallback: no invented scores or quotes."""
+    return {
+        "has_data": False, "scene_slug": "thesis_defense", "scene_label": "Thesis Defense",
+        "analysis_status": "unavailable", "analysis_scope": "thesis_defense_qa_only",
+        "coverage_warning": message, "cq_total": None, "cq_scores": None, "dim_names": [],
+        "weights": [], "exchange_count": 0, "what_i_did_good": [],
+        "areas_for_improvement": [], "communication_scores": None,
+        "dimension_evidence_status": None,
+        "communication_quality_report": {"overall_cq_score": None, "per_question_analysis": []},
+        "session_strengths": [], "session_priorities": [],
+    }
+
+
+def _thesis_cq_exact_quote(value, answer):
+    """Accept quotes only when they are a non-empty exact contiguous answer substring."""
+    value = (value or "").strip()
+    return value if value and value in (answer or "") else None
+
+
+def _thesis_cq_valid_timestamp_range(start, end, unit):
+    """Feedback timestamps must be numeric, ordered, and inside the answer turn."""
+    try:
+        start, end = float(start), float(end)
+    except (TypeError, ValueError):
+        return False
+    if start > end:
+        return False
+    unit_start = float(unit["answer_timestamp_start"])
+    unit_end = float(unit["answer_timestamp_end"])
+    # Legacy sessions can legitimately have an unknown 0/0 duration. New Q&A
+    # sessions have real relative timestamps and must remain within that turn.
+    return (unit_start == unit_end == 0) or (unit_start <= start <= end <= unit_end)
+
+
+def _thesis_cq_strategy_for_unit(candidate, unit):
+    """Keep the routed strategy ID immutable while allowing Chinese coaching to adapt."""
+    if not isinstance(candidate, dict):
+        return None
+    expected = unit["answering_strategy"]
+    if candidate.get("strategy_id") != expected.get("strategy_id"):
+        return None
+    result = dict(expected)
+    for key in ("title_zh", "purpose_zh", "steps_zh", "phrase_starters_en", "answer_example_en"):
+        if key in candidate:
+            result[key] = candidate[key]
+    if not all(isinstance(result.get(key), str) and result[key].strip()
+               for key in ("title_zh", "purpose_zh", "answer_example_en")):
+        return None
+    if not isinstance(result.get("steps_zh"), list) or not 2 <= len(result["steps_zh"]) <= 4:
+        return None
+    if not isinstance(result.get("phrase_starters_en"), list) or not 2 <= len(result["phrase_starters_en"]) <= 4:
+        return None
+    if not all(isinstance(item, str) and item.strip() for item in result["steps_zh"] + result["phrase_starters_en"]):
+        return None
+    return result
+
+
+def _thesis_cq_units(transcripts):
+    units = []
+    for index, transcript in enumerate(transcripts, start=1):
+        # Server submissions use ``text`` while the evaluator transport uses
+        # ``answer``. Accept both so the evidence contract stays identical at
+        # every stage of the Thesis Defense Q&A flow.
+        answer = (transcript.get("answer") or transcript.get("text") or "").strip()
+        question = (transcript.get("question") or "").strip()
+        if not answer or not question:
+            continue
+        question_type = transcript.get("question_type")
+        if question_type not in DEFENSE_STRATEGY_BY_TYPE:
+            question_type = "limitation_challenge"
+        routed_strategy = dict(DEFENSE_STRATEGY_BY_TYPE[question_type])
+        strategy = transcript.get("answering_strategy")
+        if not isinstance(strategy, dict):
+            strategy = routed_strategy
+        elif strategy.get("strategy_id") == routed_strategy["strategy_id"]:
+            # Older stored exchanges may retain only strategy_id. Rehydrate the
+            # public card from the canonical routed strategy before evaluation.
+            routed_strategy.update(strategy)
+            strategy = routed_strategy
+        else:
+            strategy = routed_strategy
+        units.append({
+            "question_id": transcript.get("question_id") or f"q{index}",
+            "question_type": question_type,
+            "internal_strategy_id": strategy["strategy_id"],
+            "answering_strategy": strategy,
+            "is_anchor": bool(transcript.get("is_anchor", False)),
+            "examiner_question": question,
+            "question_timestamp_start": float(transcript.get("question_timestamp_start", 0) or 0),
+            "question_timestamp_end": float(transcript.get("question_timestamp_end", 0) or 0),
+            "candidate_answer": answer,
+            "answer_timestamp_start": float(transcript.get("answer_timestamp_start", 0) or 0),
+            "answer_timestamp_end": float(transcript.get("answer_timestamp_end", 0) or 0),
+            "follow_up_to_question_id": transcript.get("follow_up_to_question_id"),
+            "context_refs": transcript.get("context_refs") or [],
+        })
+    return units
+
+
+def _thesis_cq_prompt(units, config, slides):
+    """Build the evidence-first five-dimension evaluator payload."""
+    context = _build_thesis_context(slides or [])
+    return {
+        "task": "Evaluate ONLY the Thesis Defense Q&A session, not the presentation, thesis correctness, or slide design.",
+        "system_rubric": (
+            "You are Perspeak AI's Communication Quality evaluator for a Thesis Defense Q&A session. "
+            "Assess high-pressure academic communication only. Five dimensions: question_alignment (20), "
+            "answer_structure_completeness (20), reasoning_specificity (25), interaction_regulation (15), "
+            "professional_assertiveness (20). Do not judge whether thesis facts are true. Do not infer body language. "
+            "Assess only one or two relevant dimensions per question. Use the supplied question and answer as the only speech evidence. "
+            "Every explanatory field must be Simplified Chinese; use English only for examiner/candidate quotes, phrase starters, "
+            "answer examples, and say_this_instead. Never mention TED, WPM, Carnegie, Yes-Response, slide ideal answers, or generic praise. "
+            "Every strength/improvement quote must be a contiguous exact substring of that question's candidate answer. "
+            "Question text must be copied exactly. The strategy object must be retained for its original question type. "
+            "If evidence for a session dimension is thin, mark limited_evidence. Return JSON only."
+        ),
+        "session_metadata": {
+            "scenario": "Thesis Defense", "difficulty": config.get("difficulty", "Medium"),
+            "audience": "thesis examination committee", "video_available": False,
+        },
+        "thesis_slide_context_background_only": context,
+        "question_answer_units": units,
+        "required_schema": {
+            "analysis_status": "complete",
+            "analysis_scope": "thesis_defense_qa_only",
+            "coverage_warning": "Chinese string or null",
+            "communication_scores": {key: "integer 0-100" for key in _THESIS_CQ_DIMENSIONS},
+            "overall_cq_score": "weighted rounded integer",
+            "dimension_evidence_status": {key: "sufficient or limited_evidence" for key in _THESIS_CQ_DIMENSIONS},
+            "per_question_analysis": [{
+                "question_id": "input id", "question_type": "input type",
+                "examiner_question_quote": "exact input question", "question_timestamp_start": 0,
+                "question_timestamp_end": 0, "presenter_answer_quote": "exact input answer",
+                "answer_timestamp_start": 0, "answer_timestamp_end": 0,
+                "dimensions_assessed": ["one or two dimension keys"],
+                "what_i_did_well": [{"dimension": "key", "criterion_zh": "Chinese", "title_zh": "Chinese", "presenter_answer_quote": "exact answer substring", "timestamp_start": 0, "timestamp_end": 0, "analysis_zh": "Chinese"}],
+                "areas_for_improvement": [{"dimension": "key", "criterion_zh": "Chinese", "priority": "low medium or high", "title_zh": "Chinese", "presenter_answer_quote": "exact answer substring", "timestamp_start": 0, "timestamp_end": 0, "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "English under 25 words or null"}],
+                "answering_strategy": "copy the input object for this question",
+            }],
+            "session_strengths": [{"dimension": "key", "question_id": "id", "title_zh": "Chinese", "presenter_answer_quote": "exact answer substring", "timestamp_start": 0, "timestamp_end": 0, "analysis_zh": "Chinese"}],
+            "session_priorities": [{"dimension": "key", "priority": 1, "action_zh": "Chinese", "why_zh": "Chinese"}],
+        },
+    }
+
+
+def _normalize_thesis_cq_result(result, units):
+    """Validate a model response before it reaches the report. Invalid means unavailable."""
+    if not isinstance(result, dict) or result.get("analysis_status") != "complete":
+        return None
+    raw_scores = result.get("communication_scores")
+    if not isinstance(raw_scores, dict):
+        return None
+    scores = {}
+    try:
+        for key in _THESIS_CQ_DIMENSIONS:
+            number = raw_scores[key]
+            if isinstance(number, bool) or int(float(number)) != float(number):
+                return None
+            scores[key] = int(number)
+            if not 0 <= scores[key] <= 100:
+                return None
+    except (KeyError, TypeError, ValueError):
+        return None
+    overall = int(round(sum(scores[key] * _THESIS_CQ_DIMENSIONS[key][1] for key in scores)))
+    if result.get("overall_cq_score") != overall:
+        return None
+    unit_by_id = {unit["question_id"]: unit for unit in units}
+    analysis = result.get("per_question_analysis")
+    if not isinstance(analysis, list) or len(analysis) != len(units):
+        return None
+    normalized = []
+    seen = set()
+    for item in analysis:
+        if not isinstance(item, dict) or item.get("question_id") not in unit_by_id:
+            return None
+        unit = unit_by_id[item["question_id"]]
+        if item["question_id"] in seen or item.get("question_type") != unit["question_type"]:
+            return None
+        seen.add(item["question_id"])
+        if item.get("examiner_question_quote") != unit["examiner_question"]:
+            return None
+        if item.get("presenter_answer_quote") != unit["candidate_answer"]:
+            return None
+        assessed = item.get("dimensions_assessed") or []
+        if not 1 <= len(assessed) <= 2 or any(key not in _THESIS_CQ_DIMENSIONS for key in assessed):
+            return None
+        strategy = _thesis_cq_strategy_for_unit(item.get("answering_strategy"), unit)
+        if not strategy:
+            return None
+        item["answering_strategy"] = strategy
+        for field, quote_key, explanation_keys in (
+            ("what_i_did_well", "presenter_answer_quote", ("criterion_zh", "title_zh", "analysis_zh")),
+            ("areas_for_improvement", "presenter_answer_quote", ("criterion_zh", "title_zh", "impact_zh", "actionable_next_step_zh")),
+        ):
+            values = item.get(field)
+            if not isinstance(values, list) or len(values) > 2:
+                return None
+            for feedback in values:
+                if not isinstance(feedback, dict) or feedback.get("dimension") not in assessed:
+                    return None
+                if not _thesis_cq_exact_quote(feedback.get(quote_key), unit["candidate_answer"]):
+                    return None
+                if not _thesis_cq_valid_timestamp_range(feedback.get("timestamp_start"), feedback.get("timestamp_end"), unit):
+                    return None
+                if not all(isinstance(feedback.get(key), str) and feedback.get(key).strip() for key in explanation_keys):
+                    return None
+                if field == "areas_for_improvement":
+                    repair = feedback.get("say_this_instead")
+                    if repair is not None and (not isinstance(repair, str) or len(repair.split()) >= 25):
+                        return None
+        normalized.append(item)
+    coverage = result.get("dimension_evidence_status") or {}
+    if any(coverage.get(key) not in {"sufficient", "limited_evidence"} for key in _THESIS_CQ_DIMENSIONS):
+        return None
+    priorities = result.get("session_priorities") or []
+    if not isinstance(priorities, list) or len(priorities) != 2:
+        return None
+    strengths = result.get("session_strengths") or []
+    if not isinstance(strengths, list) or len(strengths) > 2:
+        return None
+    for strength in strengths:
+        if not isinstance(strength, dict) or strength.get("dimension") not in _THESIS_CQ_DIMENSIONS:
+            return None
+        unit = unit_by_id.get(strength.get("question_id"))
+        if not unit or not _thesis_cq_exact_quote(strength.get("presenter_answer_quote"), unit["candidate_answer"]):
+            return None
+        if not _thesis_cq_valid_timestamp_range(strength.get("timestamp_start"), strength.get("timestamp_end"), unit):
+            return None
+        if not all(isinstance(strength.get(key), str) and strength[key].strip() for key in ("title_zh", "analysis_zh")):
+            return None
+    for priority in priorities:
+        if not isinstance(priority, dict) or priority.get("dimension") not in _THESIS_CQ_DIMENSIONS:
+            return None
+        if priority.get("priority") not in (1, 2):
+            return None
+        if not all(isinstance(priority.get(key), str) and priority[key].strip() for key in ("action_zh", "why_zh")):
+            return None
+    return {
+        "has_data": True, "scene_slug": "thesis_defense", "scene_label": "Thesis Defense",
+        "analysis_status": "complete", "analysis_scope": "thesis_defense_qa_only",
+        "coverage_warning": result.get("coverage_warning"), "communication_scores": scores,
+        "dimension_evidence_status": {key: coverage[key] for key in _THESIS_CQ_DIMENSIONS}, "cq_total": overall, "cq_scores": {
+            _THESIS_CQ_DIMENSIONS[key][0]: scores[key] for key in _THESIS_CQ_DIMENSIONS
+        }, "dim_names": [_THESIS_CQ_DIMENSIONS[key][0] for key in _THESIS_CQ_DIMENSIONS],
+        "weights": [_THESIS_CQ_DIMENSIONS[key][1] for key in _THESIS_CQ_DIMENSIONS],
+        "exchange_count": len(units), "what_i_did_good": strengths,
+        "areas_for_improvement": [], "session_strengths": strengths,
+        "session_priorities": priorities,
+        "communication_quality_report": {"overall_cq_score": overall, "per_question_analysis": normalized},
+    }
+
+
+def _run_thesis_defense_communication_quality(transcripts, config, slides):
+    units = _thesis_cq_units(transcripts)
+    if not units:
+        return _thesis_cq_unavailable("未收到可用于分析的完整问题与回答转写，因此暂时无法生成沟通质量分析。")
+    if not AI_ENABLED:
+        return _thesis_cq_unavailable("沟通质量分析服务暂不可用；系统不会生成模拟分数或虚构反馈。")
+    payload = _thesis_cq_prompt(units, config, slides)
+    raw = ""
+    try:
+        response = _ai_client.chat.completions.create(
+            model=EVAL_MODEL, max_tokens=6000,
+            messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        parsed = json.loads(re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw))
+        normalized = _normalize_thesis_cq_result(parsed, units)
+        if normalized:
+            return normalized
+        # A concise, schema-only retry recovers common JSON/quote formatting mistakes
+        # without ever introducing a local mock score.
+        repair = {
+            "task": "Repair this invalid Thesis Defense CQ JSON. Return valid JSON only. Preserve exact quotes from the units, use the required schema, five weighted scores, and Chinese explanatory fields.",
+            "invalid_response": parsed, "source_units": units,
+        }
+        response = _ai_client.chat.completions.create(
+            model=EVAL_MODEL, max_tokens=6000,
+            messages=[{"role": "user", "content": json.dumps(repair, ensure_ascii=False)}],
+        )
+        repaired = json.loads(re.sub(r"^```(?:json)?\\s*|\\s*```$", "", (response.choices[0].message.content or "").strip()))
+        normalized = _normalize_thesis_cq_result(repaired, units)
+        if normalized:
+            return normalized
+        app.logger.warning("[THESIS CQ] model response failed strict validation")
+    except Exception as exc:
+        app.logger.exception("[THESIS CQ] evaluation unavailable: %s", exc)
+    return _thesis_cq_unavailable("本次问答的模型输出未能通过逐字引文与评分校验，因此系统未生成不可靠的沟通质量报告。")
+
+
 def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                                           scene_slug=None, total_qa_seconds=0,
                                           slides=None, qa_bank=None):
@@ -2577,10 +2960,16 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     # Also carry question_type / anchor metadata for dual-track detection.
     session_transcripts = []
     for a in qa_answers:
-        if a.get("type") in ("qa_answer", "academic_qa"):
+        # Persisted Thesis Defense exchanges from older sessions did not always
+        # include a ``type`` field. A question/answer pair is still a valid
+        # Q&A evidence unit and must not silently disappear from evaluation.
+        if a.get("type") in ("qa_answer", "academic_qa") or (not a.get("type") and a.get("question")):
             session_transcripts.append({
                 "question":           a.get("question",        ""),
-                "answer":             a.get("text",            ""),
+                # Browser-submitted records use ``text``; callers that replay
+                # a saved Q&A unit may already use the evaluator's ``answer``
+                # field. Keep both representations interoperable.
+                "answer":             a.get("text") or a.get("answer", ""),
                 "type":               a.get("type",            ""),
                 "question_type":      a.get("question_type",   "free"),
                 "anchor_type":        a.get("anchor_type",     ""),
@@ -2588,6 +2977,13 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                 "scaffold_signal":    a.get("scaffold_signal", ""),
                 "question_id":        a.get("question_id",     ""),
                 "answering_strategy": a.get("answering_strategy", ""),
+                "is_anchor":          a.get("is_anchor", False),
+                "context_refs":       a.get("context_refs", []),
+                "follow_up_to_question_id": a.get("follow_up_to_question_id"),
+                "question_timestamp_start": a.get("question_timestamp_start", 0),
+                "question_timestamp_end": a.get("question_timestamp_end", 0),
+                "answer_timestamp_start": a.get("answer_timestamp_start", 0),
+                "answer_timestamp_end": a.get("answer_timestamp_end", 0),
             })
 
     # Use whichever source has more substantive text content
@@ -2598,7 +2994,10 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
         f"sess_exchanges={len(session_transcripts)} sess_words={sess_words}"
     )
 
-    if sess_words > fe_words:
+    # Thesis Defense relies on per-question type, strategy and timestamps that
+    # are persisted by /x/submit-academic-qa. Prefer that authoritative source
+    # even when the browser transcript has the same word count.
+    if (scene_slug == "thesis_defense" and session_transcripts) or sess_words > fe_words:
         comm_transcripts = [t for t in session_transcripts if t["answer"].strip()]
     else:
         comm_transcripts = [t for t in fe_transcripts if t["answer"].strip()]
@@ -2645,10 +3044,18 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
 
     if not comm_transcripts or all(not t["answer"].strip() for t in comm_transcripts):
         app.logger.info("[CQ] No Q&A transcript data — returning no_data placeholder.")
+        if scene_slug == "thesis_defense":
+            return _thesis_cq_unavailable("未收到可用于分析的完整问题与回答转写，因此暂时无法生成沟通质量分析。")
         return _cq_no_data_result(scene_slug)
 
     qa_texts       = [t["answer"].strip() for t in comm_transcripts if t["answer"].strip()]
     exchange_count = len(comm_transcripts)
+
+    # Thesis Defense has a dedicated evidence-first model. It must never fall
+    # through into the legacy Directness / Defensibility / Tact evaluator or
+    # its heuristic/mock fallbacks.
+    if scene_slug == "thesis_defense":
+        return _run_thesis_defense_communication_quality(comm_transcripts, config, slides)
 
     # ── Dual-track routing: anchor question present → use Module 3 evaluator ──
     _anchor_ts = [t for t in comm_transcripts if t.get("question_type") == "anchor" and t["answer"].strip()]
@@ -6519,16 +6926,10 @@ def api_start_session():
         _scene_for_qa = "class_presentation"
         session["qa_bank"] = build_dual_track_qa(slides, audience, _scene_for_qa, difficulty)
     elif scenario == "Thesis Defense":
-        # Use DEFENSE_QUESTION_BANK; question count aligned with difficulty selection.
-        # Each sampled template question is then fused with the user's actual thesis
-        # topic/slide content via generate_custom_defense_question() — the AI examiner
-        # never reads the raw template verbatim. answering_strategy stays anchored.
-        import random as _rand
-        _Q_COUNT = {"Easy": 3, "Medium": 5, "Hard": 8}
-        _pool = list(DEFENSE_QUESTION_BANK)
-        _rand.shuffle(_pool)
-        _sampled = _pool[:_Q_COUNT.get(difficulty, 5)]
-        session["qa_bank"] = customize_defense_qa_bank(_sampled, slides)
+        # Communication Quality's B-model: 1 / 2 / 3 deliberate exchanges,
+        # rather than a long generic quiz.  Each question has a typed strategy
+        # card that the candidate can see before answering.
+        session["qa_bank"] = build_thesis_defense_qa_bank(slides, difficulty)
     else:
         session["qa_bank"] = []
 
@@ -6612,7 +7013,7 @@ def api_check_slide():
             qa_bank = session.get("qa_bank", [])
             difficulty = config.get("difficulty", "Medium")
             if scenario == "Thesis Defense":
-                qa_count = {"Easy": 3, "Medium": 5, "Hard": 8}.get(difficulty, 5)
+                qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
             else:
                 qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
             questions = [q for q in qa_bank if isinstance(q, dict)][:qa_count]
@@ -6620,6 +7021,8 @@ def api_check_slide():
                 state["academic_qa_mode"] = True
                 state["academic_qa_index"] = 0
                 state["academic_qa_total"] = len(questions)
+                state["academic_qa_session_started_at"] = time.time()
+                state["academic_qa_question_started_at"] = time.time()
                 session["state"] = state
                 session["academic_qa_questions"] = questions
                 first_q = questions[0]
@@ -6736,6 +7139,9 @@ def api_submit_academic_qa():
     questions = session.get("academic_qa_questions", [])
 
     current_idx = state.get("academic_qa_index", 0)
+    answer_ended_at = time.time()
+    question_started_at = state.get("academic_qa_question_started_at", answer_ended_at)
+    qa_session_started_at = state.get("academic_qa_session_started_at", question_started_at)
 
     # Persist the answer
     current_q = questions[current_idx] if current_idx < len(questions) else {}
@@ -6746,10 +7152,17 @@ def api_submit_academic_qa():
         "question_id":     current_q.get("id", f"q{current_idx + 1}"),
         "question":        current_q.get("question", ""),
         "question_type":   current_q.get("question_type",   "free"),   # "free" | "anchor"
+        "is_anchor":       current_q.get("is_anchor", False),
+        "context_refs":    current_q.get("context_refs", []),
+        "internal_strategy_id": current_q.get("internal_strategy_id", ""),
         "anchor_type":     current_q.get("anchor_type",     ""),
         "target_dim":      current_q.get("target_dim",      ""),
         "scaffold_signal": current_q.get("scaffold_signal", ""),
         "answering_strategy": current_q.get("answering_strategy", ""),
+        "question_timestamp_start": question_started_at - qa_session_started_at,
+        "question_timestamp_end": question_started_at - qa_session_started_at,
+        "answer_timestamp_start": question_started_at - qa_session_started_at,
+        "answer_timestamp_end": answer_ended_at - qa_session_started_at,
         "text":            answer,
     })
     session["answers"] = answers_list
@@ -6757,6 +7170,7 @@ def api_submit_academic_qa():
     next_idx = current_idx + 1
     if next_idx < len(questions):
         state["academic_qa_index"] = next_idx
+        state["academic_qa_question_started_at"] = time.time()
         session["state"] = state
         next_q = questions[next_idx]
         return jsonify({
