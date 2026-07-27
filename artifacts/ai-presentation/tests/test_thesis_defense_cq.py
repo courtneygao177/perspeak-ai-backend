@@ -132,6 +132,26 @@ class TestThesisDefenseCQ(unittest.TestCase):
         self.assertEqual(len(output["session_priorities"]), 2)
         self.assertEqual(output["session_priorities"][1]["priority"], 2)
 
+    def test_normalizer_snaps_drifted_time_and_infers_second_feedback_dimension(self):
+        result = valid_response()
+        item = result["per_question_analysis"][0]
+        item["areas_for_improvement"][0]["dimension"] = "reasoning_specificity"
+        item["areas_for_improvement"][0]["timestamp_start"] = 99
+        item["areas_for_improvement"][0]["timestamp_end"] = 100
+
+        output = app_module._normalize_thesis_cq_result(
+            result, app_module._thesis_cq_units(UNITS)
+        )
+
+        self.assertIsNotNone(output)
+        normalized = output["communication_quality_report"]["per_question_analysis"][0]
+        self.assertEqual(
+            normalized["dimensions_assessed"],
+            ["answer_structure_completeness", "reasoning_specificity"],
+        )
+        feedback = normalized["areas_for_improvement"][0]
+        self.assertEqual((feedback["timestamp_start"], feedback["timestamp_end"]), (1.0, 12.0))
+
     def test_empty_primary_model_response_uses_secondary_model(self):
         class FallbackClient:
             def __init__(self):

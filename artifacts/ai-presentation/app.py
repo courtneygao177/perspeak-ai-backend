@@ -2849,9 +2849,23 @@ def _normalize_thesis_cq_result(result, units):
             return None
         if item.get("presenter_answer_quote") != unit["candidate_answer"]:
             return None
-        assessed = item.get("dimensions_assessed") or []
+        assessed = list(dict.fromkeys(item.get("dimensions_assessed") or []))
         if not 1 <= len(assessed) <= 2 or any(key not in _THESIS_CQ_DIMENSIONS for key in assessed):
             return None
+        # The model occasionally attaches a valid feedback item to a second
+        # relevant rubric dimension but omits that key from dimensions_assessed.
+        # Keep the feedback only when the missing dimension can be added within
+        # the public contract of at most two dimensions per answer.
+        for feedback_group in (item.get("what_i_did_well"), item.get("areas_for_improvement")):
+            for feedback in feedback_group if isinstance(feedback_group, list) else []:
+                dimension = feedback.get("dimension") if isinstance(feedback, dict) else None
+                if dimension not in _THESIS_CQ_DIMENSIONS:
+                    continue
+                if dimension not in assessed:
+                    if len(assessed) == 2:
+                        return None
+                    assessed.append(dimension)
+        item["dimensions_assessed"] = assessed
         strategy = _thesis_cq_strategy_for_unit(item.get("answering_strategy"), unit)
         if not strategy:
             return None
@@ -2869,7 +2883,12 @@ def _normalize_thesis_cq_result(result, units):
                 if not _thesis_cq_exact_quote(feedback.get(quote_key), unit["candidate_answer"]):
                     return None
                 if not _thesis_cq_valid_timestamp_range(feedback.get("timestamp_start"), feedback.get("timestamp_end"), unit):
-                    return None
+                    # The quote itself is exact. When the model's word-level
+                    # timing drifts outside a recorded answer turn, anchor the
+                    # card to that complete turn rather than discarding valid
+                    # source evidence or inventing a narrower timestamp.
+                    feedback["timestamp_start"] = unit["answer_timestamp_start"]
+                    feedback["timestamp_end"] = unit["answer_timestamp_end"]
                 if not all(isinstance(feedback.get(key), str) and feedback.get(key).strip() for key in explanation_keys):
                     return None
                 if field == "areas_for_improvement":
