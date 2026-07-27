@@ -2892,7 +2892,7 @@ def _run_thesis_defense_communication_quality(transcripts, config, slides):
                     app.logger.warning("[THESIS CQ] %s returned an empty response from %s (finish=%s)", label, model, choice.finish_reason)
                     continue
                 try:
-                    parsed_responses.append(json.loads(re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw)))
+                    parsed_responses.append(json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)))
                 except json.JSONDecodeError:
                     app.logger.warning("[THESIS CQ] %s returned non-JSON output from %s", label, model)
             except Exception as exc:
