@@ -99,6 +99,30 @@ class TestThesisDefenseCQ(unittest.TestCase):
         self.assertNotIn("max_completion_tokens", client.kwargs)
         self.assertIn("extra_body", client.kwargs)
 
+    def test_completion_helper_can_disable_retry_for_vision_requests(self):
+        class CapturingClient:
+            def __init__(self):
+                self.chat = types.SimpleNamespace(completions=self)
+                self.options = None
+                self.kwargs = None
+
+            def with_options(self, **options):
+                self.options = options
+                return self
+
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                return object()
+
+        client = CapturingClient()
+        with mock.patch.object(app_module, "_ai_client", client):
+            app_module._create_chat_completion(
+                "claude-sonnet-5", 100, request_timeout=30.0, max_retries=0,
+                messages=[{"role": "user", "content": "test"}],
+            )
+        self.assertEqual(client.options, {"timeout": 30.0, "max_retries": 0})
+        self.assertEqual(client.kwargs["max_tokens"], 100)
+
     def test_bank_uses_new_question_types_and_session_counts(self):
         with mock.patch.object(app_module, "AI_ENABLED", False):
             for difficulty, expected in (("Easy", 3), ("Medium", 5), ("Hard", 8)):

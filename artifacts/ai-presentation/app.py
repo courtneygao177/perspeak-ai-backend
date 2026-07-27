@@ -196,7 +196,7 @@ def _uses_completion_tokens(model):
     return normalized.startswith(("gpt-5", "o1", "o3", "o4"))
 
 
-def _create_chat_completion(model, max_output_tokens, **kwargs):
+def _create_chat_completion(model, max_output_tokens, request_timeout=None, max_retries=None, **kwargs):
     """Call the OpenAI-compatible relay with the token field its model supports.
 
     Older Chat Completions models accept ``max_tokens``. GPT-5-class reasoning
@@ -211,7 +211,15 @@ def _create_chat_completion(model, max_output_tokens, **kwargs):
         request_kwargs.pop("extra_body", None)
     else:
         request_kwargs["max_tokens"] = max_output_tokens
-    return _ai_client.chat.completions.create(**request_kwargs)
+    client = _ai_client
+    if request_timeout is not None or max_retries is not None:
+        options = {}
+        if request_timeout is not None:
+            options["timeout"] = request_timeout
+        if max_retries is not None:
+            options["max_retries"] = max_retries
+        client = _ai_client.with_options(**options)
+    return client.chat.completions.create(**request_kwargs)
 
 
 def allowed_file(filename):
@@ -854,6 +862,11 @@ def analyze_slides_with_claude(images_b64, filename):
         response = _create_chat_completion(
             VISION_MODEL,
             MAX_TOKENS,
+            # A multi-page image request can be slow at the relay. Do not let
+            # SDK retries turn a temporary vision outage into several minutes
+            # of blocked setup; the caller keeps its text-extracted slides.
+            request_timeout=30.0,
+            max_retries=0,
             messages=[{"role": "user", "content": content_parts}],
         )
 
