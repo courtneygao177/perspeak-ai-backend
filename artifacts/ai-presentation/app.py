@@ -2877,34 +2877,47 @@ def _run_thesis_defense_communication_quality(transcripts, config, slides):
     if not AI_ENABLED:
         return _thesis_cq_unavailable("沟通质量分析服务暂不可用；系统不会生成模拟分数或虚构反馈。")
     payload = _thesis_cq_prompt(units, config, slides)
-    raw = ""
-    try:
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL, max_tokens=6000,
-            messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        parsed = json.loads(re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw))
+    def request_json(request_payload, label):
+        """Try both configured text endpoints; an empty relay response is retryable."""
+        parsed_responses = []
+        for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
+            try:
+                response = _ai_client.chat.completions.create(
+                    model=model, max_tokens=6000,
+                    messages=[{"role": "user", "content": json.dumps(request_payload, ensure_ascii=False)}],
+                )
+                choice = response.choices[0]
+                raw = (choice.message.content or "").strip()
+                if not raw:
+                    app.logger.warning("[THESIS CQ] %s returned an empty response from %s (finish=%s)", label, model, choice.finish_reason)
+                    continue
+                try:
+                    parsed_responses.append(json.loads(re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw)))
+                except json.JSONDecodeError:
+                    app.logger.warning("[THESIS CQ] %s returned non-JSON output from %s", label, model)
+            except Exception as exc:
+                app.logger.warning("[THESIS CQ] %s request failed via %s: %s", label, model, exc)
+        return parsed_responses
+
+    parsed_candidates = request_json(payload, "initial evaluation")
+    for parsed in parsed_candidates:
         normalized = _normalize_thesis_cq_result(parsed, units)
         if normalized:
             return normalized
-        # A concise, schema-only retry recovers common JSON/quote formatting mistakes
-        # without ever introducing a local mock score.
-        repair = {
-            "task": "Repair this invalid Thesis Defense CQ JSON. Return valid JSON only. Preserve exact quotes from the units, use the required schema, five weighted scores, and Chinese explanatory fields.",
-            "invalid_response": parsed, "source_units": units,
-        }
-        response = _ai_client.chat.completions.create(
-            model=EVAL_MODEL, max_tokens=6000,
-            messages=[{"role": "user", "content": json.dumps(repair, ensure_ascii=False)}],
-        )
-        repaired = json.loads(re.sub(r"^```(?:json)?\\s*|\\s*```$", "", (response.choices[0].message.content or "").strip()))
+
+    # A concise schema-only repair handles common omissions (for example a
+    # missing strategy object or a mismatched weighted total). It is also tried
+    # after an empty/non-JSON first relay response rather than failing early.
+    repair = {
+        "task": "Return a complete valid Thesis Defense CQ JSON only. Preserve exact quotes from source_units, five weighted scores, two session priorities, and the routed strategy object for every question. Do not invent content.",
+        "invalid_responses": parsed_candidates, "source_units": units,
+        "required_schema": payload["required_schema"],
+    }
+    for repaired in request_json(repair, "schema repair"):
         normalized = _normalize_thesis_cq_result(repaired, units)
         if normalized:
             return normalized
-        app.logger.warning("[THESIS CQ] model response failed strict validation")
-    except Exception as exc:
-        app.logger.exception("[THESIS CQ] evaluation unavailable: %s", exc)
+    app.logger.warning("[THESIS CQ] all model responses failed strict validation")
     return _thesis_cq_unavailable("本次问答的模型输出未能通过逐字引文与评分校验，因此系统未生成不可靠的沟通质量报告。")
 
 

@@ -101,3 +101,28 @@ class TestThesisDefenseCQ(unittest.TestCase):
             output = app_module.run_communication_quality_evaluation(UNITS, {"scenario": "Thesis Defense"}, slides=[])
         self.assertTrue(output["has_data"])
         self.assertEqual(output["exchange_count"], 2)
+
+    def test_empty_primary_model_response_uses_secondary_model(self):
+        class FallbackClient:
+            def __init__(self):
+                self.chat = types.SimpleNamespace(completions=self)
+                self.calls = 0
+
+            def create(self, **kwargs):
+                self.calls += 1
+                content = "" if self.calls == 1 else json.dumps(valid_response())
+                return types.SimpleNamespace(choices=[types.SimpleNamespace(
+                    finish_reason="stop",
+                    message=types.SimpleNamespace(content=content),
+                )])
+
+        client = FallbackClient()
+        with mock.patch.object(app_module, "AI_ENABLED", True), \
+             mock.patch.object(app_module, "_ai_client", client), \
+             mock.patch.object(app_module, "EVAL_MODEL", "primary"), \
+             mock.patch.object(app_module, "TEXT_MODEL", "secondary"):
+            output = app_module.run_communication_quality_evaluation(
+                UNITS, {"scenario": "Thesis Defense"}, slides=[]
+            )
+        self.assertTrue(output["has_data"])
+        self.assertEqual(client.calls, 2)
