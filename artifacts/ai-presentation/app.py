@@ -471,6 +471,37 @@ CLASS_PRES_QA_POOL = [
      "category": "Class Presentation", "difficulty": "Hard", "challenge_type": "Depth"},
 ]
 
+# Class Presentation Q&A is a communication exercise, not a hidden slide
+# recall quiz.  These routing cards are deliberately owned by the server so
+# the public coaching method remains stable even when the question itself is
+# dynamically adapted to a student's slides.
+CLASS_CQ_STRATEGY_BY_TYPE = {
+    "summarise_core_message": {"strategy_id": "answer_reason_example", "title_zh": "核心结论、理由、例子", "purpose_zh": "先用一句清楚的主张回应问题，再补充最必要的理由或例子。", "steps_zh": ["先用一句话说明你的核心观点。", "补充一个最能支撑观点的理由。", "用一句收束，说明这对听众意味着什么。"], "phrase_starters_en": ["The main point is...", "This matters because...", "For example,..."]},
+    "explain_insight_relevance": {"strategy_id": "answer_reason_example", "title_zh": "结论、理由、例子", "purpose_zh": "让听众先听懂你的答案，再理解它为何重要。", "steps_zh": ["直接回答问题。", "说明原因或意义。", "补充一个与课堂或生活相关的例子。"], "phrase_starters_en": ["My key insight is...", "This is important because...", "For example,..."]},
+    "prioritise_key_points": {"strategy_id": "number_the_parts", "title_zh": "按重点分层回答", "purpose_zh": "把信息压缩成容易跟随的几个层次。", "steps_zh": ["先说明你会讲几个重点。", "逐点说清，每点只讲一个意思。", "最后回扣问题。"], "phrase_starters_en": ["There are three key points...", "First,...", "Overall,..."]},
+    "illustrative_support": {"strategy_id": "define_make_concrete", "title_zh": "把抽象观点说具体", "purpose_zh": "通过定义、人物、时间或案例让听众看见你的意思。", "steps_zh": ["先解释你要说明的概念。", "给出具体案例、人物、时间或情境。", "说明这个例子如何支持你的观点。"], "phrase_starters_en": ["By this I mean...", "A concrete example is...", "This shows that..."]},
+    "audience_relevance": {"strategy_id": "answer_reason_example", "title_zh": "连接听众的实际关切", "purpose_zh": "把话题和同学、课堂或日常选择连接起来。", "steps_zh": ["先点明它和听众有什么关系。", "说明影响发生的原因。", "给出一个可感知的例子。"], "phrase_starters_en": ["For us as students,...", "The practical impact is...", "For instance,..."]},
+    "constructive_disagreement": {"strategy_id": "find_common_ground_then_explain", "title_zh": "先承认共识，再说明立场", "purpose_zh": "在有分歧时保持尊重，同时清楚表达自己的理由。", "steps_zh": ["先确认双方同意的部分。", "再说明你不同意或补充的地方。", "用理由或例子支持你的立场。"], "phrase_starters_en": ["I agree that...", "At the same time,...", "My reason is..."]},
+    "assumption_challenge": {"strategy_id": "acknowledge_boundary_then_explain", "title_zh": "承认边界后再解释", "purpose_zh": "面对假设或限制时，诚实说明边界而不回避问题。", "steps_zh": ["直接承认这个假设的重要性。", "说明假设变化会带来的影响。", "解释你会如何调整判断或下一步。"], "phrase_starters_en": ["That is an important assumption...", "If it changed,...", "I would then..."]},
+    "evidence_reflection": {"strategy_id": "find_common_ground_then_explain", "title_zh": "承认证据边界，再说明下一步", "purpose_zh": "先承认证据尚不足的合理关切，再说明当前能支持什么及如何补强。", "steps_zh": ["先指出问题中合理的证据关切。", "说明现有材料可以支持的范围。", "说明下一步会补充什么。"], "phrase_starters_en": ["That is a fair concern...", "The current evidence supports...", "To strengthen this,..."]},
+}
+
+CLASS_CQ_DIMENSIONS = {
+    "question_alignment": ("问题理解与回应对齐", 0.25, "是否回应提问者实际关心的对象、范围与任务。"),
+    "answer_structure_clarity": ("回答结构与清晰度", 0.20, "是否先给出中心回答，并用清楚顺序完成表达。"),
+    "explanation_support": ("解释与支持", 0.20, "是否说明理由、相关支撑和让听众能理解的解释。"),
+    "audience_connection": ("听众连接", 0.15, "是否回应提问者，并按课堂听众的理解需要调整表达。"),
+    "composure_constructive_response": ("从容与建设性回应", 0.20, "是否在不确定、质疑或卡顿时保持诚实、尊重和可继续沟通。"),
+}
+
+CLASS_CQ_SUBCRITERIA = {
+    "question_alignment": [("task_response", 10, "直接回应问题要求"), ("scope_alignment", 8, "回应问题对象与范围"), ("answer_closure", 7, "形成明确收束")],
+    "answer_structure_clarity": [("central_answer", 6, "中心回答清楚"), ("logical_sequence", 8, "理由或步骤顺序清楚"), ("concise_completion", 6, "表达简洁且完成")],
+    "explanation_support": [("reasoning_explained", 7, "解释判断或原因"), ("relevant_support", 7, "提供相关支撑"), ("accessible_explanation", 6, "解释便于课堂听众理解")],
+    "audience_connection": [("questioner_engagement", 6, "回应提问者关切"), ("listener_adaptation", 5, "照顾听众理解"), ("respectful_collaboration", 4, "保持尊重合作")],
+    "composure_constructive_response": [("recovery_control", 5, "卡顿后能够继续"), ("challenge_response", 8, "建设性回应质疑"), ("honest_boundary", 7, "诚实说明不确定或边界")],
+}
+
 # ─────────────────────────────────────────────
 # ANCHOR QUESTION POOL — Dual-Track Q&A System
 # ─────────────────────────────────────────────
@@ -1186,8 +1217,9 @@ def _build_presentation_context(slides):
 def generate_custom_anchor_question(anchor_template, slides, audience):
     """
     Rewrite a class_presentation anchor question so that the question BODY
-    references the user's actual slide content/topic, while preserving the
-    (引导：...) scaffold hint verbatim — that hint is what the CQ engine scores.
+    references the user's actual slide content/topic.  The old embedded
+    ``(引导：...)`` text is an internal coaching route, never part of an
+    examiner's question and never a scoring requirement.
 
     Falls back to the static template text on AI failure or when AI is off.
     """
@@ -1201,11 +1233,11 @@ def generate_custom_anchor_question(anchor_template, slides, audience):
     )
 
     if not AI_ENABLED or not slides:
-        return base_text
+        return re.sub(r'\s*\(引导[：:][^)]+\)', '', base_text).strip()
 
-    # Peel off the 引导 hint so we can re-attach it unchanged after rewriting.
+    # Peel off the legacy hint. It stays in structured answering_strategy data
+    # and must not leak into the user-facing question.
     hint_match = _re.search(r'(\(引导[：:][^)]+\))', base_text)
-    scaffold_hint = hint_match.group(1) if hint_match else ""
     body_only     = base_text[:hint_match.start()].strip() if hint_match else base_text
 
     anchor_type          = anchor_template.get("anchor_type", "")
@@ -1231,13 +1263,52 @@ def generate_custom_anchor_question(anchor_template, slides, audience):
         )
         new_body = (resp.choices[0].message.content or "").strip().strip('"')
         if not new_body:
-            return base_text
-        return f"{new_body} {scaffold_hint}".strip() if scaffold_hint else new_body
+            return body_only
+        return new_body
     except Exception as e:
         app.logger.error(
             f"[ANCHOR QA] Custom anchor generation failed for {anchor_template.get('id')}: {e}"
         )
-        return base_text
+        return body_only
+
+
+def _class_cq_question_type(question):
+    """Map the visible Class Q&A item to the stable communication router."""
+    question_id = str(question.get("id", ""))
+    matrix_map = {
+        "anchor_cp_twitter": "summarise_core_message", "anchor_cp_rule3": "prioritise_key_points",
+        "anchor_cp_5w": "illustrative_support", "10": "illustrative_support", "11": "audience_relevance",
+        "12": "assumption_challenge", "13": "evidence_reflection", "14": "prioritise_key_points",
+    }
+    if question_id in matrix_map:
+        return matrix_map[question_id]
+    challenge = (question.get("challenge_type") or "").lower()
+    for key in ("twitter", "headline"):
+        if key in challenge:
+            return "summarise_core_message"
+    if "novel" in challenge:
+        return "explain_insight_relevance"
+    if "three" in challenge or "benefit" in challenge:
+        return "prioritise_key_points"
+    if "5-w" in challenge or "detail" in challenge:
+        return "illustrative_support"
+    if "consensus" in challenge or "reservation" in challenge:
+        return "constructive_disagreement"
+    return "explain_insight_relevance"
+
+
+def _attach_class_cq_routing(question):
+    item = dict(question)
+    item["question"] = re.sub(r'\s*\(引导[：:][^)]+\)', '', item.get("question", "")).strip()
+    question_type = _class_cq_question_type(item)
+    item["question_type"] = question_type
+    item["answering_strategy"] = dict(CLASS_CQ_STRATEGY_BY_TYPE[question_type])
+    # The “one more minute” fallback asks for one prioritised addition, not a
+    # numbered list. Keep its type for analysis while giving the appropriate
+    # answer–reason–example coaching route.
+    if str(item.get("id")) == "14":
+        item["answering_strategy"] = dict(CLASS_CQ_STRATEGY_BY_TYPE["audience_relevance"])
+    return item
 
 
 def customize_defense_qa_bank(pool, slides):
@@ -1497,6 +1568,8 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
     qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
 
     q1 = generate_free_qa_question(slides, audience, scene_slug)
+    if scene_slug == "class_presentation":
+        q1 = _attach_class_cq_routing(q1)
     result = [q1]
 
     if qa_count >= 2:
@@ -1509,25 +1582,29 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
                 track = "professor" if audience.lower() == "professor" else "classmate"
                 q2["question"] = by_audience.get(track, by_audience.get("professor"))
             q2["questioner"] = audience
-            # Class Presentation: dynamically rewrite the anchor question body to
-            # reference the user's actual slide content, while preserving the
-            # (引导：...) scaffold hint verbatim for CQ scoring.
+            # Class Presentation: dynamically rewrite the anchor question body
+            # from the user's slide context.  The legacy scaffold is retained
+            # only as an answering strategy, never in the visible question.
             if scene_slug == "class_presentation" and slides:
                 q2["template_question"] = q2["question"]   # keep original for debugging
                 q2["question"] = generate_custom_anchor_question(anchor_template, slides, audience)
+            if scene_slug == "class_presentation":
+                q2 = _attach_class_cq_routing(q2)
             result.append(q2)
         else:
             track = "professor" if audience.lower() == "professor" else "classmate"
             fallback_dims = list(TED_QA_MATRIX.values())
             if fallback_dims:
                 dim_data = fallback_dims[0]
-                result.append({
+                fallback_question = {
                     "id": "anchor_fallback", "question": dim_data[track],
                     "question_type": "anchor", "category": "Anchor Fallback",
                     "challenge_type": "Structural", "target_dim": "rule_of_three",
                     "scaffold_signal": "structured enumeration",
                     "anchor_type": "Structural", "questioner": audience,
-                })
+                }
+                result.append(_attach_class_cq_routing(fallback_question)
+                              if scene_slug == "class_presentation" else fallback_question)
 
     if qa_count >= 3:
         baseline_pool = [q for q in CLASS_PRES_QA_POOL if q.get("difficulty") != "Easy"]
@@ -1535,6 +1612,8 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
             q3 = dict(random.choice(baseline_pool))
             q3["question_type"] = "free"
             q3["questioner"]    = audience
+            if scene_slug == "class_presentation":
+                q3 = _attach_class_cq_routing(q3)
             result.append(q3)
 
     return result
@@ -3164,6 +3243,226 @@ def _run_thesis_defense_communication_quality(transcripts, config, slides):
     return _thesis_cq_unavailable("本次问答的模型输出未能通过逐字引文与评分校验，因此系统未生成不可靠的沟通质量报告。")
 
 
+# ── Class Presentation: evidence-first five-dimension Q&A evaluation ───────
+def _class_cq_unavailable(message):
+    return {
+        "has_data": False, "scene_slug": "class_presentation", "scene_label": "Class Presentation",
+        "analysis_status": "unavailable", "analysis_scope": "class_presentation_qa_only",
+        "coverage_warning": message, "cq_total": None, "cq_scores": None, "dim_names": [], "weights": [],
+        "exchange_count": 0, "communication_scores": None, "dimension_evidence_status": None,
+        "dimension_details": {}, "communication_quality_report": {"overall_cq_score": None, "per_question_analysis": []},
+        "session_strengths": [], "session_priorities": [],
+    }
+
+
+def _class_cq_units(transcripts, qa_bank):
+    bank = {str(q.get("id")): q for q in (qa_bank or [])}
+    units = []
+    for index, item in enumerate(transcripts, start=1):
+        answer = (item.get("answer") or item.get("text") or "").strip()
+        question = (item.get("question") or "").strip()
+        if not answer or not question:
+            continue
+        bank_item = bank.get(str(item.get("question_id", "")), {})
+        route_source = dict(bank_item, id=item.get("question_id") or bank_item.get("id"),
+                            challenge_type=item.get("challenge_type") or bank_item.get("challenge_type"))
+        qtype = item.get("question_type")
+        # Old browser sessions stored only free/anchor. They are transport
+        # labels, not the public communication type, so deterministically
+        # re-route them from the known bank / challenge type.
+        if qtype not in CLASS_CQ_STRATEGY_BY_TYPE:
+            qtype = _class_cq_question_type(route_source)
+        strategy = dict(CLASS_CQ_STRATEGY_BY_TYPE[qtype])
+        units.append({
+            "question_id": str(item.get("question_id") or f"q{index}"), "question_type": qtype,
+            "examiner_question": question, "candidate_answer": answer,
+            "question_timestamp_start": float(item.get("question_timestamp_start", 0) or 0),
+            "question_timestamp_end": float(item.get("question_timestamp_end", 0) or 0),
+            "answer_timestamp_start": float(item.get("answer_timestamp_start", 0) or 0),
+            "answer_timestamp_end": float(item.get("answer_timestamp_end", 0) or 0),
+            "answering_strategy": strategy,
+        })
+    return units
+
+
+def _class_cq_parse(raw):
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", (raw or "").strip())
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(cleaned[start:end + 1])
+        raise
+
+
+def _class_cq_normalize_dimension_cards(raw_cards, units):
+    """Validate raw rubric cards and calculate every radar score server-side.
+
+    The model may describe evidence, but it is never trusted to add or convert
+    rubric points.  This keeps the five visible scores traceable to their
+    displayed subcriteria rather than to a separate, opaque model total.
+    """
+    if not isinstance(raw_cards, dict):
+        return None
+    candidate_answers = [unit["candidate_answer"] for unit in units]
+    details, scores, coverage = {}, {}, {}
+    for dimension, (label, weight, criterion) in CLASS_CQ_DIMENSIONS.items():
+        source = raw_cards.get(dimension)
+        if not isinstance(source, dict) or not isinstance(source.get("actual_performance_zh"), str):
+            return None
+        incoming = source.get("subcriteria")
+        if not isinstance(incoming, list):
+            return None
+        by_id = {item.get("subcriterion_id"): item for item in incoming if isinstance(item, dict)}
+        expected = CLASS_CQ_SUBCRITERIA[dimension]
+        if len(incoming) != len(expected) or set(by_id) != {ident for ident, _, _ in expected}:
+            return None
+        normalized_subcriteria, raw_total, raw_max = [], 0, 0
+        statuses = []
+        for ident, maximum, standard in expected:
+            item = by_id[ident]
+            try:
+                score = int(round(float(item.get("score"))))
+            except (TypeError, ValueError):
+                return None
+            if not 0 <= score <= maximum:
+                return None
+            status = item.get("evidence_status")
+            if status not in {"sufficient", "limited_evidence"}:
+                return None
+            actual = item.get("actual_performance_zh")
+            rationale = item.get("score_rationale_zh")
+            if not isinstance(actual, str) or not actual.strip() or not isinstance(rationale, str) or not rationale.strip():
+                return None
+            evidence = item.get("evidence") or []
+            if not isinstance(evidence, list):
+                return None
+            normalized_evidence = []
+            for proof in evidence:
+                if not isinstance(proof, dict) or not isinstance(proof.get("student_answer_quote"), str):
+                    return None
+                matched_answer = next((answer for answer in candidate_answers
+                                       if _thesis_cq_exact_quote(proof["student_answer_quote"], answer)), None)
+                if not matched_answer:
+                    return None
+                normalized_evidence.append({
+                    "student_answer_quote": _thesis_cq_exact_quote(proof["student_answer_quote"], matched_answer),
+                    "timestamp_start": proof.get("timestamp_start"),
+                    "timestamp_end": proof.get("timestamp_end"),
+                })
+            normalized_subcriteria.append({
+                "subcriterion_id": ident, "standard_zh": standard, "score": score, "max_score": maximum,
+                "evidence_status": status, "actual_performance_zh": actual.strip(),
+                "score_rationale_zh": rationale.strip(), "evidence": normalized_evidence,
+            })
+            raw_total += score
+            raw_max += maximum
+            statuses.append(status)
+        scores[dimension] = int(round(raw_total / raw_max * 100))
+        coverage[dimension] = "limited_evidence" if "limited_evidence" in statuses else "sufficient"
+        details[dimension] = {
+            "label_zh": label, "weight_percent": int(weight * 100), "score": scores[dimension],
+            "criterion_zh": criterion,
+            "band_guide_zh": "90–100：回应成熟、清楚且能支持听众理解；75–89：整体清楚，仍有少量可加强处；60–74：能够回应，但常显得笼统或失焦；0–59：尚未形成有效、可跟随的回应。",
+            "performance_zh": source["actual_performance_zh"].strip(),
+            "evidence_status": coverage[dimension], "subcriteria": normalized_subcriteria,
+        }
+    return details, scores, coverage
+
+
+def _normalize_class_cq_result(result, units):
+    if not isinstance(result, dict) or result.get("analysis_status") != "complete":
+        return None
+    cards = _class_cq_normalize_dimension_cards(result.get("dimension_cards"), units)
+    if not cards:
+        return None
+    details, scores, coverage = cards
+    unit_by_id = {unit["question_id"]: unit for unit in units}
+    raw_analysis = result.get("per_question_analysis")
+    if not isinstance(raw_analysis, list) or len(raw_analysis) != len(units):
+        return None
+    normalized, seen = [], set()
+    for source in raw_analysis:
+        if not isinstance(source, dict) or source.get("question_id") not in unit_by_id or source["question_id"] in seen:
+            return None
+        seen.add(source["question_id"])
+        unit = unit_by_id[source["question_id"]]
+        assessed = list(dict.fromkeys(source.get("dimensions_assessed") or []))
+        if not 1 <= len(assessed) <= 2 or any(key not in CLASS_CQ_DIMENSIONS for key in assessed):
+            return None
+        item = {"question_id": unit["question_id"], "question_type": unit["question_type"],
+                "examiner_question_quote": unit["examiner_question"], "presenter_answer_quote": unit["candidate_answer"],
+                "question_timestamp_start": unit["question_timestamp_start"], "question_timestamp_end": unit["question_timestamp_end"],
+                "answer_timestamp_start": unit["answer_timestamp_start"], "answer_timestamp_end": unit["answer_timestamp_end"],
+                "dimensions_assessed": assessed, "what_i_did_well": [], "areas_for_improvement": [],
+                "answering_strategy": unit["answering_strategy"]}
+        for field, quote_key, required in (
+            ("what_i_did_well", "presenter_answer_quote", ("dimension", "subcriterion_id", "criterion_zh", "title_zh", "analysis_zh")),
+            ("areas_for_improvement", "presenter_answer_quote", ("dimension", "subcriterion_id", "criterion_zh", "title_zh", "impact_zh", "actionable_next_step_zh")),
+        ):
+            entries = source.get(field) or []
+            if not isinstance(entries, list) or len(entries) > 2:
+                return None
+            for entry in entries:
+                if not isinstance(entry, dict) or entry.get("dimension") not in assessed:
+                    return None
+                valid_subcriteria = {ident for ident, _, _ in CLASS_CQ_SUBCRITERIA[entry["dimension"]]}
+                if entry.get("subcriterion_id") not in valid_subcriteria:
+                    return None
+                quote = _thesis_cq_exact_quote(entry.get(quote_key), unit["candidate_answer"])
+                if not quote or not all(isinstance(entry.get(key), str) and entry[key].strip() for key in required):
+                    return None
+                entry[quote_key] = quote
+                entry["timestamp_start"] = unit["answer_timestamp_start"]
+                entry["timestamp_end"] = unit["answer_timestamp_end"]
+                if field == "areas_for_improvement":
+                    repair = entry.get("say_this_instead", "")
+                    if repair and (not isinstance(repair, str) or len(repair.split()) > 25 or "[" in repair or "]" in repair):
+                        return None
+                item[field].append(entry)
+        normalized.append(item)
+    overall = int(round(sum(scores[key] * CLASS_CQ_DIMENSIONS[key][1] for key in CLASS_CQ_DIMENSIONS)))
+    priorities = [item for item in (result.get("session_priorities") or []) if isinstance(item, dict) and item.get("dimension") in CLASS_CQ_DIMENSIONS and isinstance(item.get("action_zh"), str) and isinstance(item.get("why_zh"), str)][:2]
+    return {"has_data": True, "scene_slug": "class_presentation", "scene_label": "Class Presentation", "analysis_status": "complete", "analysis_scope": "class_presentation_qa_only", "coverage_warning": result.get("coverage_warning"), "communication_scores": scores, "dimension_evidence_status": coverage, "cq_total": overall, "cq_scores": {CLASS_CQ_DIMENSIONS[key][0]: scores[key] for key in CLASS_CQ_DIMENSIONS}, "dim_names": [CLASS_CQ_DIMENSIONS[key][0] for key in CLASS_CQ_DIMENSIONS], "weights": [CLASS_CQ_DIMENSIONS[key][1] for key in CLASS_CQ_DIMENSIONS], "dimension_order": list(CLASS_CQ_DIMENSIONS), "exchange_count": len(units), "what_i_did_good": [], "areas_for_improvement": [], "session_strengths": result.get("session_strengths") or [], "session_priorities": priorities, "dimension_details": details, "communication_quality_report": {"overall_cq_score": overall, "per_question_analysis": normalized}}
+
+
+def _run_class_presentation_communication_quality(transcripts, config, slides, qa_bank):
+    units = _class_cq_units(transcripts, qa_bank)
+    if not units:
+        return _class_cq_unavailable("未收到可用于分析的完整问题与回答转写，因此暂时无法生成沟通质量分析。")
+    if not AI_ENABLED:
+        return _class_cq_unavailable("沟通质量分析服务暂不可用；系统不会生成模拟分数或虚构反馈。")
+    payload = {
+        "task": "Evaluate ONLY Class Presentation post-presentation Q&A communication. Do not evaluate narration, slide design, factual correctness, PPT keyword coverage, ideal answer matches, WPM, fillers, answer length, or a Rule of Three unless that is the actual question task.",
+        "rules": "Use only the examiner question and the student's actual answer as speech evidence. Slides may provide background only and must never be treated as a model answer. All analysis fields must be Simplified Chinese; English is allowed only for copied question/answer quotes, phrase starters, and optional say_this_instead (<25 words). Each question assesses one or two dimensions and every feedback quote must be an exact contiguous substring of its answer. Never judge factual correctness, ideal-answer matching, keyword coverage, WPM, fillers, answer length, or non-verbal behaviour. For every dimension card, return every prescribed subcriterion with its raw score, max score, Chinese actual-performance text, Chinese rationale, and exact student-quote evidence where available. The server recalculates all dimension and overall scores from these raw points. Mark insufficient observations as limited_evidence; do not fabricate evidence.",
+        "rubric": {key: {"label_zh": value[0], "weight": value[1], "subcriteria": [{"id": ident, "max": maximum, "standard_zh": standard} for ident, maximum, standard in CLASS_CQ_SUBCRITERIA[key]]} for key, value in CLASS_CQ_DIMENSIONS.items()},
+        "question_answer_units": units,
+        "required_schema": {"analysis_status": "complete", "analysis_scope": "class_presentation_qa_only", "coverage_warning": "Chinese string or null", "communication_scores": {key: "0-100; will be recalculated" for key in CLASS_CQ_DIMENSIONS}, "dimension_evidence_status": {key: "sufficient or limited_evidence" for key in CLASS_CQ_DIMENSIONS}, "dimension_cards": {key: {"actual_performance_zh": "Chinese", "subcriteria": [{"subcriterion_id": "exact rubric id", "standard_zh": "Chinese", "score": "integer raw score", "max_score": "exact rubric maximum", "evidence_status": "sufficient or limited_evidence", "actual_performance_zh": "Chinese", "score_rationale_zh": "Chinese", "evidence": [{"student_answer_quote": "exact substring from a source answer", "timestamp_start": "source timestamp", "timestamp_end": "source timestamp"}]}]} for key in CLASS_CQ_DIMENSIONS}, "per_question_analysis": [{"question_id": "input id", "dimensions_assessed": ["one or two keys"], "what_i_did_well": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "criterion_zh": "Chinese", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "analysis_zh": "Chinese"}], "areas_for_improvement": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "criterion_zh": "Chinese", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "optional English <=25 words, concrete and question-specific"}]}], "session_strengths": [], "session_priorities": [{"dimension": "key", "action_zh": "Chinese", "why_zh": "Chinese"}]}}
+    parsed = []
+    for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
+        try:
+            raw = (_create_chat_completion(model, 6000, messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]).choices[0].message.content or "").strip()
+            if raw:
+                parsed.append(_class_cq_parse(raw))
+        except Exception as exc:
+            app.logger.warning("[CLASS CQ] model request failed via %s: %s", model, exc)
+    for candidate in parsed:
+        normalized = _normalize_class_cq_result(candidate, units)
+        if normalized:
+            return normalized
+    repair = {"task": "Return only a complete valid Class Presentation CQ JSON. Preserve each input question_id and exact answer substrings; use the supplied rubric. Do not add scores when evidence is unavailable.", "source_units": units, "required_schema": payload["required_schema"], "invalid_responses": parsed}
+    for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
+        try:
+            raw = (_create_chat_completion(model, 6000, messages=[{"role": "user", "content": json.dumps(repair, ensure_ascii=False)}]).choices[0].message.content or "").strip()
+            normalized = _normalize_class_cq_result(_class_cq_parse(raw), units) if raw else None
+            if normalized:
+                return normalized
+        except Exception as exc:
+            app.logger.warning("[CLASS CQ] repair failed via %s: %s", model, exc)
+    return _class_cq_unavailable("本次问答的模型输出未能通过逐字引文与评分校验，因此系统未生成不可靠的沟通质量报告。")
+
+
 def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
                                           scene_slug=None, total_qa_seconds=0,
                                           slides=None, qa_bank=None):
@@ -3312,6 +3611,12 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     # its heuristic/mock fallbacks.
     if scene_slug == "thesis_defense":
         return _run_thesis_defense_communication_quality(comm_transcripts, config, slides)
+
+    # Class Presentation now has its own evidence-first five-dimension Q&A
+    # rubric. It intentionally bypasses the legacy PPT-content/keyword and
+    # dual-track heuristic evaluators below.
+    if scene_slug == "class_presentation":
+        return _run_class_presentation_communication_quality(comm_transcripts, config, slides, qa_bank)
 
     # ── Dual-track routing: anchor question present → use Module 3 evaluator ──
     _anchor_ts = [t for t in comm_transcripts if t.get("question_type") == "anchor" and t["answer"].strip()]
