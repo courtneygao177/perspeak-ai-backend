@@ -60,11 +60,22 @@ def _item(dimension, quote, index, improvement=False):
         "transcript_section": segment["section"],
     }
     if improvement:
+        rubric_subcriterion = {
+            "Structure": "research_chain",
+            "Fluency": "complete_natural_expression",
+            "Relevance": "findings_contribution_meaning",
+            "Delivery": "audience_guidance",
+        }[dimension]
         base.update({
+            "rubric_subcriterion": rubric_subcriterion,
             "priority": "medium",
             "impact": "A clearer connection would help the committee follow the research story.",
             "actionable_next_step": "Add one concise link before moving to the next research stage.",
-            "say_this_instead": "This finding directly answers the research question.",
+            "ppt_anchor": quote,
+            "say_this_instead": (
+                "To present this point clearly, I would explain that "
+                f"{quote.lower()}."
+            ),
         })
     else:
         base["analysis"] = "This gives the committee a concrete part of the research narrative."
@@ -178,6 +189,30 @@ class TestThesisDefensePQ(unittest.TestCase):
         ok, error = _validate_thesis_pq_result(result, SEGMENTS, 190)
         self.assertFalse(ok)
         self.assertIn("short Thesis Defense rehearsal", error)
+
+    def test_rejects_a_generic_replacement_when_ppt_context_is_available(self):
+        result = copy.deepcopy(VALID_RESULT)
+        result["areas_for_improvement"][0]["say_this_instead"] = (
+            "This point is important and shows why the research matters to everyone."
+        )
+        slide_context = [{"title": "Mental health support", "content": " ".join(
+            segment["text"] for segment in SEGMENTS
+        )}]
+        ok, error = _validate_thesis_pq_result(
+            result, SEGMENTS, 190, slide_context
+        )
+        self.assertFalse(ok)
+        self.assertIn("meaningful PPT or transcript anchor", error)
+
+    def test_accepts_a_grounded_replacement_with_a_real_anchor(self):
+        result = copy.deepcopy(VALID_RESULT)
+        slide_context = [{"title": "Mental health support", "content": " ".join(
+            segment["text"] for segment in SEGMENTS
+        )}]
+        ok, error = _validate_thesis_pq_result(
+            result, SEGMENTS, 190, slide_context
+        )
+        self.assertTrue(ok, error)
 
     def test_normalizer_preserves_four_dimension_card_contract(self):
         output = _normalize_thesis_pq_result(copy.deepcopy(VALID_RESULT), SEGMENTS)

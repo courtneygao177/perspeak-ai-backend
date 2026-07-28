@@ -519,6 +519,12 @@
                   {% if item.listener_impact is defined and item.listener_impact %}
                   <p class="text-amber-800 text-xs leading-relaxed italic mb-1.5">{{ item.listener_impact }}</p>
                   {% endif %}
+                  {% if is_thesis and item.ppt_anchor is defined and item.ppt_anchor %}
+                  <p class="text-[11px] text-slate-500 leading-relaxed mb-2">内容锚点：{{ item.ppt_anchor }}</p>
+                  {% endif %}
+                  {% if is_thesis and item.rubric_subcriterion_label is defined and item.rubric_subcriterion_label %}
+                  <p class="text-[11px] text-slate-500 leading-relaxed mb-2">评分细分：{{ item.rubric_subcriterion_label }}</p>
+                  {% endif %}
                   <div class="mb-2">
                     <p class="fix-label text-amber-700 mb-1">你的原话</p>
                     <div class="space-y-1">
@@ -629,6 +635,54 @@
        ══════════════════════════════════════════════════════════════════════ -->
   <div id="tab-pane-cq" class="hidden">
   {% if cq and cq.has_data %}
+  {% if is_thesis and cq.analysis_scope == 'thesis_defense_qa_only' %}
+  <div class="relative z-10 mb-8">
+    <div class="flex flex-wrap items-center gap-2 mb-5">
+      <h2 class="text-sm font-semibold text-[#0F172A]">答辩沟通质量</h2>
+      <span class="text-xs font-mono px-2 py-0.5 rounded-full border" style="color:#46626F;background:#F1F4F5;border-color:#C5D1D5">{{ cq.exchange_count }} 轮问答</span>
+      <span class="text-xs font-mono px-2 py-0.5 rounded-full border" style="color:#15803D;background:#ECFDF5;border-color:#BBF7D0">五维证据评估</span>
+    </div>
+    {% if cq.coverage_warning %}
+    <div class="rounded-xl border px-4 py-3 mb-5 text-sm text-amber-900" style="background:#FFFBEB;border-color:#FDE68A">{{ cq.coverage_warning }}</div>
+    {% endif %}
+    <div class="section-card p-5 mb-5 grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+      <div class="flex items-center gap-5">
+        <div class="relative w-20 h-20 flex-shrink-0">
+          <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90"><circle cx="18" cy="18" r="15.9" fill="none" stroke="#E2E8F0" stroke-width="3.5"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#46626F" stroke-width="3.5" stroke-dasharray="{{ cq.cq_total }} {{ 100 - cq.cq_total }}" stroke-linecap="round"/></svg>
+          <div class="absolute inset-0 flex items-center justify-center"><span class="text-lg font-bold text-[#0F172A]">{{ cq.cq_total }}</span></div>
+        </div>
+        <div><p class="text-xs text-slate-500 font-semibold mb-1">综合沟通评分</p><p class="text-3xl font-bold text-[#0F172A]">{{ cq.cq_total }}<span class="text-gray-500 text-xl">/100</span></p><p class="text-xs text-slate-500 mt-1">仅根据本次真实 Q&amp;A 转写</p></div>
+      </div>
+      <div class="h-56"><canvas id="thesisCqRadar"></canvas></div>
+    </div>
+    {% set cq_order = ['question_alignment', 'answer_structure_completeness', 'reasoning_specificity', 'interaction_regulation', 'professional_assertiveness'] %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+      {% for key in cq_order %}
+      {% set detail = cq.dimension_details.get(key, {}) if cq.dimension_details is defined else {} %}
+      {% set dc = detail.score if detail and detail.score is defined else cq.communication_scores.get(key, 0) %}
+      {% set label = detail.label_zh if detail and detail.label_zh is defined else {'question_alignment':'问题理解与回应对齐', 'answer_structure_completeness':'回答结构与完整性', 'reasoning_specificity':'推理可见性与学术具体性', 'interaction_regulation':'互动调节与答辩策略', 'professional_assertiveness':'高压下的专业坚定'}[key] %}
+      <button type="button" class="dim-card p-4 text-left" onclick="openCqModal('{{ key }}')">
+        <div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold text-[#46626F]">{{ label }}</span><span class="text-xs font-mono text-slate-500">{{ dc }}/100</span></div>
+        <div class="flex items-end justify-between"><div><span class="text-2xl font-bold text-[#0F172A]">{{ dc }}</span><span class="text-[10px] text-slate-400 ml-2">{{ detail.evidence_status == 'sufficient' and '证据充足' or '证据有限' }}</span></div><span class="text-slate-400">›</span></div>
+        <div class="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:{{ dc }}%;background:#46626F"></div></div>
+      </button>
+      {% endfor %}
+    </div>
+    {% set pqa_list = cq.communication_quality_report.per_question_analysis %}
+    <div class="space-y-4"><h3 class="text-sm font-semibold text-[#0F172A]">逐题沟通分析</h3>
+      {% for q in pqa_list %}
+      <div class="section-card p-5"><div class="flex items-center gap-2 mb-3"><span class="cq-tag" style="background:#E6E2EB;color:#413A49">Q{{ loop.index }}</span><span class="text-xs text-slate-500">{{ q.question_type }}</span></div>
+        <p class="text-sm font-semibold text-[#0F172A] mb-3">{{ q.examiner_question_quote }}</p>
+        <div class="cq-quote-box mb-3"><p class="text-xs text-slate-500 font-semibold mb-1">你的真实回答</p><p class="text-xs text-slate-700 italic leading-relaxed">{{ q.presenter_answer_quote }}</p></div>
+        <div class="flex flex-wrap gap-1 mb-3">{% for dimension in q.dimensions_assessed %}<span class="text-xs px-2 py-1 rounded-full" style="background:#F1F4F5;color:#46626F">{{ {'question_alignment':'问题对齐','answer_structure_completeness':'回答结构','reasoning_specificity':'推理具体性','interaction_regulation':'互动调节','professional_assertiveness':'专业坚定'}[dimension] }}</span>{% endfor %}</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="cq-fix-panel"><p class="text-xs text-green-700 font-semibold mb-2">做得好的地方</p>{% for item in q.what_i_did_well %}<p class="text-xs font-semibold text-slate-700">{{ item.title_zh }}</p><p class="text-xs text-slate-600 italic mt-1">“{{ item.presenter_answer_quote }}”</p><p class="text-xs text-slate-700 mt-1">{{ item.analysis_zh }}</p>{% else %}<p class="text-xs text-slate-500">本题没有足够可验证的优势证据。</p>{% endfor %}</div>
+          <div class="cq-quote-box"><p class="text-xs text-amber-700 font-semibold mb-2">可以改进的地方</p>{% for item in q.areas_for_improvement %}<p class="text-xs font-semibold text-slate-700">{{ item.title_zh }}</p><p class="text-xs text-slate-600 italic mt-1">“{{ item.presenter_answer_quote }}”</p><p class="text-xs text-slate-700 mt-1">{{ item.impact_zh }}</p><p class="text-xs text-slate-700 mt-1">练习：{{ item.actionable_next_step_zh }}</p>{% else %}<p class="text-xs text-slate-500">本题没有足够可验证的改进证据。</p>{% endfor %}{% if q.areas_for_improvement %}{% set strategy = q.answering_strategy %}<div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3"><p class="text-xs font-semibold text-blue-800">本题答题策略：{{ strategy.title_zh }}</p><p class="text-xs text-blue-800 mt-1">{{ strategy.purpose_zh }}</p><ol class="text-xs text-blue-800 mt-2 list-decimal list-inside">{% for step in strategy.steps_zh %}<li>{{ step }}</li>{% endfor %}</ol><p class="text-xs text-blue-800 mt-2">可用句式：{{ strategy.phrase_starters_en|join(' / ') }}</p><p class="text-xs font-semibold text-blue-800 mt-2">英文完整示例（按本题回答改写）</p><p class="text-xs text-blue-800 italic mt-1">{{ q.areas_for_improvement[0].say_this_instead }}</p></div>{% endif %}</div>
+        </div>
+      </div>{% endfor %}
+    </div>
+  </div>
+  {% else %}
   <div class="relative z-10 mb-8">
 
     <!-- Section header -->
@@ -788,7 +842,13 @@
       {% endfor %}
     </div>
   </div>
-  {% endif %}
+  {% endif %}{# thesis CQ branch #}
+  {% else %}
+  <div class="relative z-10 rounded-2xl border px-5 py-4 text-sm" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">
+    <p class="font-semibold mb-1">本次未生成可验证的沟通质量报告</p>
+    <p>{{ cq.coverage_warning if cq and cq.coverage_warning else '未收到足够的真实问答转写，因此不会显示模拟分数或虚构反馈。' }}</p>
+  </div>
+  {% endif %}{# CQ has data #}
   </div><!-- /tab-pane-cq -->
 
   <!-- ══════════════════════════════════════════════════════════════════════
@@ -1013,6 +1073,30 @@
   </div>
 </div>
 {% endfor %}
+
+{# Thesis Defense Communication Quality: five clickable score cards use the
+   same modal interaction as Presentation Quality, with a stable rubric and
+   evidence-grounded performance text for each dimension. #}
+{% if cq and cq.has_data and is_thesis and cq.analysis_scope == 'thesis_defense_qa_only' %}
+{% for key in ['question_alignment', 'answer_structure_completeness', 'reasoning_specificity', 'interaction_regulation', 'professional_assertiveness'] %}
+{% set detail = cq.dimension_details.get(key, {}) if cq.dimension_details is defined else {} %}
+{% set label = detail.label_zh if detail and detail.label_zh is defined else {'question_alignment':'问题理解与回应对齐', 'answer_structure_completeness':'回答结构与完整性', 'reasoning_specificity':'推理可见性与学术具体性', 'interaction_regulation':'互动调节与答辩策略', 'professional_assertiveness':'高压下的专业坚定'}[key] %}
+{% set dc = detail.score if detail and detail.score is defined else cq.communication_scores.get(key, 0) %}
+<div id="modal-cq-{{ key }}" class="modal-bg" onclick="if(event.target===this)closeCqModal('{{ key }}')">
+  <div class="modal-box" style="max-width:540px">
+    <button onclick="closeCqModal('{{ key }}')" class="absolute top-4 right-4 text-gray-600 hover:text-[#0F172A] transition-colors" aria-label="关闭">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+    <p class="text-xs font-bold uppercase tracking-widest mb-2" style="color:#46626F">{{ label }}</p>
+    <div class="flex items-baseline gap-3 mb-4"><span class="text-5xl font-bold text-[#0F172A]">{{ dc }}</span><span class="text-xl font-semibold" style="color:#46626F">/100</span><span class="text-xs text-slate-400">权重 {{ detail.weight_percent if detail and detail.weight_percent is defined else '' }}%</span></div>
+    <div class="mb-4"><p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">你在本次答辩中的表现</p><p class="text-[#0F172A] text-sm leading-relaxed">{{ detail.performance_zh if detail and detail.performance_zh is defined else '本轮问答中没有足够的可展示细节。' }}</p></div>
+    <div class="rounded-xl p-4 border border-slate-200 bg-slate-50 mb-3"><p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">评分依据</p><p class="text-slate-700 text-sm leading-relaxed">{{ detail.criterion_zh if detail and detail.criterion_zh is defined else '' }}</p></div>
+    <div class="rounded-xl p-4 border border-slate-200 bg-slate-50"><p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">评分细则</p><p class="text-slate-700 text-sm leading-relaxed">{{ detail.band_guide_zh if detail and detail.band_guide_zh is defined else '' }}</p></div>
+    <div class="mt-4"><div class="flex justify-between text-xs text-slate-500 mb-1.5"><span>待加强</span><span>优秀</span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:{{ dc }}%;background:#46626F"></div></div></div>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -1058,6 +1142,22 @@
       }
     }
   });
+
+  // Thesis Defense Q&A has its own five-dimension radar. It is created only
+  // for the evidence-first CQ result, so older reports keep their existing UI.
+  const thesisCqRadar = document.getElementById('thesisCqRadar');
+  const thesisCq = __REPORT_DATA.cqData || {};
+  if (thesisCqRadar && thesisCq.analysis_scope === 'thesis_defense_qa_only') {
+    const cqScores = thesisCq.communication_scores || {};
+    new Chart(thesisCqRadar, {
+      type: 'radar',
+      data: {
+        labels: ['问题对齐', '回答结构', '推理具体性', '互动调节', '专业坚定'],
+        datasets: [{ data: [cqScores.question_alignment, cqScores.answer_structure_completeness, cqScores.reasoning_specificity, cqScores.interaction_regulation, cqScores.professional_assertiveness], backgroundColor: 'rgba(70,98,111,.16)', borderColor: '#46626F', pointBackgroundColor: '#16A34A', pointRadius: 3, borderWidth: 2 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { r: { min: 0, max: 100, ticks: { display: false }, pointLabels: { color: '#475569', font: { size: 10 } }, grid: { color: 'rgba(70,98,111,.12)' }, angleLines: { color: 'rgba(70,98,111,.12)' } } } }
+    });
+  }
 
   // ── PQ Score bar animations ────────────────────────────────────────────────
   setTimeout(() => {
@@ -1253,6 +1353,14 @@
   }
   function closeModal(key) {
     document.getElementById('modal-' + key).classList.remove('open');
+  }
+  function openCqModal(key) {
+    const modal = document.getElementById('modal-cq-' + key);
+    if (modal) modal.classList.add('open');
+  }
+  function closeCqModal(key) {
+    const modal = document.getElementById('modal-cq-' + key);
+    if (modal) modal.classList.remove('open');
   }
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
