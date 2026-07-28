@@ -649,18 +649,19 @@
       </div>
       <div class="h-56"><canvas id="thesisCqRadar"></canvas></div>
     </div>
-    <div class="section-card p-5 mb-5">
-      {% for dn in cq.dim_names %}
-      {% set dc = cq.cq_scores.get(dn, 0) %}
-      {% set status = cq.dimension_evidence_status.values()|list %}
-      <div class="mb-3 last:mb-0"><div class="flex justify-between text-xs mb-1"><span class="font-semibold text-[#46626F]">{{ dn }} <span class="font-normal text-slate-400">· {{ status[loop.index0] == 'sufficient' and '证据充足' or '证据有限' }}</span></span><span class="font-bold">{{ dc }}/100</span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:{{ dc }}%;background:#46626F"></div></div></div>
+    {% set cq_order = ['question_alignment', 'answer_structure_completeness', 'reasoning_specificity', 'interaction_regulation', 'professional_assertiveness'] %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+      {% for key in cq_order %}
+      {% set detail = cq.dimension_details.get(key, {}) if cq.dimension_details is defined else {} %}
+      {% set dc = detail.score if detail and detail.score is defined else cq.communication_scores.get(key, 0) %}
+      {% set label = detail.label_zh if detail and detail.label_zh is defined else {'question_alignment':'问题理解与回应对齐', 'answer_structure_completeness':'回答结构与完整性', 'reasoning_specificity':'推理可见性与学术具体性', 'interaction_regulation':'互动调节与答辩策略', 'professional_assertiveness':'高压下的专业坚定'}[key] %}
+      <button type="button" class="dim-card p-4 text-left" onclick="openCqModal('{{ key }}')">
+        <div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold text-[#46626F]">{{ label }}</span><span class="text-xs font-mono text-slate-500">{{ dc }}/100</span></div>
+        <div class="flex items-end justify-between"><div><span class="text-2xl font-bold text-[#0F172A]">{{ dc }}</span><span class="text-[10px] text-slate-400 ml-2">{{ detail.evidence_status == 'sufficient' and '证据充足' or '证据有限' }}</span></div><span class="text-slate-400">›</span></div>
+        <div class="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:{{ dc }}%;background:#46626F"></div></div>
+      </button>
       {% endfor %}
     </div>
-    {% if cq.session_priorities %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-      {% for priority in cq.session_priorities %}<div class="rounded-xl border p-4" style="background:#FFFBEB;border-color:#FDE68A"><p class="text-xs font-semibold text-amber-800 mb-1">练习重点 {{ priority.priority }}</p><p class="text-sm font-semibold text-slate-800">{{ priority.action_zh }}</p><p class="text-xs text-slate-600 mt-1">{{ priority.why_zh }}</p></div>{% endfor %}
-    </div>
-    {% endif %}
     {% set pqa_list = cq.communication_quality_report.per_question_analysis %}
     <div class="space-y-4"><h3 class="text-sm font-semibold text-[#0F172A]">逐题沟通分析</h3>
       {% for q in pqa_list %}
@@ -670,7 +671,7 @@
         <div class="flex flex-wrap gap-1 mb-3">{% for dimension in q.dimensions_assessed %}<span class="text-xs px-2 py-1 rounded-full" style="background:#F1F4F5;color:#46626F">{{ {'question_alignment':'问题对齐','answer_structure_completeness':'回答结构','reasoning_specificity':'推理具体性','interaction_regulation':'互动调节','professional_assertiveness':'专业坚定'}[dimension] }}</span>{% endfor %}</div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="cq-fix-panel"><p class="text-xs text-green-700 font-semibold mb-2">做得好的地方</p>{% for item in q.what_i_did_well %}<p class="text-xs font-semibold text-slate-700">{{ item.title_zh }}</p><p class="text-xs text-slate-600 italic mt-1">“{{ item.presenter_answer_quote }}”</p><p class="text-xs text-slate-700 mt-1">{{ item.analysis_zh }}</p>{% else %}<p class="text-xs text-slate-500">本题没有足够可验证的优势证据。</p>{% endfor %}</div>
-          <div class="cq-quote-box"><p class="text-xs text-amber-700 font-semibold mb-2">可以改进的地方</p>{% for item in q.areas_for_improvement %}<p class="text-xs font-semibold text-slate-700">{{ item.title_zh }}</p><p class="text-xs text-slate-600 italic mt-1">“{{ item.presenter_answer_quote }}”</p><p class="text-xs text-slate-700 mt-1">{{ item.impact_zh }}</p><p class="text-xs text-slate-700 mt-1">练习：{{ item.actionable_next_step_zh }}</p>{% if item.say_this_instead %}<div class="say-instead mt-2"><p class="text-green-800 text-xs font-medium"><span class="say-instead-arrow">→</span>可以这样说：{{ item.say_this_instead }}</p></div>{% endif %}{% else %}<p class="text-xs text-slate-500">本题没有足够可验证的改进证据。</p>{% endfor %}{% if q.areas_for_improvement %}{% set strategy = q.answering_strategy %}<div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3"><p class="text-xs font-semibold text-blue-800">本题答题策略：{{ strategy.title_zh }}</p><p class="text-xs text-blue-800 mt-1">{{ strategy.purpose_zh }}</p><ol class="text-xs text-blue-800 mt-2 list-decimal list-inside">{% for step in strategy.steps_zh %}<li>{{ step }}</li>{% endfor %}</ol><p class="text-xs text-blue-800 mt-2">可用句式：{{ strategy.phrase_starters_en|join(' / ') }}</p><p class="text-xs font-semibold text-blue-800 mt-2">英文完整示例（按本题回答改写）</p><p class="text-xs text-blue-800 italic mt-1">{{ q.areas_for_improvement[0].say_this_instead }}</p></div>{% endif %}</div>
+          <div class="cq-quote-box"><p class="text-xs text-amber-700 font-semibold mb-2">可以改进的地方</p>{% for item in q.areas_for_improvement %}<p class="text-xs font-semibold text-slate-700">{{ item.title_zh }}</p><p class="text-xs text-slate-600 italic mt-1">“{{ item.presenter_answer_quote }}”</p><p class="text-xs text-slate-700 mt-1">{{ item.impact_zh }}</p><p class="text-xs text-slate-700 mt-1">练习：{{ item.actionable_next_step_zh }}</p>{% else %}<p class="text-xs text-slate-500">本题没有足够可验证的改进证据。</p>{% endfor %}{% if q.areas_for_improvement %}{% set strategy = q.answering_strategy %}<div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3"><p class="text-xs font-semibold text-blue-800">本题答题策略：{{ strategy.title_zh }}</p><p class="text-xs text-blue-800 mt-1">{{ strategy.purpose_zh }}</p><ol class="text-xs text-blue-800 mt-2 list-decimal list-inside">{% for step in strategy.steps_zh %}<li>{{ step }}</li>{% endfor %}</ol><p class="text-xs text-blue-800 mt-2">可用句式：{{ strategy.phrase_starters_en|join(' / ') }}</p><p class="text-xs font-semibold text-blue-800 mt-2">英文完整示例（按本题回答改写）</p><p class="text-xs text-blue-800 italic mt-1">{{ q.areas_for_improvement[0].say_this_instead }}</p></div>{% endif %}</div>
         </div>
       </div>{% endfor %}
     </div>
@@ -1066,6 +1067,30 @@
   </div>
 </div>
 {% endfor %}
+
+{# Thesis Defense Communication Quality: five clickable score cards use the
+   same modal interaction as Presentation Quality, with a stable rubric and
+   evidence-grounded performance text for each dimension. #}
+{% if cq and cq.has_data and is_thesis and cq.analysis_scope == 'thesis_defense_qa_only' %}
+{% for key in ['question_alignment', 'answer_structure_completeness', 'reasoning_specificity', 'interaction_regulation', 'professional_assertiveness'] %}
+{% set detail = cq.dimension_details.get(key, {}) if cq.dimension_details is defined else {} %}
+{% set label = detail.label_zh if detail and detail.label_zh is defined else {'question_alignment':'问题理解与回应对齐', 'answer_structure_completeness':'回答结构与完整性', 'reasoning_specificity':'推理可见性与学术具体性', 'interaction_regulation':'互动调节与答辩策略', 'professional_assertiveness':'高压下的专业坚定'}[key] %}
+{% set dc = detail.score if detail and detail.score is defined else cq.communication_scores.get(key, 0) %}
+<div id="modal-cq-{{ key }}" class="modal-bg" onclick="if(event.target===this)closeCqModal('{{ key }}')">
+  <div class="modal-box" style="max-width:540px">
+    <button onclick="closeCqModal('{{ key }}')" class="absolute top-4 right-4 text-gray-600 hover:text-[#0F172A] transition-colors" aria-label="关闭">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+    <p class="text-xs font-bold uppercase tracking-widest mb-2" style="color:#46626F">{{ label }}</p>
+    <div class="flex items-baseline gap-3 mb-4"><span class="text-5xl font-bold text-[#0F172A]">{{ dc }}</span><span class="text-xl font-semibold" style="color:#46626F">/100</span><span class="text-xs text-slate-400">权重 {{ detail.weight_percent if detail and detail.weight_percent is defined else '' }}%</span></div>
+    <div class="mb-4"><p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">你在本次答辩中的表现</p><p class="text-[#0F172A] text-sm leading-relaxed">{{ detail.performance_zh if detail and detail.performance_zh is defined else '本轮问答中没有足够的可展示细节。' }}</p></div>
+    <div class="rounded-xl p-4 border border-slate-200 bg-slate-50 mb-3"><p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">评分依据</p><p class="text-slate-700 text-sm leading-relaxed">{{ detail.criterion_zh if detail and detail.criterion_zh is defined else '' }}</p></div>
+    <div class="rounded-xl p-4 border border-slate-200 bg-slate-50"><p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">评分细则</p><p class="text-slate-700 text-sm leading-relaxed">{{ detail.band_guide_zh if detail and detail.band_guide_zh is defined else '' }}</p></div>
+    <div class="mt-4"><div class="flex justify-between text-xs text-slate-500 mb-1.5"><span>待加强</span><span>优秀</span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:{{ dc }}%;background:#46626F"></div></div></div>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -1322,6 +1347,14 @@
   }
   function closeModal(key) {
     document.getElementById('modal-' + key).classList.remove('open');
+  }
+  function openCqModal(key) {
+    const modal = document.getElementById('modal-cq-' + key);
+    if (modal) modal.classList.add('open');
+  }
+  function closeCqModal(key) {
+    const modal = document.getElementById('modal-cq-' + key);
+    if (modal) modal.classList.remove('open');
   }
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {

@@ -2666,6 +2666,67 @@ _THESIS_CQ_DIMENSIONS = {
     "professional_assertiveness": ("高压下的专业坚定", 0.20, "是否在质疑下保持尊重、清楚和有依据的立场。"),
 }
 
+# These are the public, stable scoring criteria shown in the report.  They are
+# deliberately server-owned rather than model-generated: the model evaluates
+# the evidence, while the product must explain the same rubric consistently to
+# every candidate.
+_THESIS_CQ_SCORE_GUIDES = {
+    "question_alignment": {
+        "band_guide_zh": "90–100：完整回应问题对象、范围与任务；70–89：回应核心问题，但有少量遗漏；40–69：只回应部分问题或偏离重点；0–39：未有效回应评委问题。",
+    },
+    "answer_structure_completeness": {
+        "band_guide_zh": "90–100：结论清楚，并有理由、依据/限定与收束；70–89：主结论和理由基本完整；40–69：结构松散，缺少关键环节；0–39：没有形成可辨认的完整回答。",
+    },
+    "reasoning_specificity": {
+        "band_guide_zh": "90–100：判断路径、研究依据、术语与边界具体可核；70–89：推理总体清楚，细节仍可补充；40–69：多为笼统陈述，缺少证据或方法细节；0–39：无法看出研究推理路径。",
+    },
+    "interaction_regulation": {
+        "band_guide_zh": "90–100：能澄清问题、拆分复合提问并稳妥处理追问；70–89：基本能保持互动节奏；40–69：面对追问或不确定性时回应失焦；0–39：无法有效调节答辩互动。",
+    },
+    "professional_assertiveness": {
+        "band_guide_zh": "90–100：在质疑下仍尊重、清楚且有依据地坚持立场；70–89：态度专业、立场基本明确；40–69：表达犹豫或缺少依据；0–39：回避立场、失去专业回应。",
+    },
+}
+
+
+def _thesis_cq_dimension_details(scores, coverage, per_question_analysis):
+    """Build evidence-grounded detail cards for the five CQ score dimensions.
+
+    A card may quote the evaluator's already-validated analysis, but it never
+    asks the model to invent a second generic explanation.  This keeps the UI
+    useful while preserving the source-evidence contract of the Q&A report.
+    """
+    details = {}
+    for key, (label_zh, weight, criterion_zh) in _THESIS_CQ_DIMENSIONS.items():
+        strengths, improvements = [], []
+        for question in per_question_analysis or []:
+            for item in question.get("what_i_did_well") or []:
+                if item.get("dimension") == key and item.get("analysis_zh"):
+                    strengths.append(item["analysis_zh"].strip())
+            for item in question.get("areas_for_improvement") or []:
+                if item.get("dimension") == key and item.get("impact_zh"):
+                    improvements.append(item["impact_zh"].strip())
+
+        if strengths:
+            performance = strengths[0]
+        elif improvements:
+            performance = improvements[0]
+        elif coverage.get(key) == "limited_evidence":
+            performance = "本轮与该维度直接相关的回答证据有限；该分数只反映已记录的问答内容。"
+        else:
+            performance = "本轮问答中没有足够的可展示细节；请结合逐题分析查看对应回答。"
+
+        details[key] = {
+            "label_zh": label_zh,
+            "weight_percent": int(weight * 100),
+            "score": scores[key],
+            "criterion_zh": criterion_zh,
+            "band_guide_zh": _THESIS_CQ_SCORE_GUIDES[key]["band_guide_zh"],
+            "performance_zh": performance,
+            "evidence_status": coverage.get(key, "limited_evidence"),
+        }
+    return details
+
 
 def _thesis_cq_unavailable(message):
     """The only valid Thesis Defense CQ fallback: no invented scores or quotes."""
@@ -2676,6 +2737,7 @@ def _thesis_cq_unavailable(message):
         "weights": [], "exchange_count": 0, "what_i_did_good": [],
         "areas_for_improvement": [], "communication_scores": None,
         "dimension_evidence_status": None,
+        "dimension_details": {},
         "communication_quality_report": {"overall_cq_score": None, "per_question_analysis": []},
         "session_strengths": [], "session_priorities": [],
     }
@@ -3029,6 +3091,7 @@ def _normalize_thesis_cq_result(result, units):
         "exchange_count": len(units), "what_i_did_good": verified_strengths,
         "areas_for_improvement": [], "session_strengths": verified_strengths,
         "session_priorities": priorities,
+        "dimension_details": _thesis_cq_dimension_details(scores, coverage, normalized),
         "communication_quality_report": {"overall_cq_score": overall, "per_question_analysis": normalized},
     }
 

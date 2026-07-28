@@ -141,6 +141,19 @@ class TestThesisDefenseCQ(unittest.TestCase):
         self.assertEqual(output["communication_quality_report"]["per_question_analysis"][0]["answering_strategy"]["strategy_id"], "define_defend")
         self.assertEqual(output["cq_total"], 68)
 
+    def test_normalized_result_includes_evidence_grounded_dimension_cards(self):
+        output = app_module._normalize_thesis_cq_result(
+            valid_response(), app_module._thesis_cq_units(UNITS)
+        )
+
+        details = output["dimension_details"]
+        self.assertEqual(set(details), set(app_module._THESIS_CQ_DIMENSIONS))
+        structure = details["answer_structure_completeness"]
+        self.assertEqual(structure["weight_percent"], 20)
+        self.assertEqual(structure["score"], 70)
+        self.assertIn("理由", structure["performance_zh"])
+        self.assertIn("90–100", structure["band_guide_zh"])
+
     def test_non_verbatim_feedback_quote_is_rejected(self):
         result = valid_response()
         result["per_question_analysis"][0]["what_i_did_well"][0]["presenter_answer_quote"] = "invented answer"
