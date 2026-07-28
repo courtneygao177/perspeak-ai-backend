@@ -519,6 +519,12 @@
                   {% if item.listener_impact is defined and item.listener_impact %}
                   <p class="text-amber-800 text-xs leading-relaxed italic mb-1.5">{{ item.listener_impact }}</p>
                   {% endif %}
+                  {% if is_thesis and item.ppt_anchor is defined and item.ppt_anchor %}
+                  <p class="text-[11px] text-slate-500 leading-relaxed mb-2">内容锚点：{{ item.ppt_anchor }}</p>
+                  {% endif %}
+                  {% if is_thesis and item.rubric_subcriterion_label is defined and item.rubric_subcriterion_label %}
+                  <p class="text-[11px] text-slate-500 leading-relaxed mb-2">评分细分：{{ item.rubric_subcriterion_label }}</p>
+                  {% endif %}
                   <div class="mb-2">
                     <p class="fix-label text-amber-700 mb-1">你的原话</p>
                     <div class="space-y-1">

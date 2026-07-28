@@ -4967,7 +4967,7 @@ This is not a TED Talk, a class presentation, or an MBA case pitch.
 
 DO NOT evaluate examiner questions, Q&A answers, pressure handling, disagreement,
 rebuttal, academic correctness, slide visual design, slide keyword coverage, or
-script rewriting. Evaluate how clearly and professionally the candidate presents
+rewrite the whole presentation. Evaluate how clearly and professionally the candidate presents
 the research story: why the study matters, what it investigates, how it was
 conducted, what it found, and what the findings mean.
 
@@ -5023,9 +5023,38 @@ FEEDBACK RULES
 - Be specific, concise, supportive, and suitable for an IELTS 5.5-6.0 English
   learner. An improvement identifies one observable behaviour, listener impact,
   and one small presentation-only next step.
-- say_this_instead is optional. Use it only for a local phrase that can improve
-  without changing a research claim; it must be English only, under 25 words,
-  and must not invent research facts.
+- Every area_for_improvement MUST be a practical, PPT-grounded repair, not a
+  generic reminder. Work from the supplied SLIDE/THESIS CONTEXT as a private
+  factual source and from the exact evidence_quote as the spoken source. For
+  each card, choose exactly one scored rubric subcriterion for its dimension
+  and return its machine key in ``rubric_subcriterion``. Do not make several
+  broad criticisms in one card. For Structure use research_focus_opening,
+  research_chain, explicit_links_transitions, or conclusion_closure; for
+  Fluency use complete_natural_expression, connection_pacing,
+  comprehension_first_pace, or self_repair; for Relevance use
+  research_focus_visible, key_information_prioritisation,
+  findings_contribution_meaning, or committee_appropriate_explanation; for
+  Delivery use audible_clarity_emphasis, professional_stable_presence, or
+  audience_guidance. Make the Chinese title and rehearsal move specific to that
+  one subcriterion. Then:
+  1. Identify one ``ppt_anchor``: an exact 2-16-word phrase from the slide
+     title/content or the presenter's transcript that names the actual research
+     topic, method, sample, finding, contribution, limitation, or recommendation
+     which the learner should make clearer. Never invent an anchor.
+  2. Write ``actionable_next_step`` in Chinese as a concrete rehearsal move:
+     say where in the research story to revise, which anchored detail to state,
+     and which relation to make explicit (for example: research question →
+     method, finding → contribution, limitation → interpretation). Do not say
+     only “be clearer”, “add detail”, or “improve transitions”.
+  3. Write ``say_this_instead`` as a complete, natural English replacement of
+     10-65 words. It must carry out the Chinese action, preserve at least one
+     meaningful word from ppt_anchor, and model the missing research relation.
+     It may use only facts present in the slide/thesis context or transcript;
+     do not make up a sample, metric, method, causal claim, or conclusion.
+     It must be useful to say aloud immediately, rather than a vague slogan.
+- For a language-only fluency repair, ppt_anchor may be an exact phrase from
+  evidence_quote, but the replacement still has to preserve its thesis topic or
+  claim and make the sentence complete and pronounceable.
 - Never require or mention Rule of Three, Twitter-style headlines, conversational
   markers, TED golden zones, jaw-dropping moments, filler quotas, slide keyword
   coverage, Picture Superiority Effect, Q&A, academic correctness, or PPT redesign.
@@ -5046,7 +5075,7 @@ Return valid JSON only, following this exact schema:
     "delivery": {"subscores":{"audible_clarity_emphasis":0,"professional_stable_presence":0,"audience_guidance":0,"non_verbal":{"status":"not_assessed","score":null}},"score_rationale":"","evidence_coverage":{"opening":0,"early_body":0,"late_body":0,"conclusion":0}}
   },
   "what_i_did_well": [{"dimension":"Structure|Fluency|Relevance|Delivery","title":"","evidence_quote":"","timestamp_start":0,"timestamp_end":0,"transcript_section":"opening|early_body|late_body|conclusion","analysis":""}],
-  "areas_for_improvement": [{"dimension":"Structure|Fluency|Relevance|Delivery","priority":"high|medium|low","title":"","evidence_quote":"","timestamp_start":0,"timestamp_end":0,"transcript_section":"opening|early_body|late_body|conclusion","impact":"","actionable_next_step":"","say_this_instead":null}],
+  "areas_for_improvement": [{"dimension":"Structure|Fluency|Relevance|Delivery","rubric_subcriterion":"one valid key for this dimension","priority":"high|medium|low","title":"","evidence_quote":"","timestamp_start":0,"timestamp_end":0,"transcript_section":"opening|early_body|late_body|conclusion","impact":"","ppt_anchor":"exact phrase from PPT context or transcript","actionable_next_step":"","say_this_instead":"10-65 word English replacement"}],
   "next_actions": [{"priority":1,"action":"","why":""}]
 }
 """
@@ -5082,6 +5111,16 @@ _THESIS_SCORE_COMPONENTS = {
         ("professional_stable_presence", "专业而稳定的呈现感", 6),
         ("audience_guidance", "听众导向的表达", 4),
     ),
+}
+_THESIS_SUBSCORE_DIMENSIONS = {
+    key: dimension
+    for dimension, components in _THESIS_SCORE_COMPONENTS.items()
+    for key, _, _ in components
+}
+_THESIS_SUBSCORE_LABELS = {
+    key: label
+    for components in _THESIS_SCORE_COMPONENTS.values()
+    for key, label, _ in components
 }
 _THESIS_LEGACY_PHRASES = _LEGACY_CONTAMINATION_PHRASES + [
     "twitter-style headline", "picture superiority", "jaw-dropping",
@@ -5254,8 +5293,12 @@ def _thesis_validation_repair_instruction(error, is_complete_rehearsal):
         "Use only exact, unchanged phrases from PRESENTER TRANSCRIPT as evidence_quote. "
         "Do not reuse or substantially overlap a quote, clause, sentence, or time "
         "window across any feedback cards. Keep all learner-facing explanations in "
-        "Simplified Chinese, except the original English quote and optional English "
-        "say_this_instead. Every rubric subscore must be a raw JSON integer in its "
+        "Simplified Chinese, except the original English quote and English "
+        "say_this_instead. Every improvement must include an exact ppt_anchor from "
+        "the supplied slide context or transcript, a concrete Chinese rehearsal move, "
+        "and a 10-65-word English replacement that preserves a meaningful anchor and "
+        "actually performs that move. It must also name one valid rubric_subcriterion for "
+        "its own dimension. Every rubric subscore must be a raw JSON integer in its "
         "component range, not text, a fraction, or a percentage. Do not include TED "
         "or Q&A feedback. "
     )
@@ -5277,6 +5320,64 @@ def _thesis_validation_repair_instruction(error, is_complete_rehearsal):
 
 def _thesis_normalize_quote(value):
     return re.sub(r"[^\w\s]", "", str(value or "").lower()).strip()
+
+
+_THESIS_EXAMPLE_STOPWORDS = {
+    "about", "after", "also", "because", "before", "between", "candidate",
+    "context", "could", "finding", "findings", "first", "from", "have",
+    "into", "method", "more", "presentation", "research", "result", "results",
+    "should", "slide", "study", "that", "their", "there", "these", "this",
+    "through", "under", "which", "while", "with", "would", "your",
+}
+
+
+def _thesis_meaningful_english_tokens(value):
+    """Extract topic-bearing words for the local repair grounding check."""
+    return {
+        token.lower() for token in re.findall(r"[A-Za-z][A-Za-z'-]{3,}", str(value or ""))
+        if token.lower() not in _THESIS_EXAMPLE_STOPWORDS
+    }
+
+
+def _thesis_pq_context_text(slide_context, transcript_segments):
+    """Build the factual inventory allowed for a presentation repair.
+
+    Slides are never evidence quotes, but their literal terms are permitted in a
+    revised sentence. Including the transcript keeps the check useful for a
+    language-only repair when a slide has little extractable text.
+    """
+    slide_bits = []
+    for slide in slide_context or []:
+        if isinstance(slide, dict):
+            slide_bits.extend([slide.get("title") or "", slide.get("content") or ""])
+    transcript_bits = [segment.get("text") or "" for segment in transcript_segments or []]
+    return _thesis_normalize_quote(" ".join(slide_bits + transcript_bits))
+
+
+def _thesis_repair_example_is_grounded(item, context_text):
+    """Reject generic or ungrounded rewrite examples before they reach a learner."""
+    anchor = str(item.get("ppt_anchor") or "").strip()
+    example = str(item.get("say_this_instead") or "").strip()
+    if not anchor or not example:
+        return False, "improvement is missing ppt_anchor or say_this_instead"
+    normalized_anchor = _thesis_normalize_quote(anchor)
+    if len(normalized_anchor.split()) < 2 or normalized_anchor not in context_text:
+        return False, "ppt_anchor is not grounded in supplied PPT context or transcript"
+    if re.search(r"[\u4e00-\u9fff]", example):
+        return False, "say_this_instead must be English only"
+    example_words = re.findall(r"[A-Za-z][A-Za-z'-]*", example)
+    if not 10 <= len(example_words) <= 65:
+        return False, "say_this_instead must contain 10-65 English words"
+    source_tokens = (
+        _thesis_meaningful_english_tokens(anchor)
+        | _thesis_meaningful_english_tokens(item.get("evidence_quote"))
+    )
+    if source_tokens and not (source_tokens & _thesis_meaningful_english_tokens(example)):
+        return False, "say_this_instead does not preserve a meaningful PPT or transcript anchor"
+    action = str(item.get("actionable_next_step") or "").strip()
+    if len(action) < 16:
+        return False, "actionable_next_step is too vague for an executable rehearsal move"
+    return True, None
 
 
 def _thesis_snap_evidence_quotes(result, transcript_segments):
@@ -5380,7 +5481,7 @@ def _thesis_quotes_substantially_overlap(first, second):
     return len(first_words & second_words) / min(len(first_words), len(second_words)) >= 0.75
 
 
-def _validate_thesis_pq_result(result, transcript_segments, total_words):
+def _validate_thesis_pq_result(result, transcript_segments, total_words, slide_context=None):
     """Reject fabricated, legacy, or structurally invalid Thesis PQ output."""
     if not isinstance(result, dict):
         return False, "response is not an object"
@@ -5446,6 +5547,7 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
     transcript_text = _thesis_normalize_quote(" ".join(
         segment.get("text", "") for segment in transcript_segments
     ))
+    repair_context = _thesis_pq_context_text(slide_context, transcript_segments)
     seen_quotes = []
     evidence_windows = []
     for kind, items in (("strength", good), ("improvement", improvements)):
@@ -5475,8 +5577,21 @@ def _validate_thesis_pq_result(result, transcript_segments, total_words):
             evidence_windows.append((start, end))
             if kind == "improvement":
                 example = item.get("say_this_instead")
-                if example is not None and len(str(example).split()) > 24:
-                    return False, "say_this_instead exceeds 24 words"
+                # Existing historical reports have no slide context, so preserve
+                # their readable rendering. Every newly generated report passes
+                # slide_context and must meet the full grounded-repair contract.
+                if slide_context is not None:
+                    subcriterion = str(item.get("rubric_subcriterion") or "")
+                    expected_dimension = _THESIS_SUBSCORE_DIMENSIONS.get(subcriterion)
+                    if expected_dimension != str(item.get("dimension") or "").lower():
+                        return False, "improvement rubric_subcriterion does not match its dimension"
+                    grounded, repair_error = _thesis_repair_example_is_grounded(
+                        item, repair_context
+                    )
+                    if not grounded:
+                        return False, repair_error
+                elif example is not None and len(str(example).split()) > 65:
+                    return False, "say_this_instead exceeds 65 words"
 
     # A multi-card report should span the rehearsal rather than repeatedly mine
     # one long slide transcript. Short rehearsals may remain partial, but still
@@ -5562,6 +5677,11 @@ def _normalize_thesis_pq_result(result, transcript_segments):
             "title": item.get("title") or "",
             "priority": item.get("priority") or "medium",
             "listener_impact": item.get("impact") or "",
+            "rubric_subcriterion": item.get("rubric_subcriterion") or "",
+            "rubric_subcriterion_label": _THESIS_SUBSCORE_LABELS.get(
+                item.get("rubric_subcriterion") or "", ""
+            ),
+            "ppt_anchor": item.get("ppt_anchor") or "",
             "evidence_rich": [{
                 "timestamp": f"{_seconds_label(item.get('timestamp_start'))}–{_seconds_label(item.get('timestamp_end'))}",
                 "quote": item.get("evidence_quote") or "",
@@ -5693,7 +5813,9 @@ def _run_thesis_defense_presentation_quality(slides, narration_entries, audience
             raw, result = call_llm(attempt_messages)
             result = _thesis_snap_evidence_quotes(result, transcript_segments)
             result = _thesis_annotate_evidence_timing(result, transcript_segments)
-            ok, error = _validate_thesis_pq_result(result, transcript_segments, clean_words)
+            ok, error = _validate_thesis_pq_result(
+                result, transcript_segments, clean_words, slide_context
+            )
             if ok:
                 return _normalize_thesis_pq_result(result, transcript_segments)
             app.logger.warning(
