@@ -3447,10 +3447,17 @@ def _class_cq_normalize_dimension_cards(result, units):
             raw_total += score
             raw_max += maximum
             statuses.append(status)
-        scores[dimension] = int(round(raw_total / raw_max * 100))
+        normalized_score = int(round(raw_total / raw_max * 100)) if raw_max else 0
+        weighted_contribution = round(normalized_score * weight, 1)
+        scores[dimension] = normalized_score
         coverage[dimension] = "limited_evidence" if "limited_evidence" in statuses else "sufficient"
         details[dimension] = {
             "label_zh": label, "weight_percent": int(weight * 100), "score": scores[dimension],
+            # The rubric uses a raw total (for example 25 points), the radar
+            # shows a 100-point conversion, and the overall CQ score applies
+            # this dimension's weight. Keep all three visible and auditable.
+            "raw_score": raw_total, "raw_max_score": raw_max,
+            "weighted_contribution": weighted_contribution,
             "criterion_zh": criterion,
             "band_guide_zh": "90–100：回应成熟、清楚且能支持听众理解；75–89：整体清楚，仍有少量可加强处；60–74：能够回应，但常显得笼统或失焦；0–59：尚未形成有效、可跟随的回应。",
             "performance_zh": (source.get("actual_performance_zh") or summaries.get(dimension) or

@@ -69,6 +69,10 @@ class TestClassPresentationCQ(unittest.TestCase):
         self.assertEqual(len(output["dimension_details"]), 5)
         self.assertEqual(output["communication_quality_report"]["per_question_analysis"][0]["question_type"], "illustrative_support")
         self.assertEqual(output["communication_scores"]["question_alignment"], 88)
+        detail = output["dimension_details"]["question_alignment"]
+        self.assertEqual(detail["raw_score"], 22)
+        self.assertEqual(detail["raw_max_score"], 25)
+        self.assertEqual(detail["weighted_contribution"], 22.0)
 
     def test_snaps_a_paraphrased_feedback_quote_to_the_recorded_answer(self):
         invalid = response()
