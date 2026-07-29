@@ -71,3 +71,27 @@ class TestClassPresentationCQ(unittest.TestCase):
             output["communication_quality_report"]["per_question_analysis"][0]["areas_for_improvement"],
             [],
         )
+
+    def test_compact_session_scorecard_keeps_full_five_dimension_scoring(self):
+        """The model only needs full scoring once per session, not per question."""
+        compact = response()
+        compact.pop("dimension_cards")
+        compact["dimension_scores"] = {
+            dimension: {sub_id: max(1, maximum - 1)
+                        for sub_id, maximum, _ in subcriteria}
+            for dimension, subcriteria in app_module.CLASS_CQ_SUBCRITERIA.items()
+        }
+        compact["dimension_summaries"] = {
+            dimension: "本轮真实问答提供了有限但可评分的沟通证据。"
+            for dimension in app_module.CLASS_CQ_DIMENSIONS
+        }
+        output = app_module._normalize_class_cq_result(
+            compact, app_module._class_cq_units(TRANSCRIPTS, [])
+        )
+        self.assertIsNotNone(output)
+        self.assertEqual(len(output["dimension_details"]), 5)
+        self.assertTrue(all(
+            sub["evidence_status"] == "limited_evidence"
+            for detail in output["dimension_details"].values()
+            for sub in detail["subcriteria"]
+        ))

@@ -3316,50 +3316,67 @@ def _class_cq_parse(raw):
         raise
 
 
-def _class_cq_normalize_dimension_cards(raw_cards, units):
+def _class_cq_normalize_dimension_cards(result, units):
     """Validate raw rubric cards and calculate every radar score server-side.
 
     The model may describe evidence, but it is never trusted to add or convert
     rubric points.  This keeps the five visible scores traceable to their
     displayed subcriteria rather than to a separate, opaque model total.
+
+    The compact protocol intentionally separates overall scoring from
+    question-by-question feedback: five full dimension score maps are required
+    for the session-level cards, while each individual question needs only its
+    one or two most relevant dimensions.  Older detailed-card responses remain
+    accepted for backwards compatibility.
     """
+    if not isinstance(result, dict):
+        return None
+    raw_cards = result.get("dimension_cards")
+    raw_scores = result.get("dimension_scores")
+    summaries = result.get("dimension_summaries")
     if not isinstance(raw_cards, dict):
+        raw_cards = {}
+    if not isinstance(raw_scores, dict):
+        raw_scores = {}
+    if not isinstance(summaries, dict):
+        summaries = {}
+    if not raw_cards and not raw_scores:
         return None
     candidate_answers = [unit["candidate_answer"] for unit in units]
     details, scores, coverage = {}, {}, {}
     for dimension, (label, weight, criterion) in CLASS_CQ_DIMENSIONS.items():
         source = raw_cards.get(dimension)
-        if not isinstance(source, dict):
-            return None
-        incoming = source.get("subcriteria")
-        if not isinstance(incoming, list):
-            return None
+        source = source if isinstance(source, dict) else {}
+        incoming = source.get("subcriteria") if isinstance(source.get("subcriteria"), list) else []
         by_id = {item.get("subcriterion_id"): item for item in incoming if isinstance(item, dict)}
+        simple_scores = raw_scores.get(dimension)
+        simple_scores = simple_scores if isinstance(simple_scores, dict) else {}
         expected = CLASS_CQ_SUBCRITERIA[dimension]
-        # Models sometimes include a harmless extra descriptive field or omit a
-        # client-only field such as ``max_score``.  The server owns the rubric;
-        # accept the useful score entries and rebuild the display schema here.
-        # Missing *rubric criteria*, however, still make the score unverifiable.
-        if not {ident for ident, _, _ in expected}.issubset(set(by_id)):
+        expected_ids = {ident for ident, _, _ in expected}
+        detailed_mode = expected_ids.issubset(set(by_id))
+        compact_mode = expected_ids.issubset(set(simple_scores))
+        if not detailed_mode and not compact_mode:
             return None
         normalized_subcriteria, raw_total, raw_max = [], 0, 0
         statuses = []
         for ident, maximum, standard in expected:
-            item = by_id[ident]
+            item = by_id.get(ident, {})
             try:
-                score = int(round(float(item.get("score"))))
+                score = int(round(float(item.get("score") if detailed_mode else simple_scores.get(ident))))
             except (TypeError, ValueError):
                 return None
             if not 0 <= score <= maximum:
                 return None
-            status = item.get("evidence_status")
+            status = item.get("evidence_status") if detailed_mode else "limited_evidence"
             if status not in {"sufficient", "limited_evidence"}:
                 status = "limited_evidence"
-            actual = item.get("actual_performance_zh") or source.get("actual_performance_zh")
+            compact_summary = summaries.get(dimension)
+            actual = (item.get("actual_performance_zh") or source.get("actual_performance_zh")
+                      or compact_summary)
             rationale = item.get("score_rationale_zh") or actual
             if not isinstance(actual, str) or not actual.strip() or not isinstance(rationale, str) or not rationale.strip():
                 return None
-            evidence = item.get("evidence") or []
+            evidence = (item.get("evidence") or []) if detailed_mode else []
             if not isinstance(evidence, list):
                 evidence = []
             normalized_evidence = []
@@ -3393,7 +3410,7 @@ def _class_cq_normalize_dimension_cards(raw_cards, units):
             "label_zh": label, "weight_percent": int(weight * 100), "score": scores[dimension],
             "criterion_zh": criterion,
             "band_guide_zh": "90–100：回应成熟、清楚且能支持听众理解；75–89：整体清楚，仍有少量可加强处；60–74：能够回应，但常显得笼统或失焦；0–59：尚未形成有效、可跟随的回应。",
-            "performance_zh": (source.get("actual_performance_zh") or
+            "performance_zh": (source.get("actual_performance_zh") or summaries.get(dimension) or
                                "本轮回答中可验证的沟通证据有限，评分仅依据已记录的真实回答。").strip(),
             "evidence_status": coverage[dimension], "subcriteria": normalized_subcriteria,
         }
@@ -3403,7 +3420,7 @@ def _class_cq_normalize_dimension_cards(raw_cards, units):
 def _normalize_class_cq_result(result, units):
     if not isinstance(result, dict) or result.get("analysis_status") != "complete":
         return None
-    cards = _class_cq_normalize_dimension_cards(result.get("dimension_cards"), units)
+    cards = _class_cq_normalize_dimension_cards(result, units)
     if not cards:
         return None
     details, scores, coverage = cards
@@ -3476,6 +3493,21 @@ def _normalize_class_cq_result(result, units):
     return {"has_data": True, "scene_slug": "class_presentation", "scene_label": "Class Presentation", "analysis_status": "complete", "analysis_scope": "class_presentation_qa_only", "coverage_warning": result.get("coverage_warning"), "communication_scores": scores, "dimension_evidence_status": coverage, "cq_total": overall, "cq_scores": {CLASS_CQ_DIMENSIONS[key][0]: scores[key] for key in CLASS_CQ_DIMENSIONS}, "dim_names": [CLASS_CQ_DIMENSIONS[key][0] for key in CLASS_CQ_DIMENSIONS], "weights": [CLASS_CQ_DIMENSIONS[key][1] for key in CLASS_CQ_DIMENSIONS], "dimension_order": list(CLASS_CQ_DIMENSIONS), "exchange_count": len(units), "what_i_did_good": [], "areas_for_improvement": [], "session_strengths": result.get("session_strengths") or [], "session_priorities": priorities, "dimension_details": details, "communication_quality_report": {"overall_cq_score": overall, "per_question_analysis": normalized}}
 
 
+def _class_cq_candidate_shape(candidate):
+    """Summarise a rejected model payload without logging learner answers."""
+    if not isinstance(candidate, dict):
+        return {"payload_type": type(candidate).__name__}
+    return {
+        "keys": sorted(candidate.keys()),
+        "score_dimensions": sorted((candidate.get("dimension_scores") or {}).keys())
+            if isinstance(candidate.get("dimension_scores"), dict) else [],
+        "card_dimensions": sorted((candidate.get("dimension_cards") or {}).keys())
+            if isinstance(candidate.get("dimension_cards"), dict) else [],
+        "question_analyses": len(candidate.get("per_question_analysis") or [])
+            if isinstance(candidate.get("per_question_analysis"), list) else 0,
+    }
+
+
 def _run_class_presentation_communication_quality(transcripts, config, slides, qa_bank):
     units = _class_cq_units(transcripts, qa_bank)
     if not units:
@@ -3484,16 +3516,16 @@ def _run_class_presentation_communication_quality(transcripts, config, slides, q
         return _class_cq_unavailable("沟通质量分析服务暂不可用；系统不会生成模拟分数或虚构反馈。")
     payload = {
         "task": "Evaluate ONLY Class Presentation post-presentation Q&A communication. Do not evaluate narration, slide design, factual correctness, PPT keyword coverage, ideal answer matches, WPM, fillers, answer length, or a Rule of Three unless that is the actual question task.",
-        "rules": "Use only the examiner question and the student's actual answer as speech evidence. Slides may provide background only and must never be treated as a model answer. All analysis fields must be Simplified Chinese; English is allowed only for copied question/answer quotes, phrase starters, and optional say_this_instead (<25 words). Each question assesses one or two dimensions and every feedback quote must be an exact contiguous substring of its answer. Never judge factual correctness, ideal-answer matching, keyword coverage, WPM, fillers, answer length, or non-verbal behaviour. Return concise output: one short Chinese sentence per rubric field and at most one exact quote evidence item per subcriterion. For every dimension card, return every prescribed subcriterion with its raw score, Chinese actual-performance text, Chinese rationale, and exact student-quote evidence where available. The server recalculates all dimension and overall scores from these raw points. Mark insufficient observations as limited_evidence; do not fabricate evidence.",
+        "rules": "Use only the examiner question and the student's actual answer as speech evidence. Slides may provide background only and must never be treated as a model answer. All analysis fields must be Simplified Chinese; English is allowed only for copied question/answer quotes, phrase starters, and optional say_this_instead (<25 words). First score the WHOLE Q&A across all five dimensions and every listed subcriterion. Then analyse EACH question through only its one or two most relevant dimensions; never force all five dimensions into one question. Every feedback quote must be an exact contiguous substring of its own answer. Never judge factual correctness, ideal-answer matching, keyword coverage, WPM, fillers, answer length, or non-verbal behaviour. Return concise output: one short Chinese dimension summary and integer raw subcriterion scores for the overall scorecard; at most one feedback item per side for each question. Mark insufficient observations as limited_evidence; do not fabricate evidence.",
         "rubric": {key: {"label_zh": value[0], "weight": value[1], "subcriteria": [{"id": ident, "max": maximum, "standard_zh": standard} for ident, maximum, standard in CLASS_CQ_SUBCRITERIA[key]]} for key, value in CLASS_CQ_DIMENSIONS.items()},
         "question_answer_units": units,
-        "required_schema": {"analysis_status": "complete", "analysis_scope": "class_presentation_qa_only", "coverage_warning": "Chinese string or null", "dimension_cards": {key: {"actual_performance_zh": "Chinese", "subcriteria": [{"subcriterion_id": "exact rubric id", "score": "integer raw score", "evidence_status": "sufficient or limited_evidence", "actual_performance_zh": "Chinese", "score_rationale_zh": "Chinese", "evidence": [{"student_answer_quote": "exact substring from a source answer"}]}]} for key in CLASS_CQ_DIMENSIONS}, "per_question_analysis": [{"question_id": "input id", "dimensions_assessed": ["one or two keys"], "what_i_did_well": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "analysis_zh": "Chinese"}], "areas_for_improvement": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "optional English <=25 words, concrete and question-specific"}]}], "session_strengths": [], "session_priorities": [{"dimension": "key", "action_zh": "Chinese", "why_zh": "Chinese"}]}}
+        "required_schema": {"analysis_status": "complete", "analysis_scope": "class_presentation_qa_only", "coverage_warning": "Chinese string or null", "dimension_scores": {key: {ident: "integer raw score, 0..maximum" for ident, maximum, _ in CLASS_CQ_SUBCRITERIA[key]} for key in CLASS_CQ_DIMENSIONS}, "dimension_summaries": {key: "one short Chinese sentence based only on the whole Q&A" for key in CLASS_CQ_DIMENSIONS}, "per_question_analysis": [{"question_id": "input id", "dimensions_assessed": ["exactly one or two relevant keys"], "what_i_did_well": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "analysis_zh": "Chinese"}], "areas_for_improvement": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "optional English <=25 words, concrete and question-specific"}]}], "session_strengths": [], "session_priorities": [{"dimension": "key", "action_zh": "Chinese", "why_zh": "Chinese"}]}}
     parsed = []
     started_at = time.monotonic()
     for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
         try:
             raw = (_create_chat_completion(
-                model, 3600, request_timeout=75.0, max_retries=0,
+                model, 2600, request_timeout=60.0, max_retries=0,
                 messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
             ).choices[0].message.content or "").strip()
             if raw:
@@ -3504,18 +3536,21 @@ def _run_class_presentation_communication_quality(transcripts, config, slides, q
         normalized = _normalize_class_cq_result(candidate, units)
         if normalized:
             return normalized
+        app.logger.warning("[CLASS CQ] rejected primary payload shape: %s", _class_cq_candidate_shape(candidate))
     app.logger.warning("[CLASS CQ] primary response did not normalize after %.1fs; requesting one compact repair", time.monotonic() - started_at)
-    repair = {"task": "Return only a compact valid Class Presentation CQ JSON. Preserve each input question_id and exact answer substrings; use the supplied rubric. Every rubric subcriterion needs an integer raw score and Chinese rationale. Do not add unsupported quotes.", "source_units": units, "rubric": payload["rubric"], "required_schema": payload["required_schema"]}
+    repair = {"task": "Return only a compact valid Class Presentation CQ JSON. Score every overall rubric subcriterion with an integer in dimension_scores. Then give every source question only one or two relevant dimensions, with exact answer substrings. Do not add unsupported quotes.", "source_units": units, "rubric": payload["rubric"], "required_schema": payload["required_schema"]}
     for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
         try:
             raw = (_create_chat_completion(
-                model, 3000, request_timeout=60.0, max_retries=0,
+                model, 2200, request_timeout=50.0, max_retries=0,
                 messages=[{"role": "user", "content": json.dumps(repair, ensure_ascii=False)}]
             ).choices[0].message.content or "").strip()
-            normalized = _normalize_class_cq_result(_class_cq_parse(raw), units) if raw else None
+            candidate = _class_cq_parse(raw) if raw else None
+            normalized = _normalize_class_cq_result(candidate, units) if candidate else None
             if normalized:
                 app.logger.info("[CLASS CQ] compact repair normalized after %.1fs", time.monotonic() - started_at)
                 return normalized
+            app.logger.warning("[CLASS CQ] rejected repair payload shape: %s", _class_cq_candidate_shape(candidate) if candidate else {"empty": True})
         except Exception as exc:
             app.logger.warning("[CLASS CQ] repair failed via %s: %s", model, exc)
     app.logger.warning("[CLASS CQ] all responses failed normalization after %.1fs", time.monotonic() - started_at)
@@ -7885,6 +7920,16 @@ def api_submit_academic_qa():
     state    = dict(session["state"])
     config   = session.get("config", {})
     questions = session.get("academic_qa_questions", [])
+
+    # Never advance to the next question on an empty browser submission.  In
+    # particular, Chrome speech recognition can deliver its final result a
+    # fraction after the user presses Submit; treating that transient empty
+    # value as a completed answer silently destroys a whole Q&A evidence unit.
+    if not answer:
+        return jsonify({
+            "error": "No answer was received. Please wait for the transcript or type your answer before submitting.",
+            "code": "ANSWER_REQUIRED",
+        }), 400
 
     current_idx = state.get("academic_qa_index", 0)
     answer_ended_at = time.time()
