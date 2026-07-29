@@ -1240,6 +1240,13 @@ def generate_custom_anchor_question(anchor_template, slides, audience):
     hint_match = _re.search(r'(\(引导[：:][^)]+\))', base_text)
     body_only     = base_text[:hint_match.start()].strip() if hint_match else base_text
 
+    # Class Q&A has already received the deck's text during upload.  A second
+    # GPT-5.6 request solely to rephrase this question added noticeable setup
+    # latency, so make the stable template specific by naming the real topic.
+    topic = (slides[0].get("title") or "your presentation").strip()
+    if topic and body_only:
+        return f"Thinking about your presentation on {topic}, {body_only[:1].lower()}{body_only[1:]}"
+
     anchor_type          = anchor_template.get("anchor_type", "")
     presentation_context = _build_presentation_context(slides)
     track_persona        = "a professor" if track == "professor" else "a classmate"
@@ -1512,6 +1519,19 @@ def generate_free_qa_question(slides, audience, scene_slug):
         "case_pitch":         "What is the single biggest risk to your business model right now, and what is your specific mitigation plan?",
     }
     fallback_q = _fallbacks.get(scene_slug, "Can you walk us through the most important takeaway from your presentation?")
+
+    # Class Presentation already has reliable text extracted at upload time.
+    # Do not block the learner with a remote call merely to vary the wording of
+    # a single question; keep it grounded in the presentation's real topic.
+    if scene_slug == "class_presentation" and slides:
+        topic = (slides[0].get("title") or "your presentation").strip()
+        return {
+            "id": "free_q_context", "question": (
+                f"In your presentation on {topic}, what is the one insight you most want your audience to remember, and why?"
+            ),
+            "question_type": "free", "category": "Class Presentation — Contextual Question",
+            "difficulty": "Medium", "challenge_type": "Contextual",
+        }
 
     if not AI_ENABLED or not slides:
         return {
@@ -3309,14 +3329,18 @@ def _class_cq_normalize_dimension_cards(raw_cards, units):
     details, scores, coverage = {}, {}, {}
     for dimension, (label, weight, criterion) in CLASS_CQ_DIMENSIONS.items():
         source = raw_cards.get(dimension)
-        if not isinstance(source, dict) or not isinstance(source.get("actual_performance_zh"), str):
+        if not isinstance(source, dict):
             return None
         incoming = source.get("subcriteria")
         if not isinstance(incoming, list):
             return None
         by_id = {item.get("subcriterion_id"): item for item in incoming if isinstance(item, dict)}
         expected = CLASS_CQ_SUBCRITERIA[dimension]
-        if len(incoming) != len(expected) or set(by_id) != {ident for ident, _, _ in expected}:
+        # Models sometimes include a harmless extra descriptive field or omit a
+        # client-only field such as ``max_score``.  The server owns the rubric;
+        # accept the useful score entries and rebuild the display schema here.
+        # Missing *rubric criteria*, however, still make the score unverifiable.
+        if not {ident for ident, _, _ in expected}.issubset(set(by_id)):
             return None
         normalized_subcriteria, raw_total, raw_max = [], 0, 0
         statuses = []
@@ -3330,22 +3354,26 @@ def _class_cq_normalize_dimension_cards(raw_cards, units):
                 return None
             status = item.get("evidence_status")
             if status not in {"sufficient", "limited_evidence"}:
-                return None
-            actual = item.get("actual_performance_zh")
-            rationale = item.get("score_rationale_zh")
+                status = "limited_evidence"
+            actual = item.get("actual_performance_zh") or source.get("actual_performance_zh")
+            rationale = item.get("score_rationale_zh") or actual
             if not isinstance(actual, str) or not actual.strip() or not isinstance(rationale, str) or not rationale.strip():
                 return None
             evidence = item.get("evidence") or []
             if not isinstance(evidence, list):
-                return None
+                evidence = []
             normalized_evidence = []
             for proof in evidence:
                 if not isinstance(proof, dict) or not isinstance(proof.get("student_answer_quote"), str):
-                    return None
+                    continue
                 matched_answer = next((answer for answer in candidate_answers
                                        if _thesis_cq_exact_quote(proof["student_answer_quote"], answer)), None)
                 if not matched_answer:
-                    return None
+                    # A paraphrase must never become a displayed quote.  It is
+                    # simply treated as limited evidence rather than making all
+                    # five independently scored cards disappear.
+                    status = "limited_evidence"
+                    continue
                 normalized_evidence.append({
                     "student_answer_quote": _thesis_cq_exact_quote(proof["student_answer_quote"], matched_answer),
                     "timestamp_start": proof.get("timestamp_start"),
@@ -3365,7 +3393,8 @@ def _class_cq_normalize_dimension_cards(raw_cards, units):
             "label_zh": label, "weight_percent": int(weight * 100), "score": scores[dimension],
             "criterion_zh": criterion,
             "band_guide_zh": "90–100：回应成熟、清楚且能支持听众理解；75–89：整体清楚，仍有少量可加强处；60–74：能够回应，但常显得笼统或失焦；0–59：尚未形成有效、可跟随的回应。",
-            "performance_zh": source["actual_performance_zh"].strip(),
+            "performance_zh": (source.get("actual_performance_zh") or
+                               "本轮回答中可验证的沟通证据有限，评分仅依据已记录的真实回答。").strip(),
             "evidence_status": coverage[dimension], "subcriteria": normalized_subcriteria,
         }
     return details, scores, coverage
@@ -3380,17 +3409,26 @@ def _normalize_class_cq_result(result, units):
     details, scores, coverage = cards
     unit_by_id = {unit["question_id"]: unit for unit in units}
     raw_analysis = result.get("per_question_analysis")
-    if not isinstance(raw_analysis, list) or len(raw_analysis) != len(units):
-        return None
+    if not isinstance(raw_analysis, list):
+        raw_analysis = []
     normalized, seen = [], set()
-    for source in raw_analysis:
-        if not isinstance(source, dict) or source.get("question_id") not in unit_by_id or source["question_id"] in seen:
-            return None
-        seen.add(source["question_id"])
-        unit = unit_by_id[source["question_id"]]
+    # Preserve the server's question-to-answer pairing.  If a model omits an
+    # ID, positional matching is allowed only for the same number of answers;
+    # this avoids dropping a whole report because of a cosmetic JSON omission.
+    sources_by_id = {
+        item.get("question_id"): item for item in raw_analysis
+        if isinstance(item, dict) and item.get("question_id") in unit_by_id
+    }
+    for index, unit in enumerate(units):
+        source = sources_by_id.get(unit["question_id"])
+        if source is None and len(raw_analysis) == len(units) and isinstance(raw_analysis[index], dict):
+            source = raw_analysis[index]
+        if source is None:
+            source = {}
+        seen.add(unit["question_id"])
         assessed = list(dict.fromkeys(source.get("dimensions_assessed") or []))
         if not 1 <= len(assessed) <= 2 or any(key not in CLASS_CQ_DIMENSIONS for key in assessed):
-            return None
+            assessed = []
         item = {"question_id": unit["question_id"], "question_type": unit["question_type"],
                 "examiner_question_quote": unit["examiner_question"], "presenter_answer_quote": unit["candidate_answer"],
                 "question_timestamp_start": unit["question_timestamp_start"], "question_timestamp_end": unit["question_timestamp_end"],
@@ -3403,23 +3441,34 @@ def _normalize_class_cq_result(result, units):
         ):
             entries = source.get(field) or []
             if not isinstance(entries, list) or len(entries) > 2:
-                return None
+                entries = []
             for entry in entries:
                 if not isinstance(entry, dict) or entry.get("dimension") not in assessed:
-                    return None
+                    continue
                 valid_subcriteria = {ident for ident, _, _ in CLASS_CQ_SUBCRITERIA[entry["dimension"]]}
                 if entry.get("subcriterion_id") not in valid_subcriteria:
-                    return None
+                    continue
                 quote = _thesis_cq_exact_quote(entry.get(quote_key), unit["candidate_answer"])
-                if not quote or not all(isinstance(entry.get(key), str) and entry[key].strip() for key in required):
-                    return None
+                if not quote:
+                    # The whole recorded answer is always an exact, auditable
+                    # quote.  Prefer it to rejecting useful Chinese feedback
+                    # because the model abbreviated a phrase incorrectly.
+                    quote = unit["candidate_answer"]
+                if not all(isinstance(entry.get(key), str) and entry[key].strip()
+                           for key in required if key != "criterion_zh"):
+                    continue
                 entry[quote_key] = quote
+                if not isinstance(entry.get("criterion_zh"), str) or not entry["criterion_zh"].strip():
+                    entry["criterion_zh"] = next(
+                        standard for ident, _, standard in CLASS_CQ_SUBCRITERIA[entry["dimension"]]
+                        if ident == entry["subcriterion_id"]
+                    )
                 entry["timestamp_start"] = unit["answer_timestamp_start"]
                 entry["timestamp_end"] = unit["answer_timestamp_end"]
                 if field == "areas_for_improvement":
                     repair = entry.get("say_this_instead", "")
                     if repair and (not isinstance(repair, str) or len(repair.split()) > 25 or "[" in repair or "]" in repair):
-                        return None
+                        entry.pop("say_this_instead", None)
                 item[field].append(entry)
         normalized.append(item)
     overall = int(round(sum(scores[key] * CLASS_CQ_DIMENSIONS[key][1] for key in CLASS_CQ_DIMENSIONS)))
@@ -3435,14 +3484,18 @@ def _run_class_presentation_communication_quality(transcripts, config, slides, q
         return _class_cq_unavailable("沟通质量分析服务暂不可用；系统不会生成模拟分数或虚构反馈。")
     payload = {
         "task": "Evaluate ONLY Class Presentation post-presentation Q&A communication. Do not evaluate narration, slide design, factual correctness, PPT keyword coverage, ideal answer matches, WPM, fillers, answer length, or a Rule of Three unless that is the actual question task.",
-        "rules": "Use only the examiner question and the student's actual answer as speech evidence. Slides may provide background only and must never be treated as a model answer. All analysis fields must be Simplified Chinese; English is allowed only for copied question/answer quotes, phrase starters, and optional say_this_instead (<25 words). Each question assesses one or two dimensions and every feedback quote must be an exact contiguous substring of its answer. Never judge factual correctness, ideal-answer matching, keyword coverage, WPM, fillers, answer length, or non-verbal behaviour. For every dimension card, return every prescribed subcriterion with its raw score, max score, Chinese actual-performance text, Chinese rationale, and exact student-quote evidence where available. The server recalculates all dimension and overall scores from these raw points. Mark insufficient observations as limited_evidence; do not fabricate evidence.",
+        "rules": "Use only the examiner question and the student's actual answer as speech evidence. Slides may provide background only and must never be treated as a model answer. All analysis fields must be Simplified Chinese; English is allowed only for copied question/answer quotes, phrase starters, and optional say_this_instead (<25 words). Each question assesses one or two dimensions and every feedback quote must be an exact contiguous substring of its answer. Never judge factual correctness, ideal-answer matching, keyword coverage, WPM, fillers, answer length, or non-verbal behaviour. Return concise output: one short Chinese sentence per rubric field and at most one exact quote evidence item per subcriterion. For every dimension card, return every prescribed subcriterion with its raw score, Chinese actual-performance text, Chinese rationale, and exact student-quote evidence where available. The server recalculates all dimension and overall scores from these raw points. Mark insufficient observations as limited_evidence; do not fabricate evidence.",
         "rubric": {key: {"label_zh": value[0], "weight": value[1], "subcriteria": [{"id": ident, "max": maximum, "standard_zh": standard} for ident, maximum, standard in CLASS_CQ_SUBCRITERIA[key]]} for key, value in CLASS_CQ_DIMENSIONS.items()},
         "question_answer_units": units,
-        "required_schema": {"analysis_status": "complete", "analysis_scope": "class_presentation_qa_only", "coverage_warning": "Chinese string or null", "communication_scores": {key: "0-100; will be recalculated" for key in CLASS_CQ_DIMENSIONS}, "dimension_evidence_status": {key: "sufficient or limited_evidence" for key in CLASS_CQ_DIMENSIONS}, "dimension_cards": {key: {"actual_performance_zh": "Chinese", "subcriteria": [{"subcriterion_id": "exact rubric id", "standard_zh": "Chinese", "score": "integer raw score", "max_score": "exact rubric maximum", "evidence_status": "sufficient or limited_evidence", "actual_performance_zh": "Chinese", "score_rationale_zh": "Chinese", "evidence": [{"student_answer_quote": "exact substring from a source answer", "timestamp_start": "source timestamp", "timestamp_end": "source timestamp"}]}]} for key in CLASS_CQ_DIMENSIONS}, "per_question_analysis": [{"question_id": "input id", "dimensions_assessed": ["one or two keys"], "what_i_did_well": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "criterion_zh": "Chinese", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "analysis_zh": "Chinese"}], "areas_for_improvement": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "criterion_zh": "Chinese", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "optional English <=25 words, concrete and question-specific"}]}], "session_strengths": [], "session_priorities": [{"dimension": "key", "action_zh": "Chinese", "why_zh": "Chinese"}]}}
+        "required_schema": {"analysis_status": "complete", "analysis_scope": "class_presentation_qa_only", "coverage_warning": "Chinese string or null", "dimension_cards": {key: {"actual_performance_zh": "Chinese", "subcriteria": [{"subcriterion_id": "exact rubric id", "score": "integer raw score", "evidence_status": "sufficient or limited_evidence", "actual_performance_zh": "Chinese", "score_rationale_zh": "Chinese", "evidence": [{"student_answer_quote": "exact substring from a source answer"}]}]} for key in CLASS_CQ_DIMENSIONS}, "per_question_analysis": [{"question_id": "input id", "dimensions_assessed": ["one or two keys"], "what_i_did_well": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "analysis_zh": "Chinese"}], "areas_for_improvement": [{"dimension": "key", "subcriterion_id": "valid rubric id for this key", "title_zh": "Chinese", "presenter_answer_quote": "exact substring", "impact_zh": "Chinese", "actionable_next_step_zh": "Chinese", "say_this_instead": "optional English <=25 words, concrete and question-specific"}]}], "session_strengths": [], "session_priorities": [{"dimension": "key", "action_zh": "Chinese", "why_zh": "Chinese"}]}}
     parsed = []
+    started_at = time.monotonic()
     for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
         try:
-            raw = (_create_chat_completion(model, 6000, messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]).choices[0].message.content or "").strip()
+            raw = (_create_chat_completion(
+                model, 3600, request_timeout=75.0, max_retries=0,
+                messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+            ).choices[0].message.content or "").strip()
             if raw:
                 parsed.append(_class_cq_parse(raw))
         except Exception as exc:
@@ -3451,15 +3504,21 @@ def _run_class_presentation_communication_quality(transcripts, config, slides, q
         normalized = _normalize_class_cq_result(candidate, units)
         if normalized:
             return normalized
-    repair = {"task": "Return only a complete valid Class Presentation CQ JSON. Preserve each input question_id and exact answer substrings; use the supplied rubric. Do not add scores when evidence is unavailable.", "source_units": units, "required_schema": payload["required_schema"], "invalid_responses": parsed}
+    app.logger.warning("[CLASS CQ] primary response did not normalize after %.1fs; requesting one compact repair", time.monotonic() - started_at)
+    repair = {"task": "Return only a compact valid Class Presentation CQ JSON. Preserve each input question_id and exact answer substrings; use the supplied rubric. Every rubric subcriterion needs an integer raw score and Chinese rationale. Do not add unsupported quotes.", "source_units": units, "rubric": payload["rubric"], "required_schema": payload["required_schema"]}
     for model in dict.fromkeys((EVAL_MODEL, TEXT_MODEL)):
         try:
-            raw = (_create_chat_completion(model, 6000, messages=[{"role": "user", "content": json.dumps(repair, ensure_ascii=False)}]).choices[0].message.content or "").strip()
+            raw = (_create_chat_completion(
+                model, 3000, request_timeout=60.0, max_retries=0,
+                messages=[{"role": "user", "content": json.dumps(repair, ensure_ascii=False)}]
+            ).choices[0].message.content or "").strip()
             normalized = _normalize_class_cq_result(_class_cq_parse(raw), units) if raw else None
             if normalized:
+                app.logger.info("[CLASS CQ] compact repair normalized after %.1fs", time.monotonic() - started_at)
                 return normalized
         except Exception as exc:
             app.logger.warning("[CLASS CQ] repair failed via %s: %s", model, exc)
+    app.logger.warning("[CLASS CQ] all responses failed normalization after %.1fs", time.monotonic() - started_at)
     return _class_cq_unavailable("本次问答的模型输出未能通过逐字引文与评分校验，因此系统未生成不可靠的沟通质量报告。")
 
 
@@ -3552,7 +3611,7 @@ def run_communication_quality_evaluation(qa_answers, config, fe_qa_history=None,
     # Thesis Defense relies on per-question type, strategy and timestamps that
     # are persisted by /x/submit-academic-qa. Prefer that authoritative source
     # even when the browser transcript has the same word count.
-    if (scene_slug == "thesis_defense" and session_transcripts) or sess_words > fe_words:
+    if (scene_slug in ("thesis_defense", "class_presentation") and session_transcripts) or sess_words > fe_words:
         comm_transcripts = [t for t in session_transcripts if t["answer"].strip()]
     else:
         comm_transcripts = [t for t in fe_transcripts if t["answer"].strip()]
@@ -7587,14 +7646,20 @@ def api_start_session():
         session["slide_key"] = _save_slides(slides)
 
     # ── Step 3: Master Engine (Challenge seed + QA bank) ──────────────────────────
-    try:
-        challenge_seed, static_qa_bank = build_master_engine(
-            slides, audience, scenario, difficulty
-        )
-    except Exception as e:
-        traceback.print_exc()
-        app.logger.error(f"Master engine failed, using mock: {e}")
-        challenge_seed, static_qa_bank = MOCK_CHALLENGE, MOCK_QA_BANK
+    if scenario in ("Class Presentation", "Academic Presentation"):
+        # This branch creates its own typed post-presentation Q&A bank below.
+        # The generic engine's result was immediately discarded, yet became a
+        # long GPT-5.6 setup request after the model upgrade.
+        challenge_seed, static_qa_bank = MOCK_CHALLENGE, []
+    else:
+        try:
+            challenge_seed, static_qa_bank = build_master_engine(
+                slides, audience, scenario, difficulty
+            )
+        except Exception as e:
+            traceback.print_exc()
+            app.logger.error(f"Master engine failed, using mock: {e}")
+            challenge_seed, static_qa_bank = MOCK_CHALLENGE, MOCK_QA_BANK
 
     session["config"] = {
         "audience":  audience,

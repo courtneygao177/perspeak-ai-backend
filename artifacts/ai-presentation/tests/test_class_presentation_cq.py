@@ -54,12 +54,20 @@ class TestClassPresentationCQ(unittest.TestCase):
         self.assertEqual(output["communication_quality_report"]["per_question_analysis"][0]["question_type"], "illustrative_support")
         self.assertEqual(output["communication_scores"]["question_alignment"], 88)
 
-    def test_rejects_paraphrased_candidate_quote(self):
+    def test_snaps_a_paraphrased_feedback_quote_to_the_recorded_answer(self):
         invalid = response()
         invalid["per_question_analysis"][0]["what_i_did_well"][0]["presenter_answer_quote"] = "A paraphrase not spoken by the student"
-        self.assertIsNone(app_module._normalize_class_cq_result(invalid, app_module._class_cq_units(TRANSCRIPTS, [])))
+        output = app_module._normalize_class_cq_result(invalid, app_module._class_cq_units(TRANSCRIPTS, []))
+        self.assertEqual(
+            output["communication_quality_report"]["per_question_analysis"][0]["what_i_did_well"][0]["presenter_answer_quote"],
+            TRANSCRIPTS[0]["text"],
+        )
 
-    def test_rejects_a_subcriterion_from_the_wrong_dimension(self):
+    def test_drops_a_subcriterion_from_the_wrong_dimension(self):
         invalid = response()
         invalid["per_question_analysis"][0]["areas_for_improvement"][0]["subcriterion_id"] = "challenge_response"
-        self.assertIsNone(app_module._normalize_class_cq_result(invalid, app_module._class_cq_units(TRANSCRIPTS, [])))
+        output = app_module._normalize_class_cq_result(invalid, app_module._class_cq_units(TRANSCRIPTS, []))
+        self.assertEqual(
+            output["communication_quality_report"]["per_question_analysis"][0]["areas_for_improvement"],
+            [],
+        )
