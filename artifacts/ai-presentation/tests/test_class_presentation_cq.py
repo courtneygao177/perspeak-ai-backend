@@ -46,6 +46,22 @@ class TestClassPresentationCQ(unittest.TestCase):
         self.assertTrue(all(isinstance(q["answering_strategy"], dict) for q in bank))
         self.assertTrue(all("(引导" not in q["question"] for q in bank))
 
+    def test_selected_listener_changes_class_qa_wording_and_focus(self):
+        old = app_module.AI_ENABLED
+        try:
+            app_module.AI_ENABLED = False
+            slides = [{"page": 1, "title": "Sleep and Screen Time", "content": ""}]
+            professor_bank = app_module.build_dual_track_qa(slides, "Professor", "class_presentation", "Hard")
+            classmates_bank = app_module.build_dual_track_qa(slides, "Classmates", "class_presentation", "Hard")
+        finally:
+            app_module.AI_ENABLED = old
+        self.assertEqual(len(professor_bank), len(classmates_bank))
+        self.assertTrue(all(q["questioner"] == "Professor" for q in professor_bank))
+        self.assertTrue(all(q["questioner"] == "Classmates" for q in classmates_bank))
+        self.assertNotEqual(professor_bank[0]["question"], classmates_bank[0]["question"])
+        self.assertIn("evidence", professor_bank[0]["question"].lower())
+        self.assertIn("everyday", classmates_bank[0]["question"].lower())
+
     def test_valid_output_is_normalized_without_ppt_content_scoring(self):
         output = app_module._normalize_class_cq_result(response(), app_module._class_cq_units(TRANSCRIPTS, []))
         self.assertIsNotNone(output)

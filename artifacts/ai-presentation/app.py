@@ -471,6 +471,45 @@ CLASS_PRES_QA_POOL = [
      "category": "Class Presentation", "difficulty": "Hard", "challenge_type": "Depth"},
 ]
 
+# A selected listener must affect the actual Q&A experience, not just the
+# label shown on screen.  Professors probe reasoning and evidence; classmates
+# ask for clarity, relevance, and concrete lived examples.
+CLASS_PRES_QA_BY_AUDIENCE = {
+    10: {
+        "professor": "Which concrete example best supports your central claim, and how does it strengthen your reasoning?",
+        "classmate": "Can you give us one real-life example so we can picture how your main point works?",
+    },
+    11: {
+        "professor": "How does this topic extend or challenge a concept from this course?",
+        "classmate": "How does this connect with something we have discussed in class or experience in everyday life?",
+    },
+    12: {
+        "professor": "If your main assumption were not valid, how would that change the conclusion you can reasonably draw?",
+        "classmate": "If one key assumption turned out to be wrong, what part of your main point would change?",
+    },
+    13: {
+        "professor": "Which claim in your presentation currently needs the strongest additional evidence, and why?",
+        "classmate": "Was there one part you think we might still find hard to believe or understand? How would you explain it better?",
+    },
+    14: {
+        "professor": "If you had one additional minute, which detail would most improve the intellectual completeness of your argument?",
+        "classmate": "If you had one more minute, what would you add to make the main idea clearer for us?",
+    },
+}
+
+
+def _class_question_for_audience(question, audience):
+    """Return a listener-specific wording while preserving question metadata."""
+    item = dict(question)
+    track = "professor" if str(audience).lower() == "professor" else "classmate"
+    try:
+        variants = CLASS_PRES_QA_BY_AUDIENCE.get(int(item.get("id")), {})
+    except (TypeError, ValueError):
+        variants = {}
+    item["question"] = variants.get(track, item.get("question", ""))
+    item["questioner"] = audience
+    return item
+
 # Class Presentation Q&A is a communication exercise, not a hidden slide
 # recall quiz.  These routing cards are deliberately owned by the server so
 # the public coaching method remains stable even when the question itself is
@@ -1483,12 +1522,8 @@ def build_class_presentation_qa(audience, difficulty):
             "questioner":    audience,
         })
 
-    # Annotate baseline pool with questioner identity
-    baseline = []
-    for q in CLASS_PRES_QA_POOL:
-        item = dict(q)
-        item["questioner"] = audience
-        baseline.append(item)
+    # Keep fallback prompts audience-specific too.
+    baseline = [_class_question_for_audience(q, audience) for q in CLASS_PRES_QA_POOL]
 
     # TED questions first; baseline as extra depth; trim to qa_count
     combined = (ted_questions + baseline)[:qa_count]
@@ -1523,12 +1558,19 @@ def generate_free_qa_question(slides, audience, scene_slug):
     # Class Presentation already has reliable text extracted at upload time.
     # Do not block the learner with a remote call merely to vary the wording of
     # a single question; keep it grounded in the presentation's real topic.
+    # It must still sound different to a professor and a classmate.
     if scene_slug == "class_presentation" and slides:
         topic = (slides[0].get("title") or "your presentation").strip()
+        if str(audience).lower() == "professor":
+            question = (
+                f"In your presentation on {topic}, what is the central claim, and what is the strongest reasoning or evidence that supports it?"
+            )
+        else:
+            question = (
+                f"Thinking about your presentation on {topic}, what is the one idea you most want us to remember, and why does it matter in everyday terms?"
+            )
         return {
-            "id": "free_q_context", "question": (
-                f"In your presentation on {topic}, what is the one insight you most want your audience to remember, and why?"
-            ),
+            "id": "free_q_context", "question": question, "questioner": audience,
             "question_type": "free", "category": "Class Presentation — Contextual Question",
             "difficulty": "Medium", "challenge_type": "Contextual",
         }
@@ -1589,6 +1631,7 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
 
     q1 = generate_free_qa_question(slides, audience, scene_slug)
     if scene_slug == "class_presentation":
+        q1["questioner"] = audience
         q1 = _attach_class_cq_routing(q1)
     result = [q1]
 
@@ -1629,9 +1672,8 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
     if qa_count >= 3:
         baseline_pool = [q for q in CLASS_PRES_QA_POOL if q.get("difficulty") != "Easy"]
         if baseline_pool:
-            q3 = dict(random.choice(baseline_pool))
+            q3 = _class_question_for_audience(random.choice(baseline_pool), audience)
             q3["question_type"] = "free"
-            q3["questioner"]    = audience
             if scene_slug == "class_presentation":
                 q3 = _attach_class_cq_routing(q3)
             result.append(q3)
@@ -7634,6 +7676,12 @@ def api_start_session():
     audience   = data.get("audience",   "Professor")
     scenario   = data.get("scenario",   "Class Presentation")
     difficulty = data.get("difficulty", "Medium")
+
+    # Thesis Defense is deliberately a committee/professor simulation.  Keep
+    # this server-side rule in addition to the disabled UI cards so a stale or
+    # manually edited browser request cannot create a classmate/VC defense.
+    if scenario == "Thesis Defense":
+        audience = "Professor"
 
     # ── Step 2: Vision analysis — re-read file from disk (images never stored in cookie) ──
     filepath = _local_source_file(session)
