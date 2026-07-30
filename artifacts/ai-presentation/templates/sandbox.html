@@ -851,17 +851,24 @@
   }
 
   async function submitAcademicQa() {
-    // Snapshot the visible answer before sealing the recognizer. Late Chrome
-    // callbacks are discarded instead of bleeding into the next Q&A input.
-    const answer = document.getElementById('acqInput').value.trim();
-    if (!answer) return;
-    if (audioMode === 'acq') _stopAllRecording();
     const btn = document.getElementById('acqSubmitBtn');
     btn.disabled = true;
     btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
     </svg> Saving…`;
+
+    // Chrome often keeps the final spoken phrase as an "interim" result for a
+    // short moment.  Wait for that final callback before reading the answer;
+    // otherwise a learner can speak a full answer yet the server receives an
+    // empty string when they submit immediately after stopping the microphone.
+    const answer = await sealAcademicQaSpeech();
+    if (!answer) {
+      showToast('没有收到可提交的回答。请稍等转写文字出现后再提交，或直接输入回答。');
+      btn.disabled = false;
+      btn.innerHTML = `${MIC_SVG}Submit Answer`;
+      return;
+    }
     qaChatHistory.push({ role: 'user', text: answer, type: 'academic' });
 
     try {
@@ -869,6 +876,10 @@
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ answer }),
       });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail.error || 'Unable to save this answer.');
+      }
       const data = await res.json();
       // Clear the textarea BEFORE showing the next question to prevent transcript bleedover
       document.getElementById('acqInput').value = '';
@@ -1294,6 +1305,10 @@
   let _narrationRec = null;
   let _qaRec        = null;
   let _acqRec       = null;
+  let _acqFinalText  = '';
+  let _acqInterimText = '';
+  let _acqSealResolve = null;
+  let _acqSealTimer   = null;
   let _narrationWasActiveBeforeQA = false;
   const MIC_SVG = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-7a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>`;
 
@@ -1315,6 +1330,11 @@
     _narrationRec = null;
     _qaRec = null;
     _acqRec = null;
+    if (_acqSealTimer) clearTimeout(_acqSealTimer);
+    _acqSealTimer = null;
+    if (_acqSealResolve) { const resolve = _acqSealResolve; _acqSealResolve = null; resolve(_acqCombinedText()); }
+    _acqFinalText = '';
+    _acqInterimText = '';
     audioMode = 'idle';
     _syncAudioButtons();
   }
@@ -1620,23 +1640,64 @@
 
   // Academic QA voice button (post-session)
   // Same accumulation fix as toggleVoice() above — see note there.
+  function _acqCombinedText() {
+    return [_acqFinalText, _acqInterimText].filter(Boolean).join(' ').trim();
+  }
+
+  // Seal the current answer without aborting it.  stop() gives Chrome a brief
+  // chance to turn its final interim phrase into a stable recognition result;
+  // the timeout guarantees that a browser callback can never block submission.
+  function sealAcademicQaSpeech() {
+    const visible = document.getElementById('acqInput').value.trim();
+    const rec = _acqRec;
+    if (!rec || audioMode !== 'acq') return Promise.resolve(visible);
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (_acqSealTimer) clearTimeout(_acqSealTimer);
+        _acqSealTimer = null;
+        _acqSealResolve = null;
+        resolve(_acqCombinedText() || visible);
+      };
+      _acqSealResolve = finish;
+      _acqSealTimer = setTimeout(() => {
+        if (_acqRec === rec) {
+          _disposeSpeechRecognizer(rec);
+          _acqRec = null;
+          audioMode = 'idle';
+          _syncAudioButtons();
+        }
+        finish();
+      }, 900);
+      try { rec.stop(); } catch (e) { finish(); }
+    });
+  }
+
   function toggleAcqVoice() {
     if (audioMode === 'acq') { _stopAllRecording(); return; }
     _stopAllRecording();
     const rec = _makeSR(); if (!rec) return;
-    let finalText = document.getElementById('acqInput').value.trim();
+    _acqFinalText = document.getElementById('acqInput').value.trim();
+    _acqInterimText = '';
     rec.onresult = e => {
       let newFinal = '', interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) newFinal += e.results[i][0].transcript;
         else interim += e.results[i][0].transcript;
       }
-      if (newFinal.trim()) finalText += (finalText ? ' ' : '') + newFinal.trim();
+      if (newFinal.trim()) _acqFinalText += (_acqFinalText ? ' ' : '') + newFinal.trim();
+      _acqInterimText = interim.trim();
       const el = document.getElementById('acqInput');
-      el.value = finalText + (interim ? ' ' + interim : '');
+      el.value = _acqCombinedText();
       el.scrollTop = el.scrollHeight;
     };
-    rec.onend    = () => { if (audioMode==='acq') { audioMode='idle'; _syncAudioButtons(); } };
+    rec.onend = () => {
+      if (_acqRec === rec) _acqRec = null;
+      if (audioMode === 'acq') { audioMode = 'idle'; _syncAudioButtons(); }
+      if (_acqSealResolve) _acqSealResolve();
+    };
     _acqRec = rec; rec.start(); audioMode = 'acq'; _syncAudioButtons();
   }
 

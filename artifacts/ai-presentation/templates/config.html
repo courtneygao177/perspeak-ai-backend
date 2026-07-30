@@ -310,43 +310,42 @@
   });
 
   // ── Audience × Scenario dependency ───────────────────────────────────────
-  // Class Presentation / Thesis Defense → VC not applicable → disable it
-  // MBA Case Pitch → all audience options available
+  // Thesis Defense is a committee/professor simulation: only Professor is
+  // selectable. Class Presentation offers Professor and Classmates. MBA Case
+  // Pitch keeps all audience roles available.
   function syncAudienceConstraints() {
     const scenario = document.querySelector('input[name="scenario"]:checked')?.value || '';
-    const vcCard   = document.querySelector('[data-group="audience"][data-value="VC"]');
-    if (!vcCard) return;
+    const setAudienceAvailability = (value, enabled) => {
+      const card = document.querySelector(`[data-group="audience"][data-value="${value}"]`);
+      if (!card) return;
+      const inner = card.querySelector('.glass');
+      card.dataset.disabled = enabled ? 'false' : 'true';
+      card.classList.toggle('opacity-40', !enabled);
+      card.classList.toggle('cursor-not-allowed', !enabled);
+      card.classList.toggle('cursor-pointer', enabled);
+      inner?.classList.toggle('grayscale', !enabled);
+    };
 
-    const vcRadio = vcCard.querySelector('input[type="radio"]');
-    const vcInner = vcCard.querySelector('.glass');
+    const isThesis = scenario === 'Thesis Defense';
+    const isCasePitch = scenario === 'MBA Case Pitch';
+    setAudienceAvailability('Classmates', !isThesis);
+    setAudienceAvailability('VC', isCasePitch);
 
-    if (scenario === 'MBA Case Pitch') {  // only Case Pitch allows VC audience
-      // Enable VC
-      vcCard.dataset.disabled = 'false';
-      vcCard.classList.remove('opacity-40', 'cursor-not-allowed');
-      vcCard.classList.add('cursor-pointer');
-      vcInner.classList.remove('grayscale');
-    } else {
-      // Disable VC for Academic / Thesis
-      vcCard.dataset.disabled = 'true';
-      vcCard.classList.add('opacity-40', 'cursor-not-allowed');
-      vcCard.classList.remove('cursor-pointer');
-      vcInner.classList.add('grayscale');
-      // If VC was selected, reset to Professor
-      if (vcRadio.checked) {
-        vcRadio.checked = false;
-        const profCard  = document.querySelector('[data-group="audience"][data-value="Professor"]');
-        const profRadio = profCard?.querySelector('input[type="radio"]');
-        if (profRadio) { profRadio.checked = true; }
-        // Refresh all audience card highlights
-        document.querySelectorAll('[data-group="audience"] .glass').forEach(d => {
-          d.style.borderColor = 'transparent';
-          d.style.background = '';
-        });
-        const profGlass = profCard?.querySelector('.glass');
-        if (profGlass) { profGlass.style.borderColor = '#16A34A'; profGlass.style.background = 'rgba(217,72,31,0.05)'; }
-      }
+    const selected = document.querySelector('input[name="audience"]:checked');
+    const selectedCard = selected?.closest('[data-group="audience"]');
+    if (selectedCard?.dataset.disabled === 'true') {
+      selected.checked = false;
+      const professor = document.querySelector('[data-group="audience"][data-value="Professor"]');
+      const professorRadio = professor?.querySelector('input[type="radio"]');
+      if (professorRadio) professorRadio.checked = true;
     }
+
+    document.querySelectorAll('[data-group="audience"] .glass').forEach(inner => {
+      inner.style.borderColor = 'transparent';
+      inner.style.background = '';
+    });
+    const active = document.querySelector('input[name="audience"]:checked')?.closest('[data-group="audience"]')?.querySelector('.glass');
+    if (active) { active.style.borderColor = '#16A34A'; active.style.background = 'rgba(217,72,31,0.05)'; }
   }
 
   // ── Difficulty bullet swap: Thesis Defense ↔ other scenarios ─────────────
