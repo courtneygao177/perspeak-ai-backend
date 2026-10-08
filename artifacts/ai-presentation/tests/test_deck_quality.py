@@ -70,7 +70,7 @@ class TestDeckQualityTruthfulness(unittest.TestCase):
     def test_normalizer_rejects_unknown_findings_and_clamps_scores(self):
         raw = {
             "dimension_scores": {
-                "framing": {"score": 140, "status": "assessed", "summary_zh": "明确"},
+                "framing": {"score": 140, "status": "assessed", "summary_zh": "明确", "evidence_refs": [1], "evidence": [{"slide_id": 1, "evidence_type": "slide_text", "quote": "Research objective", "analysis_zh": "首页明确提出研究目标。"}]},
                 "factual_fidelity": {"score": 99, "status": "assessed", "summary_zh": "bad"},
             },
             "findings": [
@@ -78,7 +78,9 @@ class TestDeckQualityTruthfulness(unittest.TestCase):
                 {"slide_id": 99, "dimension": "framing", "severity": "major", "evidence": "x"},
                 {
                     "slide_id": 1, "dimension": "framing", "severity": "major",
-                    "evidence": "The purpose is delayed.", "question_seed_en": "Why does this matter",
+                    "evidence": "The opening names an objective.",
+                    "evidence_quote": "Research objective", "evidence_type": "slide_text",
+                    "question_seed_en": "Why does this matter",
                 },
             ],
         }
@@ -89,6 +91,42 @@ class TestDeckQualityTruthfulness(unittest.TestCase):
         self.assertEqual(result["dimension_scores"]["factual_fidelity"]["status"], "not_assessed")
         self.assertEqual(len(result["findings"]), 1)
         self.assertTrue(result["findings"][0]["question_seed_en"].endswith("?"))
+
+    def test_ungrounded_finding_is_not_displayed(self):
+        raw = {
+            "dimension_scores": {
+                "framing": {"score": 40, "status": "assessed", "summary_zh": "不足", "evidence_refs": [1], "evidence": [{"slide_id": 1, "evidence_type": "slide_text", "quote": "Research objective", "analysis_zh": "首页出现研究目标。"}]},
+            },
+            "findings": [{
+                "slide_id": 1, "dimension": "framing", "severity": "major",
+                "evidence": "The opening is unclear.",
+                "evidence_quote": "This sentence does not exist on the slide",
+                "evidence_type": "slide_text",
+            }],
+        }
+        result = app_module._normalize_deck_quality(
+            raw, SLIDES, "Class Presentation", "academic_conference_talk", "test"
+        )
+        self.assertEqual(result["findings"], [])
+
+    def test_five_point_scores_are_converted_and_punctuation_does_not_break_quote(self):
+        raw = {
+            "dimension_scores": {
+                "framing": {"score": 3, "status": "assessed", "summary_zh": "尚可", "evidence_refs": [1], "evidence": [{"slide_id": 1, "evidence_type": "slide_text", "quote": "Research objective", "analysis_zh": "首页明确研究目标。"}]},
+                "narrative_flow": {"score": 4, "status": "assessed", "summary_zh": "清晰", "evidence_refs": [1, 2], "evidence": [{"slide_id": 2, "evidence_type": "slide_text", "quote": "The treatment group improved relative to the baseline.", "analysis_zh": "结果页承接研究目标。"}]},
+            },
+            "findings": [{
+                "slide_id": 1, "dimension": "framing", "severity": "minor",
+                "evidence": "The slide names a research objective.",
+                "evidence_quote": "Research—objective", "evidence_type": "slide_text",
+            }],
+        }
+        result = app_module._normalize_deck_quality(
+            raw, SLIDES, "Class Presentation", "academic_conference_talk", "test"
+        )
+        self.assertEqual(result["dimension_scores"]["framing"]["score"], 60)
+        self.assertEqual(result["dimension_scores"]["narrative_flow"]["score"], 80)
+        self.assertEqual(len(result["findings"]), 1)
 
 
 class TestDeckQualityQuestionLinkage(unittest.TestCase):
@@ -101,12 +139,13 @@ class TestDeckQualityQuestionLinkage(unittest.TestCase):
         self.assertEqual(bank[0]["deck_finding_id"], "finding-results")
 
     def test_thesis_question_count_is_preserved(self):
-        for difficulty, expected in (("Easy", 3), ("Medium", 5), ("Hard", 8)):
-            bank = app_module.build_thesis_defense_qa_bank(
-                SLIDES, difficulty, deck_quality=severe_deck_quality()
-            )
-            self.assertEqual(len(bank), expected)
-            self.assertTrue(any(q.get("deck_finding_id") == "finding-results" for q in bank))
+        with mock.patch.object(app_module, "AI_ENABLED", False):
+            for difficulty, expected in (("Easy", 3), ("Medium", 5), ("Hard", 8)):
+                bank = app_module.build_thesis_defense_qa_bank(
+                    SLIDES, difficulty, deck_quality=severe_deck_quality()
+                )
+                self.assertEqual(len(bank), expected)
+                self.assertTrue(any(q.get("deck_finding_id") == "finding-results" for q in bank))
 
 
 class TestDeckQualityReportContract(unittest.TestCase):

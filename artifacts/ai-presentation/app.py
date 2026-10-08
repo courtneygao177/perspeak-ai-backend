@@ -10,6 +10,15 @@ import time
 import concurrent.futures
 from difflib import SequenceMatcher
 try:
+    from dotenv import load_dotenv
+    _APP_DIR = os.path.dirname(os.path.abspath(__file__))
+    # Local secrets are deliberately outside Git.  Hosted environments keep
+    # using their injected environment variables because override=False.
+    load_dotenv(os.path.join(_APP_DIR, ".env.local"), override=False)
+    load_dotenv(os.path.join(_APP_DIR, "..", "..", ".env.local"), override=False)
+except ImportError:
+    pass
+try:
     from json_repair import repair_json as _repair_json
     _HAS_JSON_REPAIR = True
 except ImportError:
@@ -985,6 +994,7 @@ def analyze_slides_with_claude(images_b64, filename):
                     "Return a JSON array ONLY (no other text) with this exact structure:\n"
                     '[{"page": 1, "title": "...", "content": "...", '
                     '"key_claims": ["claim1", "claim2"], '
+                    '"verbatim_evidence": ["exact phrase visibly written on the slide"], '
                     '"slide_role": "cover|section|argument|method|evidence|results|conclusion|other", '
                     '"takeaway": "...", '
                     '"visual_observations": {"text_density": "low|medium|high", '
@@ -1020,6 +1030,7 @@ def analyze_slides_with_claude(images_b64, filename):
         for i, s in enumerate(slides):
             s.setdefault("page", i + 1)
             s.setdefault("key_claims", [])
+            s.setdefault("verbatim_evidence", [])
             s.setdefault("slide_role", "other")
             s.setdefault("takeaway", s.get("title", ""))
             s.setdefault("visual_observations", {})
@@ -7538,6 +7549,8 @@ def _empty_deck_dimensions():
             "score": None,
             "status": "not_assessed",
             "summary_zh": "当前上传材料不足以可靠评估此项。",
+            "evidence_refs": [],
+            "evidence": [],
         }
         for key, meta in DECK_UNIVERSAL_DIMENSIONS.items()
     }
@@ -7559,28 +7572,19 @@ def _fallback_deck_quality(slides, scenario, overlay_key, overlay_reason):
         observations = slide.get("visual_observations") or {}
         dense = len(content) > 620 or len(content.split()) > 110 or observations.get("text_density") == "high"
         if dense:
+            excerpt = " ".join(content.split())[:220]
             findings.append({
                 "id": f"density-s{page}", "slide_id": page,
+                "slide_title": str(slide.get("title") or f"Slide {page}")[:200],
                 "dimension": "cognitive_load", "severity": "major",
                 "title_zh": "单页信息密度过高",
-                "evidence": f"第 {page} 页提取到较长正文或被识别为高文字密度。",
+                "evidence": f"第 {page} 页提取到 {len(content.split())} 个英文分词、{len(content)} 个字符。",
+                "evidence_quote": excerpt,
+                "evidence_type": "slide_text",
                 "why_it_matters_zh": "听众需要同时阅读和聆听，核心观点更难被记住。",
                 "recommended_fix_zh": "保留一个核心结论，把支撑细节拆页或移入演讲备注。",
                 "question_seed_en": "What is the single takeaway from this slide, and which detail is essential evidence for it?",
             })
-
-    first = (slides or [{}])[0]
-    first_text = f"{first.get('title', '')} {first.get('content', '')}".lower()
-    if slides and not any(token in first_text for token in ("why", "problem", "purpose", "objective", "背景", "目的", "问题")):
-        findings.append({
-            "id": "framing-opening", "slide_id": _safe_int(first.get("page"), 1, 1),
-            "dimension": "framing", "severity": "minor",
-            "title_zh": "开场意义定位可以更明确",
-            "evidence": "首页可提取文本中未发现清晰的问题、目的或意义表达。",
-            "why_it_matters_zh": "不熟悉主题的听众可能无法快速判断为什么要关注这场演示。",
-            "recommended_fix_zh": "在开场补充一句受众能理解的核心问题与价值。",
-            "question_seed_en": "Why should this audience care about the problem introduced at the start of your presentation?",
-        })
 
     return {
         "has_data": bool(slides),
@@ -7603,6 +7607,61 @@ def _fallback_deck_quality(slides, scenario, overlay_key, overlay_reason):
     }
 
 
+def _deck_evidence_corpus(slide):
+    """Return normalized, model-visible evidence that may be cited verbatim."""
+    pieces = [
+        str(slide.get("title") or ""),
+        str(slide.get("content") or ""),
+        str(slide.get("takeaway") or ""),
+    ]
+    pieces.extend(str(item) for item in (slide.get("key_claims") or []))
+    pieces.extend(str(item) for item in (slide.get("verbatim_evidence") or []))
+    pieces.append(str(slide.get("source_text") or ""))
+    observations = slide.get("visual_observations") or {}
+    if isinstance(observations, dict):
+        for value in observations.values():
+            if isinstance(value, list):
+                pieces.extend(str(item) for item in value)
+            else:
+                pieces.append(str(value or ""))
+    return " ".join(" ".join(pieces).split()).casefold()
+
+
+def _deck_quote_is_grounded(quote, slide):
+    def compact(value):
+        return re.sub(r"[^\w\u4e00-\u9fff]+", "", str(value or "").casefold())
+
+    normalized = compact(quote)
+    corpus = compact(_deck_evidence_corpus(slide))
+    return len(normalized) >= 6 and normalized in corpus
+
+
+def _deck_finding_has_dimension_evidence(dimension, evidence_type, slide):
+    """Reject a citation whose evidence type cannot assess the dimension."""
+    visual_dimensions = {
+        "results_legibility", "figure_integrity", "signaling", "visual_quality", "layout"
+    }
+    if dimension in visual_dimensions:
+        return evidence_type == "visual_observation"
+    if dimension == "cognitive_load" and evidence_type == "slide_text":
+        text = str(slide.get("source_text") or slide.get("content") or "")
+        return len(text) > 620 or len(text.split()) > 110
+    return True
+
+
+def _deck_issue_evidence_is_specific(dimension, evidence_type, slide):
+    """Require issue findings to cite evidence that demonstrates a defect."""
+    if not _deck_finding_has_dimension_evidence(dimension, evidence_type, slide):
+        return False
+    if dimension == "cognitive_load" and evidence_type == "visual_observation":
+        observations = slide.get("visual_observations") or {}
+        return (
+            str(observations.get("text_density") or "").lower() == "high"
+            or bool(observations.get("layout_issues"))
+        )
+    return True
+
+
 def _normalize_deck_quality(raw, slides, scenario, overlay_key, overlay_reason):
     """Validate model output against the product-owned rubric and safe schema."""
     if not isinstance(raw, dict):
@@ -7613,6 +7672,17 @@ def _normalize_deck_quality(raw, slides, scenario, overlay_key, overlay_reason):
     visual_evidence = _deck_has_visual_evidence(slides)
     visual_only = {"results_legibility", "figure_integrity", "signaling", "visual_quality", "layout"}
     forced_unassessed = {"factual_fidelity", "motion_pacing"}
+    raw_scores = []
+    if isinstance(supplied, dict):
+        for candidate in supplied.values():
+            if isinstance(candidate, dict) and candidate.get("status") == "assessed":
+                try:
+                    raw_scores.append(float(candidate.get("score")))
+                except (TypeError, ValueError):
+                    pass
+    # Some compatible models follow the upstream rubric's five-point bands
+    # even when asked for 0–100. Convert the whole response consistently.
+    uses_five_point_scale = bool(raw_scores) and min(raw_scores) >= 0 and max(raw_scores) <= 5
 
     for key, meta in dimensions.items():
         candidate = supplied.get(key, {}) if isinstance(supplied, dict) else {}
@@ -7624,9 +7694,13 @@ def _normalize_deck_quality(raw, slides, scenario, overlay_key, overlay_reason):
         elif status not in ("assessed", "not_assessed"):
             status = "assessed" if candidate.get("score") is not None else "not_assessed"
         meta["status"] = status
-        meta["score"] = (
-            _safe_int(candidate.get("score"), 0, 0, 100) if status == "assessed" else None
-        )
+        score = candidate.get("score")
+        if status == "assessed" and uses_five_point_scale:
+            try:
+                score = float(score) * 20
+            except (TypeError, ValueError):
+                score = 0
+        meta["score"] = _safe_int(score, 0, 0, 100) if status == "assessed" else None
         summary = str(candidate.get("summary_zh") or "").strip()
         if status == "not_assessed":
             if key == "factual_fidelity":
@@ -7637,7 +7711,53 @@ def _normalize_deck_quality(raw, slides, scenario, overlay_key, overlay_reason):
                 summary = "未获得可靠页面视觉证据，因此不评估此项。"
         meta["summary_zh"] = summary or meta["summary_zh"]
 
-    valid_pages = {_safe_int(slide.get("page"), 0) for slide in slides or []}
+    slide_by_page = {
+        _safe_int(slide.get("page"), 0): slide for slide in slides or []
+        if _safe_int(slide.get("page"), 0) > 0
+    }
+    valid_pages = set(slide_by_page)
+
+    for key, meta in dimensions.items():
+        candidate = supplied.get(key, {}) if isinstance(supplied, dict) else {}
+        raw_evidence = candidate.get("evidence") if isinstance(candidate, dict) else []
+        if isinstance(raw_evidence, dict):
+            raw_evidence = [raw_evidence]
+        if not isinstance(raw_evidence, list):
+            raw_evidence = []
+        verified_evidence = []
+        for evidence_item in raw_evidence[:4]:
+            if not isinstance(evidence_item, dict):
+                continue
+            page = _safe_int(evidence_item.get("slide_id"), 0)
+            quote = str(evidence_item.get("quote") or "").strip()
+            evidence_type = str(evidence_item.get("evidence_type") or "").strip()
+            analysis_zh = str(evidence_item.get("analysis_zh") or "").strip()
+            source_slide = slide_by_page.get(page, {})
+            if (
+                page not in valid_pages
+                or evidence_type not in ("slide_text", "visual_observation")
+                or not analysis_zh
+                or not _deck_quote_is_grounded(quote, source_slide)
+                or not _deck_finding_has_dimension_evidence(key, evidence_type, source_slide)
+            ):
+                continue
+            verified_evidence.append({
+                "slide_id": page,
+                "slide_title": str(source_slide.get("title") or f"Slide {page}")[:200],
+                "quote": quote[:500],
+                "evidence_type": evidence_type,
+                "analysis_zh": analysis_zh[:600],
+            })
+        refs = sorted({item["slide_id"] for item in verified_evidence})
+        meta["evidence_refs"] = refs
+        meta["evidence"] = verified_evidence
+        # A dimension score without a traceable page reference is not useful
+        # feedback.  Downgrade it instead of displaying unsupported certainty.
+        if meta["status"] == "assessed" and not refs:
+            meta["status"] = "not_assessed"
+            meta["score"] = None
+            meta["summary_zh"] = "AI 未提供可回溯的页面证据，因此该维度不展示分数。"
+
     findings = []
     for index, candidate in enumerate(raw.get("findings") or []):
         if not isinstance(candidate, dict):
@@ -7652,7 +7772,15 @@ def _normalize_deck_quality(raw, slides, scenario, overlay_key, overlay_reason):
         if valid_pages and page not in valid_pages:
             continue
         evidence = str(candidate.get("evidence") or "").strip()
-        if not evidence:
+        evidence_quote = str(candidate.get("evidence_quote") or "").strip()
+        evidence_type = str(candidate.get("evidence_type") or "").strip()
+        source_slide = slide_by_page.get(page, {})
+        if (
+            not evidence
+            or evidence_type not in ("slide_text", "visual_observation")
+            or not _deck_quote_is_grounded(evidence_quote, source_slide)
+            or not _deck_issue_evidence_is_specific(dimension, evidence_type, source_slide)
+        ):
             continue
         seed = str(candidate.get("question_seed_en") or "").strip()
         if seed and not seed.endswith("?"):
@@ -7660,10 +7788,13 @@ def _normalize_deck_quality(raw, slides, scenario, overlay_key, overlay_reason):
         findings.append({
             "id": str(candidate.get("id") or f"finding-{index + 1}"),
             "slide_id": page,
+            "slide_title": str(source_slide.get("title") or f"Slide {page}")[:200],
             "dimension": dimension,
             "severity": severity,
             "title_zh": str(candidate.get("title_zh") or dimensions[dimension]["label_zh"]).strip(),
             "evidence": evidence[:800],
+            "evidence_quote": evidence_quote[:500],
+            "evidence_type": evidence_type,
             "why_it_matters_zh": str(candidate.get("why_it_matters_zh") or "").strip()[:800],
             "recommended_fix_zh": str(candidate.get("recommended_fix_zh") or "").strip()[:800],
             "question_seed_en": seed[:520],
@@ -7710,6 +7841,8 @@ def run_deck_quality_evaluation(slides, scenario):
             "title": (slide.get("title") or "")[:200],
             "content": (slide.get("content") or "")[:1800],
             "key_claims": (slide.get("key_claims") or [])[:8],
+            "verbatim_evidence": (slide.get("verbatim_evidence") or [])[:10],
+            "source_text": (slide.get("source_text") or "")[:2200],
             "slide_role": slide.get("slide_role", "other"),
             "takeaway": (slide.get("takeaway") or "")[:400],
             "visual_observations": slide.get("visual_observations") or {},
@@ -7722,6 +7855,13 @@ Do not alter or score presentation delivery, Q&A communication, or spoken-script
 
 EVIDENCE RULES:
 - Every finding must name one slide and quote or precisely describe visible/extracted evidence.
+- Every assessed dimension must include evidence_refs: a non-empty list of slide page numbers.
+- Every assessed dimension must also include 1–3 evidence objects. Each evidence object has
+  slide_id, evidence_type, quote copied exactly from the supplied slide data, and analysis_zh
+  explaining specifically how that excerpt or observation supports the dimension score.
+- Every finding must include evidence_quote copied EXACTLY from that slide's title, content,
+  source_text, verbatim_evidence, key_claims, takeaway, or visual_observations.
+- evidence_type must be slide_text or visual_observation. Never paraphrase evidence_quote.
 - Use only blocker, major, or minor severity.
 - factual_fidelity MUST be not_assessed because no source package was supplied.
 - motion_pacing MUST be not_assessed because this is a static upload.
@@ -7729,25 +7869,27 @@ EVIDENCE RULES:
   figure_integrity, signaling, visual_quality, and layout not_assessed.
 - Do not invent metrics, missing sources, visual flaws, or strengths.
 - A structural cover/section slide is not required to have a substantive takeaway.
+- Every assessed score MUST be an integer on a 0–100 scale, never a 1–5 rating.
 
 Return one JSON object only:
 {{
   "dimension_scores": {{
-    "one_idea_per_slide": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
-    "results_legibility": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
-    "cognitive_load": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
-    "figure_integrity": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
-    "signaling": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
-    "narrative_flow": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
-    "visual_quality": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
-    "framing": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
-    "layout": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
-    "factual_fidelity": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
-    "purpose_fit": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
-    "motion_pacing": {{"score": null, "status": "not_assessed", "summary_zh": "..."}}
+    "one_idea_per_slide": {{"score": 0, "status": "assessed", "summary_zh": "...", "evidence_refs": [1], "evidence": [{{"slide_id":1,"evidence_type":"slide_text","quote":"exact copied phrase","analysis_zh":"该原文如何支持本维度评分"}}]}},
+    "results_legibility": {{"score": null, "status": "not_assessed", "summary_zh": "...", "evidence_refs": [], "evidence": []}},
+    "cognitive_load": {{"score": 0, "status": "assessed", "summary_zh": "...", "evidence_refs": [2], "evidence": [{{"slide_id":2,"evidence_type":"visual_observation","quote":"exact copied observation","analysis_zh":"..."}}]}},
+    "figure_integrity": {{"score": null, "status": "not_assessed", "summary_zh": "...", "evidence_refs": [], "evidence": []}},
+    "signaling": {{"score": null, "status": "not_assessed", "summary_zh": "...", "evidence_refs": [], "evidence": []}},
+    "narrative_flow": {{"score": 0, "status": "assessed", "summary_zh": "...", "evidence_refs": [1, 2], "evidence": [{{"slide_id":1,"evidence_type":"slide_text","quote":"exact copied phrase","analysis_zh":"..."}}]}},
+    "visual_quality": {{"score": null, "status": "not_assessed", "summary_zh": "...", "evidence_refs": [], "evidence": []}},
+    "framing": {{"score": 0, "status": "assessed", "summary_zh": "...", "evidence_refs": [1], "evidence": [{{"slide_id":1,"evidence_type":"slide_text","quote":"exact copied phrase","analysis_zh":"..."}}]}},
+    "layout": {{"score": null, "status": "not_assessed", "summary_zh": "...", "evidence_refs": [], "evidence": []}},
+    "factual_fidelity": {{"score": null, "status": "not_assessed", "summary_zh": "...", "evidence_refs": [], "evidence": []}},
+    "purpose_fit": {{"score": 0, "status": "assessed", "summary_zh": "...", "evidence_refs": [1, 2], "evidence": [{{"slide_id":2,"evidence_type":"slide_text","quote":"exact copied phrase","analysis_zh":"..."}}]}},
+    "motion_pacing": {{"score": null, "status": "not_assessed", "summary_zh": "...", "evidence_refs": [], "evidence": []}}
   }},
   "findings": [{{"id":"...","slide_id":1,"dimension":"framing","severity":"major",
-    "title_zh":"...","evidence":"...","why_it_matters_zh":"...",
+    "title_zh":"...","evidence":"...","evidence_quote":"exact copied phrase",
+    "evidence_type":"slide_text","why_it_matters_zh":"...",
     "recommended_fix_zh":"...","question_seed_en":"A concise English examiner question?"}}],
   "strengths": ["evidence-based strength in Chinese"]
 }}
@@ -8174,6 +8316,7 @@ def api_start_session():
     filename = session.get("filename", "")
     # Start with whatever text-extracted slides were stored during upload (real page count)
     slides   = _load_slides(session)
+    text_slides_by_page = {s.get("page"): dict(s) for s in slides}
     try:
         if filepath and AI_ENABLED:
             ext = filepath.rsplit(".", 1)[-1].lower()
@@ -8183,6 +8326,11 @@ def api_start_session():
                 app.logger.info(f"Vision: analysing {len(images_b64)} page(s)…")
                 ai_slides, ok = analyze_slides_with_claude(images_b64, filename)
                 if ok and ai_slides:
+                    for ai_slide in ai_slides:
+                        source = text_slides_by_page.get(ai_slide.get("page"), {})
+                        ai_slide["source_text"] = " ".join(
+                            part for part in (source.get("title", ""), source.get("content", "")) if part
+                        )
                     # Vision may have analysed fewer pages than text extraction (e.g. max_pages cap
                     # or a short Vision response). Never let Vision shrink the deck — merge so that
                     # every page the user uploaded is represented in the session.
@@ -8203,12 +8351,18 @@ def api_start_session():
                 ppt_data = extract_ppt_images_as_base64(filepath)
                 if ppt_data:
                     slides = pptx_to_slides(ppt_data)
+                    text_slides_by_page = {s.get("page"): dict(s) for s in slides}
                 # Optional visual enhancement.  The extracted text above is
                 # always retained if conversion or Vision is unavailable.
                 office_images = extract_office_images_as_base64(filepath)
                 if office_images:
                     ai_slides, ok = analyze_slides_with_claude(office_images, filename)
                     if ok and ai_slides:
+                        for ai_slide in ai_slides:
+                            source = text_slides_by_page.get(ai_slide.get("page"), {})
+                            ai_slide["source_text"] = " ".join(
+                                part for part in (source.get("title", ""), source.get("content", "")) if part
+                            )
                         seen_pages = {s.get("page") for s in ai_slides}
                         extra = [s for s in slides if s.get("page") not in seen_pages]
                         slides = sorted(ai_slides + extra, key=lambda s: s.get("page", 0))

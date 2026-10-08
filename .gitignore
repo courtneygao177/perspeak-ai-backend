@@ -52,6 +52,9 @@ Thumbs.db
 .venv/
 __pycache__/
 *.pyc
+.env
+.env.*
+!.env.example
 
 # Vercel
 .vercel
