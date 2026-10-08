@@ -27,6 +27,14 @@ from config.defense_knowledge_base import (
     INTERRUPT_STRATEGIES,
     DEFENSE_STRATEGY_BY_TYPE,
 )
+from config.deck_quality_rubrics import (
+    PURPOSE_OVERLAYS,
+    RUBRIC_VERSION as DECK_RUBRIC_VERSION,
+    SEVERITY_DEFINITIONS,
+    UNIVERSAL_DIMENSIONS as DECK_UNIVERSAL_DIMENSIONS,
+    rubric_prompt_block,
+    select_purpose_overlay,
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "ai-presentation-dev-secret-2024")
@@ -89,6 +97,20 @@ def _load_report(key):
     if not key:
         return None
     return store.get_json(f"reports/{key}.json")
+
+
+def _save_deck_quality(deck_quality):
+    """Persist the upload-time deck audit without enlarging the session."""
+    key = str(uuid.uuid4())
+    store.put_json(f"deck_quality/{key}.json", deck_quality)
+    return key
+
+
+def _load_deck_quality(session_obj):
+    key = session_obj.get("deck_quality_key", "")
+    if not key:
+        return None
+    return store.get_json(f"deck_quality/{key}.json")
 
 # ── Server-side slides store ──────────────────────────────────────────────────
 
@@ -847,6 +869,50 @@ def extract_ppt_images_as_base64(filepath, max_pages=20):
         return []
 
 
+def extract_office_images_as_base64(filepath, max_pages=20):
+    """Render PPT/PPTX pages for Vision when LibreOffice is available.
+
+    Text extraction remains the authoritative fallback.  Production hosts that
+    do not install LibreOffice therefore keep the existing behaviour instead
+    of failing the rehearsal setup.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    office = shutil.which("soffice") or shutil.which("libreoffice")
+    if not office:
+        app.logger.info("PPTX visual audit skipped: LibreOffice is unavailable")
+        return []
+    try:
+        with tempfile.TemporaryDirectory(prefix="perspeak-deck-") as out_dir:
+            result = subprocess.run(
+                [
+                    office, "--headless", "--convert-to", "pdf",
+                    "--outdir", out_dir, filepath,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=45,
+                check=False,
+            )
+            if result.returncode != 0:
+                app.logger.warning(
+                    "PPTX visual conversion failed (%s): %s",
+                    result.returncode, (result.stderr or result.stdout)[-500:],
+                )
+                return []
+            pdfs = [
+                os.path.join(out_dir, name)
+                for name in os.listdir(out_dir)
+                if name.lower().endswith(".pdf")
+            ]
+            return extract_pdf_images_as_base64(pdfs[0], max_pages) if pdfs else []
+    except Exception as exc:
+        app.logger.warning("PPTX visual conversion unavailable: %s", exc)
+        return []
+
+
 def extract_pdf_text_slides(filepath, max_pages=20):
     """
     Fast text extraction from PDF pages — no AI, no base64 encoding.
@@ -913,10 +979,17 @@ def analyze_slides_with_claude(images_b64, filename):
                 "type": "text",
                 "text": (
                     "You are an expert presentation analyst. I am uploading slide images from a presentation. "
-                    "For each slide, extract: the slide title, a concise summary of the main content (2-4 sentences), "
-                    "and the key claims or data points made.\n\n"
+                    "For each slide, extract the slide title, a concise summary of the main content (2-4 sentences), "
+                    "the key claims or data points, the slide's structural role, its one-sentence takeaway, and "
+                    "observable visual signals. Report only what is visible; never invent a source, number, or flaw.\n\n"
                     "Return a JSON array ONLY (no other text) with this exact structure:\n"
-                    '[{"page": 1, "title": "...", "content": "...", "key_claims": ["claim1", "claim2"]}]\n\n'
+                    '[{"page": 1, "title": "...", "content": "...", '
+                    '"key_claims": ["claim1", "claim2"], '
+                    '"slide_role": "cover|section|argument|method|evidence|results|conclusion|other", '
+                    '"takeaway": "...", '
+                    '"visual_observations": {"text_density": "low|medium|high", '
+                    '"hierarchy": "...", "legibility": "...", "signaling": "...", '
+                    '"figure_integrity": "...", "layout_issues": ["..."]}}]\n\n'
                     "Be concise and factual. Extract exactly what is on the slides."
                 ),
             }
@@ -947,6 +1020,9 @@ def analyze_slides_with_claude(images_b64, filename):
         for i, s in enumerate(slides):
             s.setdefault("page", i + 1)
             s.setdefault("key_claims", [])
+            s.setdefault("slide_role", "other")
+            s.setdefault("takeaway", s.get("title", ""))
+            s.setdefault("visual_observations", {})
         return slides, True
 
     except Exception as e:
@@ -954,10 +1030,121 @@ def analyze_slides_with_claude(images_b64, filename):
         return MOCK_SLIDES, False
 
 
+_DECK_SEVERITY_ORDER = {"blocker": 0, "major": 1, "minor": 2}
+
+
+def _top_deck_finding(deck_quality, include_minor=False):
+    """Return the strongest usable deck finding, or None for legacy flows."""
+    findings = (deck_quality or {}).get("findings") or []
+    allowed = {"blocker", "major", "minor"} if include_minor else {"blocker", "major"}
+    usable = [
+        finding for finding in findings
+        if finding.get("severity") in allowed and (finding.get("question_seed_en") or "").strip()
+    ]
+    usable.sort(key=lambda item: (
+        _DECK_SEVERITY_ORDER.get(item.get("severity"), 9),
+        _safe_int(item.get("slide_id"), 9999),
+    ))
+    return usable[0] if usable else None
+
+
+def _deck_quality_question_context(deck_quality):
+    """Compact, bounded context for the existing question engines."""
+    findings = (deck_quality or {}).get("findings") or []
+    selected = sorted(
+        findings,
+        key=lambda item: _DECK_SEVERITY_ORDER.get(item.get("severity"), 9),
+    )[:4]
+    if not selected:
+        return "No verified blocker or major deck-quality finding was available."
+    lines = []
+    for item in selected:
+        lines.append(
+            f"- Slide {item.get('slide_id') or 'deck'} | {item.get('severity', 'minor')} | "
+            f"{item.get('dimension', 'purpose_fit')}: {item.get('title_zh', '')} | "
+            f"Evidence: {item.get('evidence', '')} | Suggested question: {item.get('question_seed_en', '')}"
+        )
+    return "\n".join(lines)
+
+
+def _challenge_type_for_deck_finding(finding, scenario):
+    dimension = (finding or {}).get("dimension", "")
+    if scenario == "MBA Case Pitch":
+        return {
+            "factual_fidelity": "Unrealistic Assumption",
+            "results_legibility": "Unrealistic Assumption",
+            "figure_integrity": "Unrealistic Assumption",
+            "framing": "Market Size Doubt",
+            "purpose_fit": "Defensibility",
+            "narrative_flow": "Monetization Issue",
+        }.get(dimension, "Unrealistic Assumption")
+    return {
+        "factual_fidelity": "Unsupported Claim",
+        "results_legibility": "Unsupported Claim",
+        "figure_integrity": "Unsupported Claim",
+        "narrative_flow": "Overgeneralization",
+        "framing": "Literature Gap",
+        "purpose_fit": "Methodology Weakness",
+    }.get(dimension, "Unsupported Claim")
+
+
+def _challenge_seed_from_deck_quality(deck_quality, scenario):
+    """Turn a verified severe finding into the existing interrupt structure."""
+    finding = _top_deck_finding(deck_quality)
+    if not finding:
+        return None
+    question = (finding.get("question_seed_en") or "").strip()
+    if not question:
+        return None
+    return {
+        "trigger_page": _safe_int(finding.get("slide_id"), 1, 1),
+        "challenge_type": _challenge_type_for_deck_finding(finding, scenario),
+        "initial_challenge": question,
+        "deck_finding_id": finding.get("id", ""),
+    }
+
+
+def _question_from_deck_quality(deck_quality, scene_slug, audience, difficulty):
+    """Build one question without altering the existing reviewed question banks."""
+    finding = _top_deck_finding(deck_quality)
+    if not finding:
+        return None
+    question = (finding.get("question_seed_en") or "").strip()
+    if not question:
+        return None
+    item = {
+        "id": f"deck_finding_{finding.get('id') or 'top'}",
+        "question": question,
+        "category": "Deck Quality — Targeted",
+        "difficulty": difficulty,
+        "challenge_type": finding.get("dimension", "Deck Quality").replace("_", " ").title(),
+        "questioner": audience,
+        "deck_finding_id": finding.get("id", ""),
+        "slide_id": finding.get("slide_id"),
+        "is_anchor": False,
+    }
+    if scene_slug == "thesis_defense":
+        dimension = finding.get("dimension", "")
+        question_type = {
+            "factual_fidelity": "result_interpretation",
+            "results_legibility": "result_interpretation",
+            "figure_integrity": "result_interpretation",
+            "narrative_flow": "multipart_followup",
+            "framing": "contribution_originality",
+            "purpose_fit": "contribution_originality",
+            "cognitive_load": "definition_concept",
+        }.get(dimension, "limitation_challenge")
+        item["question_type"] = question_type
+        item["internal_strategy_id"] = DEFENSE_STRATEGY_BY_TYPE[question_type]["strategy_id"]
+        item["answering_strategy"] = dict(DEFENSE_STRATEGY_BY_TYPE[question_type])
+        item["context_refs"] = [finding.get("slide_id")] if finding.get("slide_id") else []
+    return item
+
+
 # ─────────────────────────────────────────────
 # CLAUDE: MASTER ENGINE — BUILD CHALLENGE SEED + QA BANK (Step 3)
 # ─────────────────────────────────────────────
-def build_master_engine(slides, audience, scenario, difficulty):
+def build_master_engine(slides, audience, scenario, difficulty, deck_quality=None):
     """
     The Master Engine: Claude reads slides + config and returns:
     - challenge_seed (for interruptable scenarios)
@@ -1012,6 +1199,7 @@ def build_master_engine(slides, audience, scenario, difficulty):
     difficulty_text = DIFFICULTY_INSTRUCTIONS.get(difficulty, DIFFICULTY_INSTRUCTIONS["Medium"])
     _lang_directive = audience_language_directive(audience)
     language_block = f"\nQUESTION LANGUAGE LEVEL:\n{_lang_directive}\n" if _lang_directive else ""
+    deck_quality_context = _deck_quality_question_context(deck_quality)
 
     prompt = f"""You are a world-class presentation examiner AI.
 
@@ -1026,6 +1214,9 @@ DIFFICULTY MODE:
 
 PRESENTATION SLIDES:
 {slide_text}
+
+DECK QUALITY FINDINGS (use these before inventing a different weakness):
+{deck_quality_context}
 
 TASK:
 {task_instruction}
@@ -1149,7 +1340,7 @@ def _generate_dynamic_defense_question(thesis_context, used_types, ordinal):
         return None
 
 
-def build_thesis_defense_qa_bank(slides, difficulty):
+def build_thesis_defense_qa_bank(slides, difficulty, deck_quality=None):
     """Build the Thesis Defense Q&A sequence shown in the difficulty UI.
 
     Easy / Medium / Hard must respectively deliver 3 / 5 / 8 questions.  We
@@ -1160,7 +1351,17 @@ def build_thesis_defense_qa_bank(slides, difficulty):
     count = {"Easy": 3, "Medium": 5, "Hard": 8}.get(difficulty, 5)
     desired_free = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
     used_types, questions = set(), []
-    for ordinal in range(1, desired_free + 1):
+    targeted = _question_from_deck_quality(
+        deck_quality, "thesis_defense", "Professor", difficulty
+    )
+    if targeted:
+        questions.append(targeted)
+        used_types.add(targeted["question_type"])
+
+    # The targeted question occupies one of the existing free-question slots,
+    # so question count, latency, and the reviewed anchor-bank mix stay stable.
+    remaining_free = max(0, desired_free - len(questions))
+    for ordinal in range(1, remaining_free + 1):
         item = _generate_dynamic_defense_question(thesis_context, used_types, ordinal)
         if item:
             used_types.add(item["question_type"])
@@ -1533,7 +1734,7 @@ def build_class_presentation_qa(audience, difficulty):
 # ─────────────────────────────────────────────
 # DUAL-TRACK Q&A BUILDER
 # ─────────────────────────────────────────────
-def generate_free_qa_question(slides, audience, scene_slug):
+def generate_free_qa_question(slides, audience, scene_slug, deck_quality=None, difficulty="Medium"):
     """
     Generate a single context-aware free question using AI + slide content.
     No scaffold hint — purely contextual. Returns a question dict with question_type='free'.
@@ -1554,6 +1755,12 @@ def generate_free_qa_question(slides, audience, scene_slug):
         "case_pitch":         "What is the single biggest risk to your business model right now, and what is your specific mitigation plan?",
     }
     fallback_q = _fallbacks.get(scene_slug, "Can you walk us through the most important takeaway from your presentation?")
+
+    targeted = _question_from_deck_quality(
+        deck_quality, scene_slug, audience, difficulty
+    )
+    if targeted:
+        return targeted
 
     # Class Presentation already has reliable text extracted at upload time.
     # Do not block the learner with a remote call merely to vary the wording of
@@ -1616,7 +1823,7 @@ def generate_free_qa_question(slides, audience, scene_slug):
         }
 
 
-def build_dual_track_qa(slides, audience, scene_slug, difficulty):
+def build_dual_track_qa(slides, audience, scene_slug, difficulty, deck_quality=None):
     """
     Build the dual-track Q&A bank for post-session Q&A.
 
@@ -1629,7 +1836,9 @@ def build_dual_track_qa(slides, audience, scene_slug, difficulty):
     """
     qa_count = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 2)
 
-    q1 = generate_free_qa_question(slides, audience, scene_slug)
+    q1 = generate_free_qa_question(
+        slides, audience, scene_slug, deck_quality=deck_quality, difficulty=difficulty
+    )
     if scene_slug == "class_presentation":
         q1["questioner"] = audience
         q1 = _attach_class_cq_routing(q1)
@@ -7297,6 +7506,276 @@ def _render_pptx_page(filepath, page_num):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DECK QUALITY EVALUATION — upload-time, purpose-aware slide audit
+# ─────────────────────────────────────────────────────────────────────────────
+def _safe_int(value, default=0, minimum=None, maximum=None):
+    try:
+        result = int(round(float(value)))
+    except (TypeError, ValueError):
+        result = default
+    if minimum is not None:
+        result = max(minimum, result)
+    if maximum is not None:
+        result = min(maximum, result)
+    return result
+
+
+def _deck_has_visual_evidence(slides):
+    for slide in slides or []:
+        observations = slide.get("visual_observations")
+        if isinstance(observations, dict) and any(
+            value not in (None, "", [], {}) for value in observations.values()
+        ):
+            return True
+    return False
+
+
+def _empty_deck_dimensions():
+    return {
+        key: {
+            "label_en": meta["label_en"],
+            "label_zh": meta["label_zh"],
+            "score": None,
+            "status": "not_assessed",
+            "summary_zh": "当前上传材料不足以可靠评估此项。",
+        }
+        for key, meta in DECK_UNIVERSAL_DIMENSIONS.items()
+    }
+
+
+def _fallback_deck_quality(slides, scenario, overlay_key, overlay_reason):
+    """Conservative local audit used when the AI evaluator is unavailable."""
+    dimensions = _empty_deck_dimensions()
+    findings = []
+    # A local fallback may surface deterministic warnings, but it never
+    # fabricates dimension scores.  Numeric scoring belongs to the validated
+    # rubric evaluator only.
+    for item in dimensions.values():
+        item["summary_zh"] = "AI 评估暂不可用；仅显示可由本地规则直接验证的问题，不生成模拟分数。"
+
+    for slide in slides or []:
+        page = _safe_int(slide.get("page"), 1, 1)
+        content = (slide.get("content") or "").strip()
+        observations = slide.get("visual_observations") or {}
+        dense = len(content) > 620 or len(content.split()) > 110 or observations.get("text_density") == "high"
+        if dense:
+            findings.append({
+                "id": f"density-s{page}", "slide_id": page,
+                "dimension": "cognitive_load", "severity": "major",
+                "title_zh": "单页信息密度过高",
+                "evidence": f"第 {page} 页提取到较长正文或被识别为高文字密度。",
+                "why_it_matters_zh": "听众需要同时阅读和聆听，核心观点更难被记住。",
+                "recommended_fix_zh": "保留一个核心结论，把支撑细节拆页或移入演讲备注。",
+                "question_seed_en": "What is the single takeaway from this slide, and which detail is essential evidence for it?",
+            })
+
+    first = (slides or [{}])[0]
+    first_text = f"{first.get('title', '')} {first.get('content', '')}".lower()
+    if slides and not any(token in first_text for token in ("why", "problem", "purpose", "objective", "背景", "目的", "问题")):
+        findings.append({
+            "id": "framing-opening", "slide_id": _safe_int(first.get("page"), 1, 1),
+            "dimension": "framing", "severity": "minor",
+            "title_zh": "开场意义定位可以更明确",
+            "evidence": "首页可提取文本中未发现清晰的问题、目的或意义表达。",
+            "why_it_matters_zh": "不熟悉主题的听众可能无法快速判断为什么要关注这场演示。",
+            "recommended_fix_zh": "在开场补充一句受众能理解的核心问题与价值。",
+            "question_seed_en": "Why should this audience care about the problem introduced at the start of your presentation?",
+        })
+
+    return {
+        "has_data": bool(slides),
+        "rubric_version": DECK_RUBRIC_VERSION,
+        "rubric_overlay": overlay_key,
+        "overlay_label": PURPOSE_OVERLAYS[overlay_key]["label_zh"],
+        "overlay_reason": overlay_reason,
+        "analysis_scope": "deck_only",
+        "evaluation_method": "conservative_local_fallback",
+        "overall_score": None,
+        "score_status": "not_assessed",
+        "reviewed_slides": len(slides or []),
+        "dimension_scores": dimensions,
+        "findings": findings,
+        "strengths": [],
+        "not_assessed": [
+            key for key, value in dimensions.items() if value["status"] == "not_assessed"
+        ],
+        "consent_to_rehearse": not any(item["severity"] == "blocker" for item in findings),
+    }
+
+
+def _normalize_deck_quality(raw, slides, scenario, overlay_key, overlay_reason):
+    """Validate model output against the product-owned rubric and safe schema."""
+    if not isinstance(raw, dict):
+        return _fallback_deck_quality(slides, scenario, overlay_key, overlay_reason)
+
+    dimensions = _empty_deck_dimensions()
+    supplied = raw.get("dimension_scores") or {}
+    visual_evidence = _deck_has_visual_evidence(slides)
+    visual_only = {"results_legibility", "figure_integrity", "signaling", "visual_quality", "layout"}
+    forced_unassessed = {"factual_fidelity", "motion_pacing"}
+
+    for key, meta in dimensions.items():
+        candidate = supplied.get(key, {}) if isinstance(supplied, dict) else {}
+        if not isinstance(candidate, dict):
+            candidate = {}
+        status = candidate.get("status")
+        if key in forced_unassessed or (key in visual_only and not visual_evidence):
+            status = "not_assessed"
+        elif status not in ("assessed", "not_assessed"):
+            status = "assessed" if candidate.get("score") is not None else "not_assessed"
+        meta["status"] = status
+        meta["score"] = (
+            _safe_int(candidate.get("score"), 0, 0, 100) if status == "assessed" else None
+        )
+        summary = str(candidate.get("summary_zh") or "").strip()
+        if status == "not_assessed":
+            if key == "factual_fidelity":
+                summary = "未提供可逐项核验的原始来源，因此不评估事实忠实度。"
+            elif key == "motion_pacing":
+                summary = "静态上传无法可靠评估动画、转场与现场页面节奏。"
+            elif key in visual_only and not visual_evidence:
+                summary = "未获得可靠页面视觉证据，因此不评估此项。"
+        meta["summary_zh"] = summary or meta["summary_zh"]
+
+    valid_pages = {_safe_int(slide.get("page"), 0) for slide in slides or []}
+    findings = []
+    for index, candidate in enumerate(raw.get("findings") or []):
+        if not isinstance(candidate, dict):
+            continue
+        dimension = candidate.get("dimension")
+        severity = candidate.get("severity")
+        page = _safe_int(candidate.get("slide_id"), 0)
+        if dimension not in dimensions or severity not in SEVERITY_DEFINITIONS:
+            continue
+        if dimensions[dimension]["status"] != "assessed":
+            continue
+        if valid_pages and page not in valid_pages:
+            continue
+        evidence = str(candidate.get("evidence") or "").strip()
+        if not evidence:
+            continue
+        seed = str(candidate.get("question_seed_en") or "").strip()
+        if seed and not seed.endswith("?"):
+            seed += "?"
+        findings.append({
+            "id": str(candidate.get("id") or f"finding-{index + 1}"),
+            "slide_id": page,
+            "dimension": dimension,
+            "severity": severity,
+            "title_zh": str(candidate.get("title_zh") or dimensions[dimension]["label_zh"]).strip(),
+            "evidence": evidence[:800],
+            "why_it_matters_zh": str(candidate.get("why_it_matters_zh") or "").strip()[:800],
+            "recommended_fix_zh": str(candidate.get("recommended_fix_zh") or "").strip()[:800],
+            "question_seed_en": seed[:520],
+        })
+    findings.sort(key=lambda item: (_DECK_SEVERITY_ORDER[item["severity"]], item["slide_id"]))
+
+    assessed_scores = [
+        item["score"] for item in dimensions.values()
+        if item["status"] == "assessed" and item["score"] is not None
+    ]
+    overall = round(sum(assessed_scores) / len(assessed_scores)) if assessed_scores else None
+    strengths = [str(item).strip()[:500] for item in (raw.get("strengths") or []) if str(item).strip()][:5]
+    return {
+        "has_data": bool(slides),
+        "rubric_version": DECK_RUBRIC_VERSION,
+        "rubric_overlay": overlay_key,
+        "overlay_label": PURPOSE_OVERLAYS[overlay_key]["label_zh"],
+        "overlay_reason": overlay_reason,
+        "analysis_scope": "deck_only",
+        "evaluation_method": "ai_rubric_review",
+        "overall_score": overall,
+        "score_status": "assessed" if assessed_scores else "not_assessed",
+        "reviewed_slides": len(slides or []),
+        "dimension_scores": dimensions,
+        "findings": findings[:12],
+        "strengths": strengths,
+        "not_assessed": [key for key, value in dimensions.items() if value["status"] == "not_assessed"],
+        "consent_to_rehearse": not any(item["severity"] == "blocker" for item in findings),
+    }
+
+
+def run_deck_quality_evaluation(slides, scenario):
+    """Audit the uploaded deck without changing any existing speaker score."""
+    slides = slides or []
+    overlay_key, overlay_reason = select_purpose_overlay(scenario, slides)
+    fallback = _fallback_deck_quality(slides, scenario, overlay_key, overlay_reason)
+    if not AI_ENABLED or not slides:
+        return fallback
+
+    compact_slides = []
+    for slide in slides[:20]:
+        compact_slides.append({
+            "page": slide.get("page"),
+            "title": (slide.get("title") or "")[:200],
+            "content": (slide.get("content") or "")[:1800],
+            "key_claims": (slide.get("key_claims") or [])[:8],
+            "slide_role": slide.get("slide_role", "other"),
+            "takeaway": (slide.get("takeaway") or "")[:400],
+            "visual_observations": slide.get("visual_observations") or {},
+        })
+    visual_evidence = _deck_has_visual_evidence(slides)
+    prompt = f"""You are a rigorous slide-deck reviewer. Evaluate the DECK, not the speaker.
+Do not alter or score presentation delivery, Q&A communication, or spoken-script quality.
+
+{rubric_prompt_block(overlay_key)}
+
+EVIDENCE RULES:
+- Every finding must name one slide and quote or precisely describe visible/extracted evidence.
+- Use only blocker, major, or minor severity.
+- factual_fidelity MUST be not_assessed because no source package was supplied.
+- motion_pacing MUST be not_assessed because this is a static upload.
+- Visual evidence available: {str(visual_evidence).lower()}. If false, mark results_legibility,
+  figure_integrity, signaling, visual_quality, and layout not_assessed.
+- Do not invent metrics, missing sources, visual flaws, or strengths.
+- A structural cover/section slide is not required to have a substantive takeaway.
+
+Return one JSON object only:
+{{
+  "dimension_scores": {{
+    "one_idea_per_slide": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
+    "results_legibility": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
+    "cognitive_load": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
+    "figure_integrity": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
+    "signaling": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
+    "narrative_flow": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
+    "visual_quality": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
+    "framing": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
+    "layout": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
+    "factual_fidelity": {{"score": null, "status": "not_assessed", "summary_zh": "..."}},
+    "purpose_fit": {{"score": 0, "status": "assessed", "summary_zh": "..."}},
+    "motion_pacing": {{"score": null, "status": "not_assessed", "summary_zh": "..."}}
+  }},
+  "findings": [{{"id":"...","slide_id":1,"dimension":"framing","severity":"major",
+    "title_zh":"...","evidence":"...","why_it_matters_zh":"...",
+    "recommended_fix_zh":"...","question_seed_en":"A concise English examiner question?"}}],
+  "strengths": ["evidence-based strength in Chinese"]
+}}
+
+SLIDES:
+{json.dumps(compact_slides, ensure_ascii=False)}"""
+    try:
+        response = _create_chat_completion(
+            TEXT_MODEL, 5000, request_timeout=45.0, max_retries=0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            if not _HAS_JSON_REPAIR:
+                raise
+            parsed = _repair_json(raw, return_objects=True)
+        return _normalize_deck_quality(
+            parsed, slides, scenario, overlay_key, overlay_reason
+        )
+    except Exception as exc:
+        app.logger.warning("Deck-quality evaluator unavailable, using conservative fallback: %s", exc)
+        return fallback
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CONTENT QUALITY EVALUATION (Step 8c) — Per-slide 5-dimension transcript audit
 # ─────────────────────────────────────────────────────────────────────────────
 def run_content_quality_evaluation(fe_transcripts, slides, scene_slug, config):
@@ -7724,6 +8203,15 @@ def api_start_session():
                 ppt_data = extract_ppt_images_as_base64(filepath)
                 if ppt_data:
                     slides = pptx_to_slides(ppt_data)
+                # Optional visual enhancement.  The extracted text above is
+                # always retained if conversion or Vision is unavailable.
+                office_images = extract_office_images_as_base64(filepath)
+                if office_images:
+                    ai_slides, ok = analyze_slides_with_claude(office_images, filename)
+                    if ok and ai_slides:
+                        seen_pages = {s.get("page") for s in ai_slides}
+                        extra = [s for s in slides if s.get("page") not in seen_pages]
+                        slides = sorted(ai_slides + extra, key=lambda s: s.get("page", 0))
             session["slide_key"] = _save_slides(slides)
         else:
             app.logger.info(f"Skipping Vision (filepath={filepath!r}, AI_ENABLED={AI_ENABLED})")
@@ -7736,6 +8224,10 @@ def api_start_session():
         slides = _load_slides(session)
         session["slide_key"] = _save_slides(slides)
 
+    # ── Additive deck audit: stored independently from the existing reports ──
+    deck_quality = run_deck_quality_evaluation(slides, scenario)
+    session["deck_quality_key"] = _save_deck_quality(deck_quality)
+
     # ── Step 3: Master Engine (Challenge seed + QA bank) ──────────────────────────
     if scenario in ("Class Presentation", "Academic Presentation"):
         # This branch creates its own typed post-presentation Q&A bank below.
@@ -7745,8 +8237,11 @@ def api_start_session():
     else:
         try:
             challenge_seed, static_qa_bank = build_master_engine(
-                slides, audience, scenario, difficulty
+                slides, audience, scenario, difficulty, deck_quality=deck_quality
             )
+            targeted_seed = _challenge_seed_from_deck_quality(deck_quality, scenario)
+            if targeted_seed:
+                challenge_seed = targeted_seed
         except Exception as e:
             traceback.print_exc()
             app.logger.error(f"Master engine failed, using mock: {e}")
@@ -7763,12 +8258,16 @@ def api_start_session():
         # Dual-track: Q1 = AI-free, Q2 = anchor (when difficulty >= Medium).
         # "Academic Presentation" kept for backward compat with old sessions.
         _scene_for_qa = "class_presentation"
-        session["qa_bank"] = build_dual_track_qa(slides, audience, _scene_for_qa, difficulty)
+        session["qa_bank"] = build_dual_track_qa(
+            slides, audience, _scene_for_qa, difficulty, deck_quality=deck_quality
+        )
     elif scenario == "Thesis Defense":
         # The selector explicitly promises 3 / 5 / 8 deliberate exchanges.
         # Each question has a typed strategy card that the candidate can see
         # before answering; detailed coaching appears in the report.
-        session["qa_bank"] = build_thesis_defense_qa_bank(slides, difficulty)
+        session["qa_bank"] = build_thesis_defense_qa_bank(
+            slides, difficulty, deck_quality=deck_quality
+        )
     else:
         session["qa_bank"] = []
 
@@ -8116,6 +8615,12 @@ def api_finish_presentation():
     slides         = _load_slides(session)
     challenge_seed = session.get("challenge_seed") or MOCK_CHALLENGE
     scenario       = config.get("scenario", "Class Presentation")
+    deck_quality   = _load_deck_quality(session)
+    if not deck_quality:
+        # Backward compatibility for sessions started before this feature was
+        # deployed.  Existing reports and sessions remain renderable.
+        deck_quality = run_deck_quality_evaluation(slides, scenario)
+        session["deck_quality_key"] = _save_deck_quality(deck_quality)
 
     # ── Read real performance data sent by the frontend ────────────────────────
     req_data           = request.get_json(silent=True) or {}
@@ -8163,6 +8668,7 @@ def api_finish_presentation():
             config.get("audience", "Professor"),
             "Class Presentation",
             config.get("difficulty", "Medium"),
+            deck_quality=deck_quality,
         )
         session["qa_bank"] = qa_bank
 
@@ -8264,6 +8770,7 @@ def api_finish_presentation():
         "pillar":                pillar_eval,
         "communication_quality": cq_eval,
         "content_quality":       content_quality_eval,
+        "deck_quality":          deck_quality,
         "training_plan":         training_plan,
         "scenario":              scenario,
         "audience":              config.get("audience",   "Professor"),

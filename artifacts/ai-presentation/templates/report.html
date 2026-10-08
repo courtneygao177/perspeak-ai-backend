@@ -80,6 +80,8 @@
   .tab-btn.active-cq .tab-badge { background:#F1F4F5; color:#46626F; }
   .tab-btn.active-cqual { color:#5D5468; border-bottom-color:#5D5468; }
   .tab-btn.active-cqual .tab-badge { background:#F2F0F5; color:#5D5468; }
+  .tab-btn.active-deck { color:#2563EB; border-bottom-color:#2563EB; }
+  .tab-btn.active-deck .tab-badge { background:#EFF6FF; color:#2563EB; }
   /* Content Quality card styles */
   .cqual-card { background:#fff; border:1px solid #E2E8F0; border-radius:1rem;
                 box-shadow:0 1px 4px rgba(15,23,42,.06); overflow:hidden; }
@@ -90,6 +92,13 @@
   }
   .cqual-left  { background:#FAF3E3; border-right:1px solid #EDD4A6; }
   .cqual-right { background:#ECFDF5; }
+  /* Deck Quality — same report-card language as the other modules */
+  .deck-card { background:#fff; border:1px solid #DBEAFE; border-radius:1rem;
+               box-shadow:0 1px 4px rgba(15,23,42,.06); }
+  .deck-finding { background:#fff; border:1px solid #E2E8F0; border-radius:.875rem; overflow:hidden; }
+  .deck-severity-blocker { color:#991B1B; background:#FEF2F2; border-color:#FECACA; }
+  .deck-severity-major { color:#92400E; background:#FFFBEB; border-color:#FDE68A; }
+  .deck-severity-minor { color:#475569; background:#F8FAFC; border-color:#E2E8F0; }
 </style>
 {% endblock %}
 
@@ -130,6 +139,7 @@
 {% set jaw_drop   = pillar.jaw_dropping_moment %}
 {% set cq         = evaluation.communication_quality if evaluation.communication_quality is defined else None %}
 {% set cqual      = evaluation.content_quality if evaluation.content_quality is defined else None %}
+{% set deck       = evaluation.deck_quality if evaluation.deck_quality is defined else None %}
 
 <div class="relative max-w-5xl mx-auto px-5 py-10 animate-fade-in">
   <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(217,72,31,0.05)"></div>
@@ -185,7 +195,7 @@
   </div>
   {% endif %}
 
-  <!-- ── 3-Tab Navigation ──────────────────────────────────────────────────── -->
+  <!-- ── 4-Tab Navigation ──────────────────────────────────────────────────── -->
   <div class="relative z-10 flex border-b border-slate-200 mb-8 overflow-x-auto">
     <button id="tab-btn-pq" onclick="switchTab('pq')" class="tab-btn active">
       Presentation Quality
@@ -208,6 +218,16 @@
       Content Quality
       {% if cqual and cqual.has_data %}
       <span class="tab-badge" style="background:#F2F0F5;color:#5D5468">{{ cqual.slide_transcripts_report | length }} slides</span>
+      {% else %}
+      <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">No data</span>
+      {% endif %}
+    </button>
+    <button id="tab-btn-deck" onclick="switchTab('deck')" class="tab-btn">
+      Deck Quality
+      {% if deck and deck.has_data and deck.overall_score is not none %}
+      <span class="tab-badge" style="background:#EFF6FF;color:#2563EB">DQ {{ deck.overall_score }}</span>
+      {% elif deck and deck.has_data %}
+      <span class="tab-badge" style="background:#EFF6FF;color:#2563EB">Limited</span>
       {% else %}
       <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">No data</span>
       {% endif %}
@@ -964,6 +984,155 @@
   {% endif %}
   </div><!-- /tab-pane-cqual -->
 
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB PANEL 4: DECK QUALITY — purpose-aware slide audit
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-pane-deck" class="hidden">
+  {% if deck and deck.has_data %}
+  <div class="relative z-10 mb-8">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div>
+        <h2 class="text-sm font-semibold text-[#0F172A]">Purpose-Aware Deck Audit</h2>
+        <p class="text-xs text-gray-500">幻灯片本身的独立诊断 · 不计入演讲者其他三项评分</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="text-xs px-3 py-1.5 rounded-full border font-mono"
+              style="color:#2563EB;background:#EFF6FF;border-color:#BFDBFE">
+          {{ deck.overlay_label }}
+        </span>
+        <span class="text-xs px-3 py-1.5 rounded-full border font-mono text-slate-500 border-slate-200 bg-white">
+          {{ deck.reviewed_slides }} slide(s) audited
+        </span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+      <div class="deck-card p-6 flex items-center gap-5">
+        <div class="relative w-20 h-20 flex-shrink-0">
+          <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E2E8F0" stroke-width="3.5"/>
+            {% if deck.overall_score is not none %}
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#2563EB" stroke-width="3.5"
+                    stroke-dasharray="{{ deck.overall_score }} {{ 100 - deck.overall_score }}" stroke-linecap="round"/>
+            {% endif %}
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-lg font-bold text-[#0F172A]">{{ deck.overall_score if deck.overall_score is not none else '—' }}</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">Deck Score</p>
+          {% if deck.overall_score is not none %}
+          <p class="text-3xl font-bold text-[#0F172A]">{{ deck.overall_score }}<span class="text-slate-400 text-xl">/100</span></p>
+          {% else %}
+          <p class="text-sm font-semibold text-slate-500">Evidence limited</p>
+          {% endif %}
+          <p class="text-[11px] text-slate-400 mt-1">仅汇总已评估维度</p>
+        </div>
+      </div>
+      <div class="deck-card p-5 lg:col-span-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Purpose overlay</p>
+        <p class="text-sm font-bold text-[#0F172A] mb-1">{{ deck.overlay_label }}</p>
+        <p class="text-xs text-slate-600 leading-relaxed">{{ deck.overlay_reason }}</p>
+        <div class="mt-3 flex gap-2 text-[10px]">
+          <span class="px-2 py-1 rounded bg-slate-100 text-slate-500">Rubric {{ deck.rubric_version }}</span>
+          <span class="px-2 py-1 rounded bg-blue-50 text-blue-700">Deck only</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="deck-card p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-sm font-semibold text-[#0F172A]">12-Dimension Review</h3>
+          <p class="text-xs text-slate-400 mt-0.5">无法可靠判断的维度明确标记为“未评估”</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {% for key, dim in deck.dimension_scores.items() %}
+        <div class="rounded-xl border border-slate-200 p-3 bg-slate-50/60">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div>
+              <p class="text-xs font-semibold text-slate-800">{{ dim.label_zh }}</p>
+              <p class="text-[10px] text-slate-400">{{ dim.label_en }}</p>
+            </div>
+            {% if dim.status == 'assessed' %}
+            {% set dscore = dim.score | int %}
+            {% set dcolor = '#DC2626' if dscore < 55 else ('#C98A2D' if dscore < 75 else '#2563EB') %}
+            <span class="text-xs font-bold" style="color:{{ dcolor }}">{{ dscore }}</span>
+            {% else %}
+            <span class="text-[10px] font-semibold text-slate-400 whitespace-nowrap">未评估</span>
+            {% endif %}
+          </div>
+          {% if dim.status == 'assessed' %}
+          <div class="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-2">
+            <div class="h-full rounded-full" style="width:{{ dim.score }}%;background:{{ dcolor }}"></div>
+          </div>
+          {% endif %}
+          <p class="text-[11px] leading-relaxed text-slate-500">{{ dim.summary_zh }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="text-sm font-semibold text-[#0F172A]">Prioritized Findings</h3>
+          <p class="text-xs text-slate-400 mt-0.5">按 Blocker → Major → Minor 排序，并关联到具体页面</p>
+        </div>
+        <span class="text-xs font-mono text-slate-500">{{ deck.findings | length }} finding(s)</span>
+      </div>
+      {% if deck.findings %}
+      <div class="space-y-3">
+        {% for finding in deck.findings %}
+        <div class="deck-finding">
+          <div class="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-slate-100">
+            <span class="text-[10px] font-mono px-2 py-1 rounded border
+              {% if finding.severity == 'blocker' %}deck-severity-blocker{% elif finding.severity == 'major' %}deck-severity-major{% else %}deck-severity-minor{% endif %}">
+              {{ finding.severity | upper }}
+            </span>
+            <span class="text-[10px] font-mono px-2 py-1 rounded bg-blue-50 text-blue-700">S{{ finding.slide_id }}</span>
+            <span class="text-sm font-semibold text-[#0F172A]">{{ finding.title_zh }}</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 text-xs leading-relaxed">
+            <div><p class="font-semibold text-slate-400 uppercase tracking-wide mb-1">Evidence</p><p class="text-slate-700">{{ finding.evidence }}</p></div>
+            <div><p class="font-semibold text-slate-400 uppercase tracking-wide mb-1">Why it matters</p><p class="text-slate-700">{{ finding.why_it_matters_zh }}</p></div>
+            <div><p class="font-semibold text-blue-500 uppercase tracking-wide mb-1">Recommended fix</p><p class="text-slate-700">{{ finding.recommended_fix_zh }}</p></div>
+          </div>
+          {% if finding.question_seed_en %}
+          <div class="px-4 py-3 bg-blue-50/60 border-t border-blue-100">
+            <p class="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Rehearsal question generated from this finding</p>
+            <p class="text-xs text-slate-700">{{ finding.question_seed_en }}</p>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="deck-card p-5 text-sm text-slate-500">当前证据中没有发现需要优先修复的 Deck Quality 问题。</div>
+      {% endif %}
+    </div>
+
+    {% if deck.strengths %}
+    <div class="deck-card p-5">
+      <h3 class="text-sm font-semibold text-[#0F172A] mb-3">Evidence-Based Strengths</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% for strength in deck.strengths %}
+        <div class="good-item"><span class="text-green-600">✓</span><p class="text-xs text-slate-700 leading-relaxed">{{ strength }}</p></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="relative z-10 text-center py-16">
+    <p class="text-slate-500 text-sm font-semibold mb-1">No deck audit data</p>
+    <p class="text-slate-400 text-xs max-w-sm mx-auto">这是旧版报告或当前上传材料不可用；原有三个报告模块仍可正常查看。</p>
+  </div>
+  {% endif %}
+  </div><!-- /tab-pane-deck -->
+
   <!-- CTA -->
   <div class="relative z-10 flex gap-4 pb-10">
     <a href="/" class="flex-1 btn-primary font-semibold py-4 rounded-xl text-sm
@@ -1340,19 +1509,19 @@
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
   function switchTab(name) {
-    const tabs   = ['pq', 'cq', 'cqual'];
-    const colors = { pq: 'active', cq: 'active-cq', cqual: 'active-cqual' };
+    const tabs   = ['pq', 'cq', 'cqual', 'deck'];
+    const colors = { pq: 'active', cq: 'active-cq', cqual: 'active-cqual', deck: 'active-deck' };
     tabs.forEach(function(t) {
       var pane = document.getElementById('tab-pane-' + t);
       var btn  = document.getElementById('tab-btn-' + t);
       if (!pane || !btn) return;
       if (t === name) {
         pane.classList.remove('hidden');
-        btn.classList.remove('active', 'active-cq', 'active-cqual');
+        btn.classList.remove('active', 'active-cq', 'active-cqual', 'active-deck');
         btn.classList.add(colors[name]);
       } else {
         pane.classList.add('hidden');
-        btn.classList.remove('active', 'active-cq', 'active-cqual');
+        btn.classList.remove('active', 'active-cq', 'active-cqual', 'active-deck');
       }
     });
     // Reset PQ performance view to "What I did well" when switching back to PQ
