@@ -157,6 +157,28 @@ class TestDeckQualityReportContract(unittest.TestCase):
             self.assertIn(f'id="tab-btn-{tab}"', template)
             self.assertIn(f'id="tab-pane-{tab}"', template)
         self.assertIn("evaluation.deck_quality if evaluation.deck_quality is defined else None", template)
+        self.assertIn("Slide Evidence Map", template)
+        self.assertIn("jumpToDeckSlide", template)
+
+    def test_evidence_map_groups_each_original_slide_once(self):
+        deck = {
+            "dimension_scores": {
+                "framing": {
+                    "label_zh": "开场定位", "label_en": "Framing", "score": 70,
+                    "evidence": [{"slide_id": 1, "slide_title": "Warm up", "quote": "A", "analysis_zh": "A1", "evidence_type": "slide_text"}],
+                },
+                "visual_quality": {
+                    "label_zh": "视觉质量", "label_en": "Visual quality", "score": 80,
+                    "evidence": [{"slide_id": 1, "slide_title": "Warm up", "quote": "B", "analysis_zh": "B1", "evidence_type": "visual_observation"}],
+                },
+            },
+            "findings": [{"slide_id": 1, "slide_title": "Warm up", "severity": "minor"}],
+        }
+        result = app_module._build_deck_evidence_by_slide(deck)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["slide_id"], 1)
+        self.assertEqual(len(result[0]["dimensions"]), 2)
+        self.assertEqual(len(result[0]["findings"]), 1)
 
 
 class TestDeckQualitySessionIntegration(unittest.TestCase):
@@ -183,6 +205,40 @@ class TestDeckQualitySessionIntegration(unittest.TestCase):
             audit = app_module._load_deck_quality(flask_session)
         self.assertEqual(audit["rubric_version"], app_module.DECK_RUBRIC_VERSION)
         self.assertEqual(audit["analysis_scope"], "deck_only")
+
+    def test_historical_thumbnail_is_owner_only(self):
+        import fitz
+
+        app_module.app.config.update(TESTING=True)
+        owner_client = app_module.app.test_client()
+        owner_email = f"deck-owner-{uuid.uuid4()}@example.com"
+        owner_client.post("/register", data={"email": owner_email, "password": "password123"})
+        owner = app_module.mvp_store.get_user_by_email(owner_email)
+
+        document = fitz.open()
+        page = document.new_page(width=800, height=500)
+        page.insert_text((72, 100), "Perspeak evidence slide")
+        pdf_bytes = document.tobytes()
+        document.close()
+        file_key = f"{uuid.uuid4()}.pdf"
+        app_module.store.put(f"files/{file_key}", pdf_bytes)
+        practice_id = app_module.mvp_store.create_practice(
+            owner["id"], file_key, "evidence.pdf", {"scenario": "Class Presentation"}
+        )
+
+        response = owner_client.get(f"/x/history/{practice_id}/slide-image/1?thumb=1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/jpeg")
+
+        other_client = app_module.app.test_client()
+        other_client.post(
+            "/register",
+            data={"email": f"deck-other-{uuid.uuid4()}@example.com", "password": "password123"},
+        )
+        self.assertEqual(
+            other_client.get(f"/x/history/{practice_id}/slide-image/1?thumb=1").status_code,
+            404,
+        )
 
 
 if __name__ == "__main__":

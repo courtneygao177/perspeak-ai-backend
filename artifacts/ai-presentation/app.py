@@ -121,6 +121,44 @@ def _load_deck_quality(session_obj):
         return None
     return store.get_json(f"deck_quality/{key}.json")
 
+
+def _build_deck_evidence_by_slide(deck_quality):
+    """Group the audit by original slide for a compact visual evidence map."""
+    grouped = {}
+    dimensions = (deck_quality or {}).get("dimension_scores") or {}
+    for dimension_key, dimension in dimensions.items():
+        for evidence in (dimension or {}).get("evidence") or []:
+            page = _safe_int(evidence.get("slide_id"), 0)
+            if page <= 0:
+                continue
+            card = grouped.setdefault(page, {
+                "slide_id": page,
+                "slide_title": evidence.get("slide_title") or f"Slide {page}",
+                "dimensions": [],
+                "findings": [],
+            })
+            card["dimensions"].append({
+                "dimension_key": dimension_key,
+                "label_zh": dimension.get("label_zh") or dimension_key,
+                "label_en": dimension.get("label_en") or dimension_key,
+                "score": dimension.get("score"),
+                "quote": evidence.get("quote", ""),
+                "analysis_zh": evidence.get("analysis_zh", ""),
+                "evidence_type": evidence.get("evidence_type", "slide_text"),
+            })
+    for finding in (deck_quality or {}).get("findings") or []:
+        page = _safe_int(finding.get("slide_id"), 0)
+        if page <= 0:
+            continue
+        card = grouped.setdefault(page, {
+            "slide_id": page,
+            "slide_title": finding.get("slide_title") or f"Slide {page}",
+            "dimensions": [],
+            "findings": [],
+        })
+        card["findings"].append(finding)
+    return [grouped[page] for page in sorted(grouped)]
+
 # ── Server-side slides store ──────────────────────────────────────────────────
 
 def _save_slides(slides):
@@ -8100,11 +8138,9 @@ Return ONLY a valid JSON object — no markdown, no code fences, no comments:
         return {"has_data": False, "slide_transcripts_report": [], "scene_label": scene_label, "error": str(e)}
 
 
-@app.route("/x/slide-image/<int:page>")
-def slide_image(page):
-    """Serve a specific slide page as PNG — PDF via fitz, PPTX via Pillow."""
+def _serve_slide_image(filepath, page, thumbnail=False):
+    """Render one page from an authorised deck path."""
     from flask import Response as _R
-    filepath = _local_source_file(session)
     if not filepath:
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500">'
@@ -8136,17 +8172,40 @@ def slide_image(page):
             doc.close()
             return "Page out of range", 404
         p   = doc[page - 1]
-        mat = fitz.Matrix(2.0, 2.0)
+        mat = fitz.Matrix(0.75, 0.75) if thumbnail else fitz.Matrix(2.0, 2.0)
         pix = p.get_pixmap(matrix=mat)
         # JPEG, not PNG: photo-heavy pages rendered at 2x can exceed the
         # 4.5MB response cap of Vercel serverless functions as PNG
-        img_bytes = pix.tobytes("jpg", jpg_quality=82)
+        img_bytes = pix.tobytes("jpg", jpg_quality=68 if thumbnail else 82)
         doc.close()
         return _R(img_bytes, mimetype="image/jpeg",
                   headers={"Cache-Control": "max-age=3600"})
     except Exception as e:
         app.logger.error(f"slide_image page={page} failed: {e}")
         return "Error generating image", 500
+
+
+@app.route("/x/slide-image/<int:page>")
+def slide_image(page):
+    """Serve a slide from the deck attached to the active rehearsal."""
+    return _serve_slide_image(
+        _local_source_file(session), page, request.args.get("thumb") == "1"
+    )
+
+
+@app.route("/x/history/<record_id>/slide-image/<int:page>")
+@login_required
+def history_slide_image(record_id, page):
+    """Serve a historical deck page to its owner or an administrator."""
+    user = _current_user()
+    record = mvp_store.get_practice(record_id)
+    if not record or (record["user_id"] != user["id"] and not user["is_admin"]):
+        abort(404)
+    file_key = record.get("deck_file_key") or ""
+    filepath = store.ensure_local_file(f"files/{file_key}") if file_key else None
+    if not filepath:
+        abort(404)
+    return _serve_slide_image(filepath, page, request.args.get("thumb") == "1")
 
 
 @app.route("/report")
@@ -8162,15 +8221,23 @@ def report():
 
 def _render_report(report_data, config, practice):
     """Render the current report or an authorised historical report."""
+    evaluation = report_data.get("evaluation") or {}
+    deck_quality = evaluation.get("deck_quality") or {}
+    if practice:
+        deck_image_base = f"/x/history/{practice['id']}/slide-image"
+    else:
+        deck_image_base = "/x/slide-image"
     return render_template(
         "report.html",
-        evaluation=report_data.get("evaluation"),
+        evaluation=evaluation,
         qa_bank=report_data.get("qa_bank", []),
         config=config,
         answers=report_data.get("answers", []),
         ai_enabled=AI_ENABLED,
         user=_current_user(),
         practice=practice,
+        deck_evidence_by_slide=_build_deck_evidence_by_slide(deck_quality),
+        deck_image_base=deck_image_base,
     )
 
 
