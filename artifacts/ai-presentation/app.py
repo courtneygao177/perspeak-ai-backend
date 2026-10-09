@@ -217,6 +217,11 @@ def require_account_for_product_routes():
     return redirect(url_for("login", next=request.path))
 
 ALLOWED_EXTENSIONS = {"pdf", "ppt", "pptx"}
+# Keep the complete deck available for navigation/reporting.  Vision requests
+# remain capped separately at 20 pages so a large classroom deck does not turn
+# into one oversized multimodal request.
+MAX_DECK_PAGES = int(os.environ.get("MAX_DECK_PAGES", "200"))
+MAX_VISION_PAGES = int(os.environ.get("MAX_VISION_PAGES", "20"))
 
 # ─────────────────────────────────────────────
 # OPENAI-COMPATIBLE UNIFIED API CLIENT SETUP
@@ -876,7 +881,7 @@ CASE_PITCH_CHALLENGE_POOL = [
 # ─────────────────────────────────────────────
 # PDF → BASE64 IMAGES PIPELINE (Step 1)
 # ─────────────────────────────────────────────
-def extract_pdf_images_as_base64(filepath, max_pages=20):
+def extract_pdf_images_as_base64(filepath, max_pages=MAX_VISION_PAGES):
     """Convert PDF pages to base64-encoded PNG images for Vision API."""
     try:
         import fitz  # PyMuPDF
@@ -897,7 +902,7 @@ def extract_pdf_images_as_base64(filepath, max_pages=20):
         return []
 
 
-def extract_ppt_images_as_base64(filepath, max_pages=20):
+def extract_ppt_images_as_base64(filepath, max_pages=MAX_DECK_PAGES):
     """For PPT/PPTX files — extract text per slide."""
     try:
         from pptx import Presentation
@@ -916,12 +921,13 @@ def extract_ppt_images_as_base64(filepath, max_pages=20):
         return []
 
 
-def extract_office_images_as_base64(filepath, max_pages=20):
-    """Render PPT/PPTX pages for Vision when LibreOffice is available.
+def _convert_office_to_pdf(filepath):
+    """Convert PPT/PPTX to a cached PDF for faithful page rendering.
 
-    Text extraction remains the authoritative fallback.  Production hosts that
-    do not install LibreOffice therefore keep the existing behaviour instead
-    of failing the rehearsal setup.
+    ``python-pptx`` extracts content but is not a PowerPoint renderer and does
+    not support legacy binary ``.ppt`` files.  LibreOffice is therefore the
+    preferred display path; the generated PDF is cached beside the upload so
+    thumbnails do not launch a new office process for every page.
     """
     import shutil
     import subprocess
@@ -929,8 +935,18 @@ def extract_office_images_as_base64(filepath, max_pages=20):
 
     office = shutil.which("soffice") or shutil.which("libreoffice")
     if not office:
-        app.logger.info("PPTX visual audit skipped: LibreOffice is unavailable")
-        return []
+        app.logger.info("PPT/PPTX rendering skipped: LibreOffice is unavailable")
+        return None
+
+    source_mtime = int(os.path.getmtime(filepath)) if os.path.exists(filepath) else 0
+    source_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
+    cache_dir = os.path.join(os.path.dirname(filepath), ".rendered")
+    os.makedirs(cache_dir, exist_ok=True)
+    stem = os.path.splitext(os.path.basename(filepath))[0]
+    cached_pdf = os.path.join(cache_dir, f"{stem}-{source_mtime}-{source_size}.pdf")
+    if os.path.exists(cached_pdf) and os.path.getsize(cached_pdf) > 0:
+        return cached_pdf
+
     try:
         with tempfile.TemporaryDirectory(prefix="perspeak-deck-") as out_dir:
             result = subprocess.run(
@@ -948,19 +964,32 @@ def extract_office_images_as_base64(filepath, max_pages=20):
                     "PPTX visual conversion failed (%s): %s",
                     result.returncode, (result.stderr or result.stdout)[-500:],
                 )
-                return []
+                return None
             pdfs = [
                 os.path.join(out_dir, name)
                 for name in os.listdir(out_dir)
                 if name.lower().endswith(".pdf")
             ]
-            return extract_pdf_images_as_base64(pdfs[0], max_pages) if pdfs else []
+            if not pdfs:
+                return None
+            temp_target = cached_pdf + ".tmp"
+            shutil.copyfile(pdfs[0], temp_target)
+            os.replace(temp_target, cached_pdf)
+            return cached_pdf
     except Exception as exc:
         app.logger.warning("PPTX visual conversion unavailable: %s", exc)
+        return None
+
+
+def extract_office_images_as_base64(filepath, max_pages=MAX_VISION_PAGES):
+    """Render the first Vision-budgeted PPT/PPTX pages as images."""
+    converted_pdf = _convert_office_to_pdf(filepath)
+    if not converted_pdf:
         return []
+    return extract_pdf_images_as_base64(converted_pdf, max_pages)
 
 
-def extract_pdf_text_slides(filepath, max_pages=20):
+def extract_pdf_text_slides(filepath, max_pages=MAX_DECK_PAGES):
     """
     Fast text extraction from PDF pages — no AI, no base64 encoding.
     Used to populate session["slides"] immediately after upload so the config
@@ -8155,8 +8184,11 @@ def _serve_slide_image(filepath, page, thumbnail=False):
 
     ext = os.path.splitext(filepath)[1].lstrip(".").lower()
 
-    # ── PPTX / PPT → SVG renderer ───────────────────────────────────────────
+    # ── PPTX / PPT → faithful PDF renderer, with text-SVG fallback ──────────
     if ext in ("pptx", "ppt"):
+        converted_pdf = _convert_office_to_pdf(filepath)
+        if converted_pdf:
+            return _serve_slide_image(converted_pdf, page, thumbnail)
         svg_bytes, mime = _render_pptx_page(filepath, page)
         if svg_bytes is None:
             return "Page out of range or render failed", 404
@@ -8299,7 +8331,16 @@ def _ingest_uploaded_file(file_key, ext, filename):
         slides_preview = extract_pdf_text_slides(save_path)
     elif ext in ("ppt", "pptx"):
         ppt_data = extract_ppt_images_as_base64(save_path)
-        slides_preview = pptx_to_slides(ppt_data) if ppt_data else MOCK_SLIDES
+        if ppt_data:
+            slides_preview = pptx_to_slides(ppt_data)
+        else:
+            # Legacy .ppt is not readable by python-pptx.  LibreOffice can
+            # still convert it, preserving the real page count and page text.
+            converted_pdf = _convert_office_to_pdf(save_path)
+            slides_preview = (
+                extract_pdf_text_slides(converted_pdf)
+                if converted_pdf else MOCK_SLIDES
+            )
     else:
         slides_preview = MOCK_SLIDES
 
@@ -8516,6 +8557,52 @@ def api_session_state():
         "config": session.get("config", {}),
         "slides": _load_slides(session),
     })
+
+
+@app.route("/x/go-to-slide", methods=["POST"])
+def api_go_to_slide():
+    """Move an active rehearsal to any real slide in the uploaded deck.
+
+    The visible narration is sealed against the page the learner is leaving,
+    so using the outline as navigation never re-labels speech as belonging to
+    the destination page.  Q&A remains modal because changing pages in the
+    middle of a challenge would detach its answer from the source question.
+    """
+    if "state" not in session:
+        return jsonify({"error": "No active session"}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        target_page = int(data.get("page"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid slide number"}), 400
+
+    state = dict(session["state"])
+    if state.get("in_qa_mode") or state.get("academic_qa_mode"):
+        return jsonify({"error": "Finish the current Q&A before changing slides."}), 409
+
+    slides = _load_slides(session)
+    target_slide = next((slide for slide in slides if slide.get("page") == target_page), None)
+    if target_slide is None:
+        return jsonify({"error": "Slide not found"}), 404
+
+    current_page = state.get("current_page", 1)
+    narration = str(data.get("narration") or "").strip()
+    if narration and target_page != current_page:
+        answers_list = list(session.get("answers", []))
+        answers_list.append({
+            "type": "narration",
+            "page": current_page,
+            "text": narration,
+            "navigation": "outline_jump",
+        })
+        session["answers"] = answers_list
+
+    state["current_page"] = target_page
+    state["follow_up_round"] = 0
+    state["chat_history"] = []
+    session["state"] = state
+    return jsonify({"success": True, "page": target_page, "slide": target_slide})
 
 
 @app.route("/x/check-slide", methods=["POST"])
