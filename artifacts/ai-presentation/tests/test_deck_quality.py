@@ -157,8 +157,11 @@ class TestDeckQualityReportContract(unittest.TestCase):
             self.assertIn(f'id="tab-btn-{tab}"', template)
             self.assertIn(f'id="tab-pane-{tab}"', template)
         self.assertIn("evaluation.deck_quality if evaluation.deck_quality is defined else None", template)
-        self.assertIn("Slide Evidence Map", template)
-        self.assertIn("jumpToDeckSlide", template)
+        self.assertIn("Slide-by-Slide Review", template)
+        self.assertIn("{{ item.analysis_zh }}", template)
+        self.assertNotIn("12-Dimension Review", template)
+        self.assertNotIn("Prioritized Findings", template)
+        self.assertNotIn("jumpToDeckSlide", template)
 
     def test_evidence_map_groups_each_original_slide_once(self):
         deck = {

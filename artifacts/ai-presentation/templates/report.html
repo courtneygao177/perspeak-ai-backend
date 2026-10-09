@@ -95,17 +95,7 @@
   /* Deck Quality — same report-card language as the other modules */
   .deck-card { background:#fff; border:1px solid #DBEAFE; border-radius:1rem;
                box-shadow:0 1px 4px rgba(15,23,42,.06); }
-  .deck-finding { background:#fff; border:1px solid #E2E8F0; border-radius:.875rem; overflow:hidden; }
-  .deck-severity-blocker { color:#991B1B; background:#FEF2F2; border-color:#FECACA; }
-  .deck-severity-major { color:#92400E; background:#FFFBEB; border-color:#FDE68A; }
-  .deck-severity-minor { color:#475569; background:#F8FAFC; border-color:#E2E8F0; }
-  .deck-ref-btn { font-size:.58rem; font-family:ui-monospace,SFMono-Regular,monospace;
-                  padding:.18rem .45rem; border-radius:.35rem; background:#EFF6FF;
-                  color:#2563EB; border:1px solid #DBEAFE; cursor:pointer; transition:all .15s; }
-  .deck-ref-btn:hover { background:#DBEAFE; border-color:#93C5FD; transform:translateY(-1px); }
-  .deck-evidence-row { scroll-margin-top:1.5rem; transition:border-color .25s,box-shadow .25s,background .25s; }
-  .deck-evidence-row.highlight { border-color:#3B82F6; background:#EFF6FF;
-                                 box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+  .deck-evidence-row { transition:border-color .25s,box-shadow .25s,background .25s; }
   .deck-thumb { width:100%; aspect-ratio:16/10; object-fit:contain; background:#F8FAFC; }
   .deck-thumb-button { width:100%; overflow:hidden; border-radius:.75rem; border:1px solid #CBD5E1;
                        background:#F8FAFC; cursor:zoom-in; transition:all .18s; }
@@ -1038,7 +1028,7 @@
           {% else %}
           <p class="text-sm font-semibold text-slate-500">Evidence limited</p>
           {% endif %}
-          <p class="text-[11px] text-slate-400 mt-1">仅汇总已评估维度</p>
+          <p class="text-[11px] text-slate-400 mt-1">综合已完成的页面评价</p>
         </div>
       </div>
       <div class="deck-card p-5 lg:col-span-2">
@@ -1052,62 +1042,12 @@
       </div>
     </div>
 
-    <div class="deck-card p-5 mb-6">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h3 class="text-sm font-semibold text-[#0F172A]">12-Dimension Review</h3>
-          <p class="text-xs text-slate-400 mt-0.5">无法可靠判断的维度明确标记为“未评估”</p>
-        </div>
-      </div>
-      {% if deck.evaluation_method == 'conservative_local_fallback' %}
-      <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-        <p class="text-xs font-semibold text-amber-800">本次 Deck AI 评估未成功运行</p>
-        <p class="text-[11px] text-amber-700 mt-1">以下维度不生成模拟分数；只保留能够从上传文本直接量化并引用原文的规则提示。</p>
-      </div>
-      {% endif %}
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {% for key, dim in deck.dimension_scores.items() %}
-        <div class="rounded-xl border border-slate-200 p-3 bg-slate-50/60">
-          <div class="flex items-start justify-between gap-2 mb-2">
-            <div>
-              <p class="text-xs font-semibold text-slate-800">{{ dim.label_zh }}</p>
-              <p class="text-[10px] text-slate-400">{{ dim.label_en }}</p>
-            </div>
-            {% if dim.status == 'assessed' %}
-            {% set dscore = dim.score | int %}
-            {% set dcolor = '#DC2626' if dscore < 55 else ('#C98A2D' if dscore < 75 else '#2563EB') %}
-            <span class="text-xs font-bold" style="color:{{ dcolor }}">{{ dscore }}</span>
-            {% else %}
-            <span class="text-[10px] font-semibold text-slate-400 whitespace-nowrap">未评估</span>
-            {% endif %}
-          </div>
-          {% if dim.status == 'assessed' %}
-          <div class="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-2">
-            <div class="h-full rounded-full" style="width:{{ dim.score }}%;background:{{ dcolor }}"></div>
-          </div>
-          {% endif %}
-          <p class="text-[11px] leading-relaxed text-slate-500">{{ dim.summary_zh }}</p>
-          {% if dim.evidence_refs %}
-          <div class="flex flex-wrap items-center gap-1 mt-3">
-            <span class="text-[9px] text-slate-400 mr-0.5">查看原页</span>
-            {% for ref in dim.evidence_refs %}
-            <button type="button" class="deck-ref-btn"
-                    onclick="jumpToDeckSlide({{ ref }}, '{{ key }}')"
-                    aria-label="查看幻灯片 {{ ref }} 的证据">S{{ ref }}</button>
-            {% endfor %}
-          </div>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-
     {% if deck_evidence_by_slide %}
     <div class="mb-6">
       <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
         <div>
-          <h3 class="text-sm font-semibold text-[#0F172A]">Slide Evidence Map</h3>
-          <p class="text-xs text-slate-400 mt-0.5">按原幻灯片聚合评价 · 点击缩略图放大查看</p>
+          <h3 class="text-sm font-semibold text-[#0F172A]">Slide-by-Slide Review</h3>
+          <p class="text-xs text-slate-400 mt-0.5">逐页查看评价语与页面证据 · 点击缩略图放大查看</p>
         </div>
         <span class="text-xs font-mono text-slate-500">{{ deck_evidence_by_slide | length }} referenced slide(s)</span>
       </div>
@@ -1132,29 +1072,16 @@
               </div>
             </div>
             <div class="md:col-span-8 lg:col-span-9">
-              <div class="flex flex-wrap gap-1.5 mb-3">
-                {% for item in slide_evidence.dimensions %}
-                <span class="text-[10px] px-2 py-1 rounded-full border border-blue-100 bg-blue-50 text-blue-700">
-                  {{ item.label_zh }}{% if item.score is not none %} · {{ item.score }}{% endif %}
-                </span>
-                {% endfor %}
-              </div>
               <div class="space-y-3">
                 {% for item in slide_evidence.dimensions %}
-                <div class="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3"
-                     data-dimension="{{ item.dimension_key }}">
-                  <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                    <p class="text-xs font-semibold text-slate-800">{{ item.label_zh }}</p>
-                    <span class="text-[9px] font-mono text-slate-400">{{ '视觉观察' if item.evidence_type == 'visual_observation' else '页面原文' }}</span>
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3">
+                  <p class="text-xs text-slate-700 leading-relaxed">{{ item.analysis_zh }}</p>
+                  {% if item.quote %}
+                  <div class="mt-2.5 border-l-2 border-blue-200 pl-3">
+                    <p class="text-[9px] font-mono text-slate-400 mb-1">{{ '视觉证据' if item.evidence_type == 'visual_observation' else '页面证据' }}</p>
+                    <p class="text-[11px] text-slate-500 leading-relaxed">“{{ item.quote }}”</p>
                   </div>
-                  <p class="text-[11px] text-slate-700 leading-relaxed">“{{ item.quote }}”</p>
-                  <p class="text-[11px] text-slate-500 leading-relaxed mt-1.5">{{ item.analysis_zh }}</p>
-                </div>
-                {% endfor %}
-                {% for finding in slide_evidence.findings %}
-                <div class="rounded-xl border px-3.5 py-3 {% if finding.severity == 'blocker' %}deck-severity-blocker{% elif finding.severity == 'major' %}deck-severity-major{% else %}deck-severity-minor{% endif %}">
-                  <p class="text-[10px] font-bold uppercase mb-1">{{ finding.severity }} · {{ finding.title_zh }}</p>
-                  <p class="text-[11px] leading-relaxed">{{ finding.recommended_fix_zh }}</p>
+                  {% endif %}
                 </div>
                 {% endfor %}
               </div>
@@ -1165,56 +1092,6 @@
       </div>
     </div>
     {% endif %}
-
-    <div class="mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <div>
-          <h3 class="text-sm font-semibold text-[#0F172A]">Prioritized Findings</h3>
-          <p class="text-xs text-slate-400 mt-0.5">按 Blocker → Major → Minor 排序，并关联到具体页面</p>
-        </div>
-        <span class="text-xs font-mono text-slate-500">{{ deck.findings | length }} finding(s)</span>
-      </div>
-      {% if deck.findings %}
-      <div class="space-y-3">
-        {% for finding in deck.findings %}
-        <div class="deck-finding">
-          <div class="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-slate-100">
-            <span class="text-[10px] font-mono px-2 py-1 rounded border
-              {% if finding.severity == 'blocker' %}deck-severity-blocker{% elif finding.severity == 'major' %}deck-severity-major{% else %}deck-severity-minor{% endif %}">
-              {{ finding.severity | upper }}
-            </span>
-            <button type="button" class="deck-ref-btn"
-                    onclick="jumpToDeckSlide({{ finding.slide_id }}, '{{ finding.dimension }}')">S{{ finding.slide_id }}</button>
-            <span class="text-sm font-semibold text-[#0F172A]">{{ finding.title_zh }}</span>
-            {% if finding.slide_title %}<span class="text-[10px] text-slate-400">· {{ finding.slide_title }}</span>{% endif %}
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 text-xs leading-relaxed">
-            <div>
-              <p class="font-semibold text-slate-400 uppercase tracking-wide mb-1">Evidence</p>
-              <p class="text-slate-700">{{ finding.evidence }}</p>
-              {% if finding.evidence_quote %}
-              <div class="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <p class="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Source excerpt · {{ 'visual observation' if finding.evidence_type == 'visual_observation' else 'slide text' }}</p>
-                <p class="text-[11px] text-slate-700 leading-relaxed">“{{ finding.evidence_quote }}”</p>
-              </div>
-              {% endif %}
-            </div>
-            <div><p class="font-semibold text-slate-400 uppercase tracking-wide mb-1">Why it matters</p><p class="text-slate-700">{{ finding.why_it_matters_zh }}</p></div>
-            <div><p class="font-semibold text-blue-500 uppercase tracking-wide mb-1">Recommended fix</p><p class="text-slate-700">{{ finding.recommended_fix_zh }}</p></div>
-          </div>
-          {% if finding.question_seed_en %}
-          <div class="px-4 py-3 bg-blue-50/60 border-t border-blue-100">
-            <p class="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Rehearsal question generated from this finding</p>
-            <p class="text-xs text-slate-700">{{ finding.question_seed_en }}</p>
-          </div>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div class="deck-card p-5 text-sm text-slate-500">当前证据中没有发现需要优先修复的 Deck Quality 问题。</div>
-      {% endif %}
-    </div>
 
     {% if deck.strengths %}
     <div class="deck-card p-5">
@@ -1649,23 +1526,7 @@
     if (name === 'pq') switchPerfView('good');
   }
 
-  // ── Deck evidence map ─────────────────────────────────────────────────────
-  function jumpToDeckSlide(page, dimensionKey) {
-    var row = document.getElementById('deck-evidence-slide-' + page);
-    if (!row) return;
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    document.querySelectorAll('.deck-evidence-row.highlight').forEach(function(el) {
-      el.classList.remove('highlight');
-    });
-    row.classList.add('highlight');
-    var detail = dimensionKey ? row.querySelector('[data-dimension="' + dimensionKey + '"]') : null;
-    if (detail) {
-      detail.style.boxShadow = '0 0 0 2px rgba(37,99,235,.28)';
-      setTimeout(function(){ detail.style.boxShadow = ''; }, 2200);
-    }
-    setTimeout(function(){ row.classList.remove('highlight'); }, 2400);
-  }
-
+  // ── Deck slide preview ────────────────────────────────────────────────────
   function openDeckSlide(button) {
     var modal = document.getElementById('deck-slide-modal');
     document.getElementById('deck-slide-modal-image').src = button.dataset.slideSrc || '';
