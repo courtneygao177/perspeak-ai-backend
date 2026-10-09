@@ -80,6 +80,8 @@
   .tab-btn.active-cq .tab-badge { background:#F1F4F5; color:#46626F; }
   .tab-btn.active-cqual { color:#5D5468; border-bottom-color:#5D5468; }
   .tab-btn.active-cqual .tab-badge { background:#F2F0F5; color:#5D5468; }
+  .tab-btn.active-deck { color:#2563EB; border-bottom-color:#2563EB; }
+  .tab-btn.active-deck .tab-badge { background:#EFF6FF; color:#2563EB; }
   /* Content Quality card styles */
   .cqual-card { background:#fff; border:1px solid #E2E8F0; border-radius:1rem;
                 box-shadow:0 1px 4px rgba(15,23,42,.06); overflow:hidden; }
@@ -90,6 +92,14 @@
   }
   .cqual-left  { background:#FAF3E3; border-right:1px solid #EDD4A6; }
   .cqual-right { background:#ECFDF5; }
+  /* Deck Quality — same report-card language as the other modules */
+  .deck-card { background:#fff; border:1px solid #DBEAFE; border-radius:1rem;
+               box-shadow:0 1px 4px rgba(15,23,42,.06); }
+  .deck-evidence-row { transition:border-color .25s,box-shadow .25s,background .25s; }
+  .deck-thumb { width:100%; aspect-ratio:16/10; object-fit:contain; background:#F8FAFC; }
+  .deck-thumb-button { width:100%; overflow:hidden; border-radius:.75rem; border:1px solid #CBD5E1;
+                       background:#F8FAFC; cursor:zoom-in; transition:all .18s; }
+  .deck-thumb-button:hover { border-color:#3B82F6; box-shadow:0 5px 18px rgba(37,99,235,.14); }
 </style>
 {% endblock %}
 
@@ -130,6 +140,7 @@
 {% set jaw_drop   = pillar.jaw_dropping_moment %}
 {% set cq         = evaluation.communication_quality if evaluation.communication_quality is defined else None %}
 {% set cqual      = evaluation.content_quality if evaluation.content_quality is defined else None %}
+{% set deck       = evaluation.deck_quality if evaluation.deck_quality is defined else None %}
 
 <div class="relative max-w-5xl mx-auto px-5 py-10 animate-fade-in">
   <div class="orb w-80 h-80 top-0 right-0" style="background:rgba(217,72,31,0.05)"></div>
@@ -185,7 +196,7 @@
   </div>
   {% endif %}
 
-  <!-- ── 3-Tab Navigation ──────────────────────────────────────────────────── -->
+  <!-- ── 4-Tab Navigation ──────────────────────────────────────────────────── -->
   <div class="relative z-10 flex border-b border-slate-200 mb-8 overflow-x-auto">
     <button id="tab-btn-pq" onclick="switchTab('pq')" class="tab-btn active">
       Presentation Quality
@@ -208,6 +219,16 @@
       Content Quality
       {% if cqual and cqual.has_data %}
       <span class="tab-badge" style="background:#F2F0F5;color:#5D5468">{{ cqual.slide_transcripts_report | length }} slides</span>
+      {% else %}
+      <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">No data</span>
+      {% endif %}
+    </button>
+    <button id="tab-btn-deck" onclick="switchTab('deck')" class="tab-btn">
+      Deck Quality
+      {% if deck and deck.has_data and deck.overall_score is not none %}
+      <span class="tab-badge" style="background:#EFF6FF;color:#2563EB">DQ {{ deck.overall_score }}</span>
+      {% elif deck and deck.has_data %}
+      <span class="tab-badge" style="background:#EFF6FF;color:#2563EB">Limited</span>
       {% else %}
       <span class="tab-badge" style="background:#F1F5F9;color:#94A3B8">No data</span>
       {% endif %}
@@ -964,6 +985,133 @@
   {% endif %}
   </div><!-- /tab-pane-cqual -->
 
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB PANEL 4: DECK QUALITY — purpose-aware slide audit
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-pane-deck" class="hidden">
+  {% if deck and deck.has_data %}
+  <div class="relative z-10 mb-8">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div>
+        <h2 class="text-sm font-semibold text-[#0F172A]">Purpose-Aware Deck Audit</h2>
+        <p class="text-xs text-gray-500">幻灯片本身的独立诊断 · 不计入演讲者其他三项评分</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="text-xs px-3 py-1.5 rounded-full border font-mono"
+              style="color:#2563EB;background:#EFF6FF;border-color:#BFDBFE">
+          {{ deck.overlay_label }}
+        </span>
+        <span class="text-xs px-3 py-1.5 rounded-full border font-mono text-slate-500 border-slate-200 bg-white">
+          {{ deck.reviewed_slides }} slide(s) audited
+        </span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+      <div class="deck-card p-6 flex items-center gap-5">
+        <div class="relative w-20 h-20 flex-shrink-0">
+          <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E2E8F0" stroke-width="3.5"/>
+            {% if deck.overall_score is not none %}
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#2563EB" stroke-width="3.5"
+                    stroke-dasharray="{{ deck.overall_score }} {{ 100 - deck.overall_score }}" stroke-linecap="round"/>
+            {% endif %}
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-lg font-bold text-[#0F172A]">{{ deck.overall_score if deck.overall_score is not none else '—' }}</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">Deck Score</p>
+          {% if deck.overall_score is not none %}
+          <p class="text-3xl font-bold text-[#0F172A]">{{ deck.overall_score }}<span class="text-slate-400 text-xl">/100</span></p>
+          {% else %}
+          <p class="text-sm font-semibold text-slate-500">Evidence limited</p>
+          {% endif %}
+          <p class="text-[11px] text-slate-400 mt-1">综合已完成的页面评价</p>
+        </div>
+      </div>
+      <div class="deck-card p-5 lg:col-span-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Purpose overlay</p>
+        <p class="text-sm font-bold text-[#0F172A] mb-1">{{ deck.overlay_label }}</p>
+        <p class="text-xs text-slate-600 leading-relaxed">{{ deck.overlay_reason }}</p>
+        <div class="mt-3 flex gap-2 text-[10px]">
+          <span class="px-2 py-1 rounded bg-slate-100 text-slate-500">Rubric {{ deck.rubric_version }}</span>
+          <span class="px-2 py-1 rounded bg-blue-50 text-blue-700">Deck only</span>
+        </div>
+      </div>
+    </div>
+
+    {% if deck_evidence_by_slide %}
+    <div class="mb-6">
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
+        <div>
+          <h3 class="text-sm font-semibold text-[#0F172A]">Slide-by-Slide Review</h3>
+          <p class="text-xs text-slate-400 mt-0.5">逐页查看评价语与页面证据 · 点击缩略图放大查看</p>
+        </div>
+        <span class="text-xs font-mono text-slate-500">{{ deck_evidence_by_slide | length }} referenced slide(s)</span>
+      </div>
+      <div class="space-y-4">
+        {% for slide_evidence in deck_evidence_by_slide %}
+        <div id="deck-evidence-slide-{{ slide_evidence.slide_id }}"
+             class="deck-card deck-evidence-row p-4 md:p-5"
+             data-slide-id="{{ slide_evidence.slide_id }}">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-5">
+            <div class="md:col-span-4 lg:col-span-3">
+              <button type="button" class="deck-thumb-button"
+                      data-slide-src="{{ deck_image_base }}/{{ slide_evidence.slide_id }}"
+                      data-slide-title="S{{ slide_evidence.slide_id }} · {{ slide_evidence.slide_title | e }}"
+                      onclick="openDeckSlide(this)">
+                <img class="deck-thumb" loading="lazy"
+                     src="{{ deck_image_base }}/{{ slide_evidence.slide_id }}?thumb=1"
+                     alt="Slide {{ slide_evidence.slide_id }} thumbnail">
+              </button>
+              <div class="flex items-start gap-2 mt-2">
+                <span class="text-[10px] font-mono px-2 py-1 rounded bg-blue-50 text-blue-700">S{{ slide_evidence.slide_id }}</span>
+                <p class="text-xs font-semibold text-slate-700 leading-snug">{{ slide_evidence.slide_title }}</p>
+              </div>
+            </div>
+            <div class="md:col-span-8 lg:col-span-9">
+              <div class="space-y-3">
+                {% for item in slide_evidence.dimensions %}
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3">
+                  <p class="text-xs text-slate-700 leading-relaxed">{{ item.analysis_zh }}</p>
+                  {% if item.quote %}
+                  <div class="mt-2.5 border-l-2 border-blue-200 pl-3">
+                    <p class="text-[9px] font-mono text-slate-400 mb-1">{{ '视觉证据' if item.evidence_type == 'visual_observation' else '页面证据' }}</p>
+                    <p class="text-[11px] text-slate-500 leading-relaxed">“{{ item.quote }}”</p>
+                  </div>
+                  {% endif %}
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if deck.strengths %}
+    <div class="deck-card p-5">
+      <h3 class="text-sm font-semibold text-[#0F172A] mb-3">Evidence-Based Strengths</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% for strength in deck.strengths %}
+        <div class="good-item"><span class="text-green-600">✓</span><p class="text-xs text-slate-700 leading-relaxed">{{ strength }}</p></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="relative z-10 text-center py-16">
+    <p class="text-slate-500 text-sm font-semibold mb-1">No deck audit data</p>
+    <p class="text-slate-400 text-xs max-w-sm mx-auto">这是旧版报告或当前上传材料不可用；原有三个报告模块仍可正常查看。</p>
+  </div>
+  {% endif %}
+  </div><!-- /tab-pane-deck -->
+
   <!-- CTA -->
   <div class="relative z-10 flex gap-4 pb-10">
     <a href="/" class="flex-1 btn-primary font-semibold py-4 rounded-xl text-sm
@@ -983,6 +1131,25 @@
       </svg>
       Export Report
     </button>
+  </div>
+</div>
+
+<!-- Original-slide lightbox for Deck Quality evidence -->
+<div id="deck-slide-modal" class="modal-bg" onclick="if(event.target===this)closeDeckSlide()">
+  <div class="modal-box" style="max-width:980px;width:min(94vw,980px);padding:1rem">
+    <div class="flex items-center justify-between gap-3 mb-3 px-1">
+      <p id="deck-slide-modal-title" class="text-sm font-semibold text-[#0F172A] truncate">Original slide</p>
+      <button type="button" onclick="closeDeckSlide()" aria-label="关闭幻灯片预览"
+              class="text-slate-400 hover:text-slate-700 transition-colors">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+      <img id="deck-slide-modal-image" src="" alt="Original slide preview"
+           style="display:block;width:100%;max-height:78vh;object-fit:contain;background:#F8FAFC">
+    </div>
   </div>
 </div>
 
@@ -1340,24 +1507,45 @@
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
   function switchTab(name) {
-    const tabs   = ['pq', 'cq', 'cqual'];
-    const colors = { pq: 'active', cq: 'active-cq', cqual: 'active-cqual' };
+    const tabs   = ['pq', 'cq', 'cqual', 'deck'];
+    const colors = { pq: 'active', cq: 'active-cq', cqual: 'active-cqual', deck: 'active-deck' };
     tabs.forEach(function(t) {
       var pane = document.getElementById('tab-pane-' + t);
       var btn  = document.getElementById('tab-btn-' + t);
       if (!pane || !btn) return;
       if (t === name) {
         pane.classList.remove('hidden');
-        btn.classList.remove('active', 'active-cq', 'active-cqual');
+        btn.classList.remove('active', 'active-cq', 'active-cqual', 'active-deck');
         btn.classList.add(colors[name]);
       } else {
         pane.classList.add('hidden');
-        btn.classList.remove('active', 'active-cq', 'active-cqual');
+        btn.classList.remove('active', 'active-cq', 'active-cqual', 'active-deck');
       }
     });
     // Reset PQ performance view to "What I did well" when switching back to PQ
     if (name === 'pq') switchPerfView('good');
   }
+
+  // ── Deck slide preview ────────────────────────────────────────────────────
+  function openDeckSlide(button) {
+    var modal = document.getElementById('deck-slide-modal');
+    document.getElementById('deck-slide-modal-image').src = button.dataset.slideSrc || '';
+    document.getElementById('deck-slide-modal-title').textContent = button.dataset.slideTitle || 'Original slide';
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDeckSlide() {
+    var modal = document.getElementById('deck-slide-modal');
+    if (!modal) return;
+    modal.classList.remove('open');
+    document.getElementById('deck-slide-modal-image').src = '';
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') closeDeckSlide();
+  });
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
   function openModal(key) {

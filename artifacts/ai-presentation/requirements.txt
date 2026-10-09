@@ -7,3 +7,4 @@ Pillow>=10.0
 requests>=2.31
 json-repair>=0.25
 gunicorn>=21.0
+python-dotenv>=1.0

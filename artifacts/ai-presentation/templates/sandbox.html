@@ -15,7 +15,11 @@
 
   /* Sidebar slide thumbnails */
   .sidebar-thumb {
-    cursor: default;
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    color: inherit;
+    text-align: left;
     border-radius: 0.75rem;
     overflow: hidden;
     border: 2px solid transparent;
@@ -26,6 +30,9 @@
     border-color: #16A34A;
     box-shadow: 0 0 0 2px rgba(217,72,31,0.15);
   }
+  .sidebar-thumb:hover { border-color:#86EFAC; box-shadow:0 2px 8px rgba(15,23,42,0.10); }
+  .sidebar-thumb:focus-visible { outline:3px solid rgba(22,163,74,0.28); outline-offset:2px; }
+  .sidebar-thumb.navigating { opacity:0.55; pointer-events:none; }
   .sidebar-thumb img { width:100%; display:block; object-fit:contain; }
   .sidebar-thumb .thumb-label {
     font-size:0.6rem; color:#64748B; padding:2px 4px 4px;
@@ -94,16 +101,19 @@
          id="slideOutlineSidebar"
          style="width:8rem;max-height:calc(100vh - 160px);scrollbar-width:thin;scrollbar-color:#334155 transparent;">
       {% for slide in slides %}
-      <div class="sidebar-thumb relative {% if slide.page == state.current_page %}active{% endif %}"
-           id="sthumb-{{ slide.page }}"
-           data-page="{{ slide.page }}">
+      <button type="button"
+              class="sidebar-thumb relative {% if slide.page == state.current_page %}active{% endif %}"
+              id="sthumb-{{ slide.page }}"
+              data-page="{{ slide.page }}"
+              aria-label="切换到幻灯片 {{ slide.page }}"
+              onclick="goToSlide({{ slide.page }})">
         <img src="/x/slide-image/{{ slide.page }}?v={{ deck_version }}"
              loading="lazy"
              alt="Slide {{ slide.page }}"
              onerror="this.style.opacity='0.3'">
         <span class="thumb-num">{{ slide.page }}</span>
         <p class="thumb-label">{{ (slide.title or '') | truncate(20, True, '') }}</p>
-      </div>
+      </button>
       {% endfor %}
     </div>
 
@@ -701,6 +711,55 @@
   }
 
   // ── Slide navigation ──────────────────────────────────────────────────────
+  let slideJumpPending = false;
+
+  async function goToSlide(page) {
+    page = Number(page);
+    if (!Number.isInteger(page) || page < 1 || page > state.total_pages) return;
+    if (page === state.current_page || slideJumpPending) return;
+    if (state.in_qa_mode || !document.getElementById('academicQaPanel').classList.contains('hidden')) {
+      showToast('请先完成当前问答，再切换幻灯片。');
+      return;
+    }
+
+    slideJumpPending = true;
+    document.querySelectorAll('.sidebar-thumb').forEach(el => el.classList.add('navigating'));
+    const fromPage = state.current_page;
+    const narration = document.getElementById('narrationInput').value.trim();
+    const wasRecordingNarration = (audioMode === 'narration');
+
+    try {
+      const res = await fetch('/x/go-to-slide', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ page, narration }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to change slide.');
+
+      if (narration) {
+        presentationTranscripts.push({
+          page: fromPage, text: narration,
+          words: narration.split(/\s+/).filter(Boolean).length,
+        });
+      }
+      if (wasRecordingNarration) _onSlideCapture(fromPage, narration);
+      const restartNarration = _sealNarrationAtSlideBoundary();
+
+      state.current_page = data.page;
+      currentSlideTranscript = '';
+      document.getElementById('narrationInput').value = '';
+      updateSlideDisplay(data.slide);
+      if (restartNarration) setTimeout(() => _startNarrationRec(true), 0);
+      addLog(`↪ Slide ${fromPage} → ${data.page}`);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || 'Unable to change slide.');
+    } finally {
+      slideJumpPending = false;
+      document.querySelectorAll('.sidebar-thumb').forEach(el => el.classList.remove('navigating'));
+    }
+  }
+
   async function finishSlide() {
     const btn = document.getElementById('finishSlideBtn');
     btn.disabled = true;
