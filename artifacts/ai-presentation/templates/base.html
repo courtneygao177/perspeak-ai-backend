@@ -156,7 +156,7 @@
   <!-- Top Nav -->
   <nav class="fixed top-0 left-0 right-0 z-50 glass-strong border-b" style="border-color:#E2E8F0">
     <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2.5">
+      <a href="{{ url_for('home') }}" class="flex items-center gap-2.5">
         <div class="w-7 h-7 flex items-center justify-center text-sm font-extrabold"
              style="background:#16A34A;color:#FFFFFF;border-radius:6px">P</div>
         <span class="font-extrabold tracking-tight" style="color:#0F172A;letter-spacing:-.01em">Perspeak<span style="color:#16A34A">AI</span></span>
@@ -166,6 +166,7 @@
       <div class="flex items-center gap-6 text-sm" style="color:#64748B">
         {% block nav_steps %}{% endblock %}
         {% if user %}
+        <a href="{{ url_for('home') }}" class="text-xs font-semibold hover:text-slate-900">场景首页</a>
         <a href="/history" class="text-xs font-semibold hover:text-slate-900">我的记录</a>
         {% if user.is_admin %}<a href="/admin" class="text-xs font-semibold hover:text-slate-900">管理后台</a>{% endif %}
         <form method="post" action="/logout" class="inline"><button class="text-xs font-semibold hover:text-slate-900">退出</button></form>

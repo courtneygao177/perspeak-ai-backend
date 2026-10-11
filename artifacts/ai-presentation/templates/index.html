@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}PerspeakAI — Train Your Talk{% endblock %}
+{% block title %}PerspeakAI — {{ 'Thesis Defense' if entry_scene == 'Thesis Defense' else 'Class Presentation' }}{% endblock %}
 
 {% block nav_steps %}
 <nav class="flex items-center gap-2 text-xs select-none">
@@ -46,8 +46,11 @@
         Own the Stage<br/><span class="text-gradient">Before You Step on It.</span>
       </h1>
       <p class="text-base leading-relaxed max-w-[52ch] mx-auto" style="color:#475569">
-        Upload your deck and present out loud to an AI examiner that interrupts,
-        asks follow-ups, and keeps score — so the real Q&amp;A feels like just another rep.
+        {% if entry_scene == 'Thesis Defense' %}
+        Upload your thesis deck and rehearse under structured academic questions before the real defense.
+        {% else %}
+        Upload your deck and present out loud to an AI examiner that asks follow-ups and keeps score — so the real Q&amp;A feels like just another rep.
+        {% endif %}
       </p>
     </div>
 

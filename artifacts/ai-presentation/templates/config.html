@@ -138,7 +138,7 @@
           ] %}
           {% for val, icon, interrupt_type, bullets in scenarios %}
           <label class="config-card cursor-pointer group" data-group="scenario" data-value="{{ val }}">
-            <input type="radio" name="scenario" value="{{ val }}" class="sr-only" {% if val == 'Class Presentation' %}checked{% endif %}>
+            <input type="radio" name="scenario" value="{{ val }}" class="sr-only" {% if val == entry_scene %}checked{% endif %}>
             <div class="glass rounded-md p-5 border-2 transition-all duration-200 h-full"
                  style="border-color:transparent">
               <div class="font-mono text-[0.62rem] uppercase tracking-widest mb-2" style="color:#16A34A">{{ icon }}</div>
