@@ -11,7 +11,10 @@ const port = Number(process.env.PORT || 8787)
 const provider = {
   baseUrl: process.env.AGGREGATOR_API_BASE_URL || process.env.UNIFIED_BASE_URL || '',
   apiKey: process.env.AGGREGATOR_API_KEY || process.env.UNIFIED_API_KEY || '',
-  model: process.env.AGGREGATOR_MODEL || process.env.TEXT_MODEL || '',
+  // The Flask application uses gpt-4o as its existing text-model default.
+  // Keep the Group Project service aligned when the host has only the shared
+  // endpoint/key configured. A deployment can still override it explicitly.
+  model: process.env.AGGREGATOR_MODEL || process.env.TEXT_MODEL || 'gpt-4o',
 }
 const proxyUrl = process.env.OUTBOUND_PROXY_URL?.trim()
 const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined

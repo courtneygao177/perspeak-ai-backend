@@ -1,0 +1,35 @@
+# Insert these locations into the existing HTTPS server block for perspeakai.cn
+# after the production preview has passed. Keep the existing TLS directives and
+# the existing `location /` block intact.
+
+location = /group-project {
+    return 301 /group-project/;
+}
+
+location = /_perspeak_group_project_auth {
+    internal;
+    proxy_pass http://127.0.0.1:8000/x/group-project-auth;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header Cookie $http_cookie;
+    proxy_set_header X-Original-URI $request_uri;
+}
+
+location ^~ /group-project/api/ {
+    auth_request /_perspeak_group_project_auth;
+    proxy_pass http://127.0.0.1:8787/api/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 30s;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+}
+
+location ^~ /group-project/ {
+    auth_request /_perspeak_group_project_auth;
+    alias /opt/apps/perspeak-current/artifacts/group-project/dist/;
+    try_files $uri $uri/ /group-project/index.html;
+}

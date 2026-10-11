@@ -15,6 +15,11 @@ perspeakai.cn/group-project/api/
   Nginx reverse proxy -> Group Project Express on 127.0.0.1:8787/api/
 ```
 
+The Nginx locations must use Flask's internal
+`/x/group-project-auth` subrequest before serving either the static app or its
+API. This keeps a direct `/group-project/` URL behind the existing PerspeakAI
+login instead of exposing a paid model endpoint to anonymous traffic.
+
 ## Build variables
 
 Build the client from `artifacts/group-project` with:
@@ -36,6 +41,10 @@ the Group Project-specific `AGGREGATOR_API_BASE_URL`, `AGGREGATOR_API_KEY`, and
 `UNIFIED_BASE_URL`, `UNIFIED_API_KEY`, and `TEXT_MODEL` values. Do not expose
 either set in the browser or commit them to this repository.
 
+When `TEXT_MODEL` is not set, the director uses `gpt-4o`, matching the Flask
+application's established default. A host may set `AGGREGATOR_MODEL` to
+override it without changing application code.
+
 Set `GROUP_PROJECT_URL=/group-project/` for Flask. This activates the Group
 Project card on the scenario home.
 
@@ -48,3 +57,14 @@ Before enabling the card in production:
 3. Verify `GET /group-project/api/health` through Nginx.
 4. Verify a full Group Project run and Replay on the staging site.
 5. Run the existing Flask test suite, then deploy through the existing rollback-safe release process.
+
+## Rollout order
+
+Run the `Deploy PerspeakAI preview` GitHub Action first with
+`bootstrap_server=true`. It writes only the isolated preview service, its
+Nginx route, and its own release files. Once the preview is accepted, use the
+separately approved production workflow to install the production Group
+Project service. Then merge
+`deploy/perspeak-production-group-project-nginx.snippet` into the existing
+HTTPS `perspeakai.cn` server block, run `nginx -t`, and reload Nginx before
+enabling the card for users.

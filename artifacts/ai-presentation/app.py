@@ -207,7 +207,7 @@ def options_handler(p=""):
 @app.before_request
 def require_account_for_product_routes():
     """Keep the landing page public while protecting all product data routes."""
-    public = {"home", "login", "register", "logout", "static", "options_handler"}
+    public = {"home", "login", "register", "logout", "static", "options_handler", "group_project_auth"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if _current_user():
@@ -7387,6 +7387,18 @@ def group_project_entry():
         group_project_url=group_project_url,
         user=_current_user(),
     )
+
+
+@app.route("/x/group-project-auth")
+def group_project_auth():
+    """Internal Nginx subrequest used to protect the React module and its API.
+
+    The Group Project static files are served by Nginx rather than Flask, so
+    this endpoint lets Nginx reuse the signed Flask session before it serves
+    either the app shell or a director request. It intentionally returns a
+    status only and never exposes account data.
+    """
+    return ("", 204) if _current_user() else ("", 401)
 
 
 def _safe_next(value):

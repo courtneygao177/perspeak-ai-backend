@@ -7,13 +7,16 @@ readonly APP_ROOT="/opt/apps"
 readonly RELEASES_DIR="${APP_ROOT}/perspeak-staging-releases"
 readonly CURRENT_LINK="${APP_ROOT}/perspeak-staging-current"
 readonly APP_DIR_REL="artifacts/ai-presentation"
+readonly GROUP_APP_DIR_REL="artifacts/group-project"
 readonly WHEELS_DIR_REL=".deploy-wheels"
 readonly SERVICE_NAME="perspeak-staging"
+readonly GROUP_SERVICE_NAME="perspeak-group-project-staging"
 readonly SERVICE_USER="perspeak-staging"
 readonly BASE_PYTHON="${APP_ROOT}/perspeak-venv311-local/bin/python"
 readonly DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
 readonly DROPIN_FILE="${DROPIN_DIR}/release-path.conf"
 readonly SERVICE_PORT="8001"
+readonly GROUP_SERVICE_PORT="8788"
 
 fail() {
   echo "Preview deployment failed: $*" >&2
@@ -44,7 +47,12 @@ trap cleanup_release EXIT
 tar -xzf "$archive" -C "$release_dir" --no-same-owner --no-same-permissions
 [[ -f "${release_dir}/${APP_DIR_REL}/app.py" ]] || fail "app.py is absent from the release"
 [[ -f "${release_dir}/${APP_DIR_REL}/requirements.txt" ]] || fail "requirements.txt is absent from the release"
+[[ -f "${release_dir}/${GROUP_APP_DIR_REL}/package.json" ]] || fail "Group Project package.json is absent from the release"
+[[ -f "${release_dir}/${GROUP_APP_DIR_REL}/package-lock.json" ]] || fail "Group Project package-lock.json is absent from the release"
+[[ -f "${release_dir}/${GROUP_APP_DIR_REL}/server/index.mjs" ]] || fail "Group Project director is absent from the release"
+[[ -f "${release_dir}/${GROUP_APP_DIR_REL}/dist/index.html" ]] || fail "Group Project static build is absent from the release"
 [[ -d "${release_dir}/${WHEELS_DIR_REL}" ]] || fail "offline dependency wheels are absent from the release"
+command -v npm >/dev/null || fail "npm is missing"
 chown -R "${SERVICE_USER}:${SERVICE_USER}" "$release_dir"
 
 # A virtual environment embeds absolute interpreter paths, so it is created
@@ -57,6 +65,7 @@ runuser -u "$SERVICE_USER" -- "${release_dir}/.venv/bin/python" -m py_compile \
   "${release_dir}/${APP_DIR_REL}/app.py" \
   "${release_dir}/${APP_DIR_REL}/server_store.py" \
   "${release_dir}/${APP_DIR_REL}/audio_engine.py"
+runuser -u "$SERVICE_USER" -- npm ci --omit=dev --ignore-scripts --prefix "${release_dir}/${GROUP_APP_DIR_REL}"
 
 trap - EXIT
 
@@ -86,10 +95,11 @@ rollback() {
   fi
   systemctl daemon-reload
   systemctl restart "$SERVICE_NAME" || true
+  systemctl restart "$GROUP_SERVICE_NAME" || true
 }
 
 systemctl daemon-reload
-if ! systemctl restart "$SERVICE_NAME"; then
+if ! systemctl restart "$SERVICE_NAME" || ! systemctl restart "$GROUP_SERVICE_NAME"; then
   rollback
   fail "systemd could not start the new release"
 fi
@@ -105,6 +115,11 @@ done
 if [[ $healthy -ne 1 ]]; then
   rollback
   fail "the new release did not pass its local health check"
+fi
+
+if ! curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${GROUP_SERVICE_PORT}/api/health" >/dev/null; then
+  rollback
+  fail "the Group Project director did not pass its local health check"
 fi
 
 rm -f "$archive"
