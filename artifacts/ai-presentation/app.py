@@ -207,7 +207,7 @@ def options_handler(p=""):
 @app.before_request
 def require_account_for_product_routes():
     """Keep the landing page public while protecting all product data routes."""
-    public = {"index", "login", "register", "logout", "static", "options_handler"}
+    public = {"home", "login", "register", "logout", "static", "options_handler", "group_project_auth"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if _current_user():
@@ -7342,23 +7342,73 @@ def transcribe_audio(audio_file):
 # PAGE ROUTES
 # ─────────────────────────────────────────────
 
-@app.route("/")
-def index():
-    # Starting over resets only the active practice, never the signed-in user.
+def _reset_active_practice():
+    """Clear a rehearsal without clearing the signed-in account."""
     for key in ("slide_key", "filename", "file_key", "filepath", "answers", "qa_bank",
-                "config", "challenge_seed", "state", "report_key", "practice_id"):
+                "config", "challenge_seed", "state", "report_key", "practice_id", "entry_scene"):
         session.pop(key, None)
-    return render_template("index.html", ai_enabled=AI_ENABLED, user=_current_user())
+
+
+@app.route("/")
+def home():
+    """The product-level entry point. Individual drills start from their own routes."""
+    return render_template("home.html", ai_enabled=AI_ENABLED, user=_current_user())
+
+
+def _render_upload_entry(entry_scene):
+    _reset_active_practice()
+    session["entry_scene"] = entry_scene
+    return render_template(
+        "index.html",
+        ai_enabled=AI_ENABLED,
+        user=_current_user(),
+        entry_scene=entry_scene,
+    )
+
+
+@app.route("/presentation")
+def presentation_entry():
+    return _render_upload_entry("Class Presentation")
+
+
+@app.route("/thesis-defense")
+def thesis_defense_entry():
+    return _render_upload_entry("Thesis Defense")
+
+
+@app.route("/group-project")
+def group_project_entry():
+    # The React/Express Group Project module is mounted independently during
+    # deployment. Keeping the URL in configuration lets Flask own navigation
+    # without hard-coding a local development port into the public product.
+    group_project_url = (os.environ.get("GROUP_PROJECT_URL") or "").strip()
+    return render_template(
+        "group_project_entry.html",
+        group_project_url=group_project_url,
+        user=_current_user(),
+    )
+
+
+@app.route("/x/group-project-auth")
+def group_project_auth():
+    """Internal Nginx subrequest used to protect the React module and its API.
+
+    The Group Project static files are served by Nginx rather than Flask, so
+    this endpoint lets Nginx reuse the signed Flask session before it serves
+    either the app shell or a director request. It intentionally returns a
+    status only and never exposes account data.
+    """
+    return ("", 204) if _current_user() else ("", 401)
 
 
 def _safe_next(value):
-    return value if value and value.startswith("/") and not value.startswith("//") else url_for("index")
+    return value if value and value.startswith("/") and not value.startswith("//") else url_for("home")
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if _current_user():
-        return redirect(url_for("index"))
+        return redirect(url_for("home"))
     error = None
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
@@ -7384,7 +7434,7 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if _current_user():
-        return redirect(url_for("index"))
+        return redirect(url_for("home"))
     error = None
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
@@ -7402,7 +7452,7 @@ def login():
 @app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    return redirect(url_for("index"))
+    return redirect(url_for("home"))
 
 
 @app.route("/history")
@@ -7435,14 +7485,20 @@ def admin_dashboard():
 @app.route("/config")
 def config_page():
     if "slide_key" not in session and "slides" not in session:
-        return redirect(url_for("index"))
-    return render_template("config.html", slides=_load_slides(session), ai_enabled=AI_ENABLED, user=_current_user())
+        return redirect(url_for("home"))
+    return render_template(
+        "config.html",
+        slides=_load_slides(session),
+        ai_enabled=AI_ENABLED,
+        user=_current_user(),
+        entry_scene=session.get("entry_scene", "Class Presentation"),
+    )
 
 
 @app.route("/sandbox")
 def sandbox():
     if "state" not in session:
-        return redirect(url_for("index"))
+        return redirect(url_for("home"))
     state = session["state"]
     slides = _load_slides(session)
     cfg = session.get("config", {})
@@ -8247,7 +8303,7 @@ def report():
     if not report_data:
         # Cookie lost or file missing — restart from home
         app.logger.warning(f"[Report] No report data found for key={report_key!r} — redirecting home")
-        return redirect(url_for("index"))
+        return redirect(url_for("home"))
     return _render_report(report_data, session.get("config", {}), None)
 
 

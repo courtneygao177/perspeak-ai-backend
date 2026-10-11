@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time Alibaba Cloud setup. Run as root on the server:
 #   sudo bash bootstrap-aliyun.sh /home/admin/perspeak-github-actions.pub
+# Add --include-production only during the separately approved production cutover.
 # The public key file must contain the GitHub Actions deploy key only.
 set -Eeuo pipefail
 
@@ -11,12 +12,24 @@ readonly STAGING_USER="perspeak-staging"
 readonly STAGING_ENV_FILE="/etc/perspeak-staging.env"
 readonly STAGING_DATA_DIR="/var/lib/perspeak-staging"
 readonly STAGING_SERVICE="perspeak-staging.service"
+readonly STAGING_GROUP_SERVICE="perspeak-group-project-staging.service"
+readonly PRODUCTION_GROUP_SERVICE="perspeak-group-project.service"
+readonly PRODUCTION_USER="perspeak"
 readonly STAGING_NGINX_CONFIG="/etc/nginx/conf.d/perspeak-staging.conf"
 
 [[ ${EUID} -eq 0 ]] || { echo "Run this script with sudo." >&2; exit 1; }
-[[ $# -eq 1 ]] || { echo "Usage: $0 /path/to/perspeak-github-actions.pub" >&2; exit 1; }
+include_production=false
+if [[ ${1:-} == "--include-production" ]]; then
+  include_production=true
+  shift
+fi
+[[ $# -eq 1 ]] || { echo "Usage: $0 [--include-production] /path/to/perspeak-github-actions.pub" >&2; exit 1; }
 [[ -s "$1" ]] || { echo "Public key file is missing or empty." >&2; exit 1; }
 id "$DEPLOY_USER" >/dev/null || { echo "User $DEPLOY_USER does not exist." >&2; exit 1; }
+command -v node >/dev/null || { echo "Node.js must be installed before bootstrap." >&2; exit 1; }
+if $include_production; then
+  id "$PRODUCTION_USER" >/dev/null || { echo "User $PRODUCTION_USER does not exist." >&2; exit 1; }
+fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ -f "${script_dir}/perspeak-deploy" ]] || { echo "perspeak-deploy must be beside this script." >&2; exit 1; }
@@ -52,6 +65,15 @@ if [[ ! -f "$STAGING_ENV_FILE" ]]; then
   rm -f "$staging_env_tmp"
 fi
 
+# Do not make the landing-page card live until this script has installed the
+# matching Nginx route and Group Project service.
+if ! grep -q '^GROUP_PROJECT_URL=' "$STAGING_ENV_FILE"; then
+  printf 'GROUP_PROJECT_URL=/group-project/\n' >>"$STAGING_ENV_FILE"
+fi
+if $include_production && ! grep -q '^GROUP_PROJECT_URL=' /etc/perspeak-ai.env; then
+  printf 'GROUP_PROJECT_URL=/group-project/\n' >>/etc/perspeak-ai.env
+fi
+
 cat >"/etc/systemd/system/${STAGING_SERVICE}" <<'EOF'
 [Unit]
 Description=PerspeakAI staging Flask application
@@ -74,10 +96,65 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
+cat >"/etc/systemd/system/${STAGING_GROUP_SERVICE}" <<'EOF'
+[Unit]
+Description=PerspeakAI Group Project staging director
+After=network.target
+
+[Service]
+Type=simple
+User=perspeak-staging
+Group=perspeak-staging
+WorkingDirectory=/opt/apps/perspeak-staging-current/artifacts/group-project
+EnvironmentFile=/etc/perspeak-staging.env
+Environment=NODE_ENV=production
+Environment=PORT=8788
+ExecStart=/usr/bin/node server/index.mjs
+Restart=always
+RestartSec=5
+UMask=027
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+if $include_production; then
+  # This is only written during the separately approved production cutover.
+  # The staging bootstrap never touches production's service configuration.
+  cat >"/etc/systemd/system/${PRODUCTION_GROUP_SERVICE}" <<'EOF'
+[Unit]
+Description=PerspeakAI Group Project director
+After=network.target
+
+[Service]
+Type=simple
+User=perspeak
+Group=perspeak
+WorkingDirectory=/opt/apps/perspeak-current/artifacts/group-project
+EnvironmentFile=/etc/perspeak-ai.env
+Environment=NODE_ENV=production
+Environment=PORT=8787
+ExecStart=/usr/bin/node server/index.mjs
+Restart=always
+RestartSec=5
+UMask=027
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
 install -m 0644 -o root -g root "${script_dir}/perspeak-staging-nginx.conf" "$STAGING_NGINX_CONFIG"
 nginx -t
 systemctl daemon-reload
-systemctl enable "$STAGING_SERVICE" >/dev/null
+systemctl enable "$STAGING_SERVICE" "$STAGING_GROUP_SERVICE" >/dev/null
+if $include_production; then
+  systemctl enable "$PRODUCTION_GROUP_SERVICE" >/dev/null
+fi
 systemctl reload nginx
 
 sudoers_tmp="$(mktemp)"

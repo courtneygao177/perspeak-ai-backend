@@ -1,0 +1,31 @@
+{
+  "name": "perspeakai-group-project",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"vite --host 127.0.0.1\" \"node server/index.mjs\"",
+    "client": "vite --host 127.0.0.1",
+    "server": "node server/index.mjs",
+    "build": "tsc -b && vite build",
+    "test:scenario": "node --test test/scenario-engine.test.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest",
+    "undici": "^8.10.0",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4"
+  }
+}

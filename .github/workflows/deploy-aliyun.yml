@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - artifacts/ai-presentation/**
+      - artifacts/group-project/**
       - deploy/**
       - .github/workflows/deploy-aliyun.yml
 
@@ -40,17 +41,29 @@ jobs:
         with:
           python-version: '3.11'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: artifacts/group-project/package-lock.json
+
       - name: Install and test
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r artifacts/ai-presentation/requirements.txt pytest
           python -m py_compile artifacts/ai-presentation/app.py artifacts/ai-presentation/mvp_store.py artifacts/ai-presentation/server_store.py artifacts/ai-presentation/audio_engine.py
           python -m pytest artifacts/ai-presentation/tests -q
+          cd artifacts/group-project
+          npm ci
+          npm run test:scenario
+          GROUP_PROJECT_BASE=/group-project/ VITE_GROUP_PROJECT_API_BASE=/group-project/api npm run build
 
       - name: Build a self-contained release package
         run: |
           python -m pip wheel --wheel-dir .deploy-wheels -r artifacts/ai-presentation/requirements.txt
-          tar -czf "/tmp/perspeak-release-${GITHUB_SHA}.tgz" artifacts/ai-presentation .deploy-wheels
+          tar --exclude='artifacts/group-project/node_modules' --exclude='artifacts/group-project/.env' \
+            -czf "/tmp/perspeak-release-${GITHUB_SHA}.tgz" \
+            artifacts/ai-presentation artifacts/group-project .deploy-wheels
 
       - name: Configure SSH
         run: |
@@ -68,7 +81,7 @@ jobs:
         run: |
           ssh-keygen -y -f ~/.ssh/id_ed25519 > /tmp/perspeak-github-actions.pub
           scp -q deploy/perspeak-deploy deploy/perspeak-staging-deploy deploy/perspeak-staging-nginx.conf deploy/bootstrap-aliyun.sh /tmp/perspeak-github-actions.pub "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
-          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "sudo bash /tmp/bootstrap-aliyun.sh /tmp/perspeak-github-actions.pub"
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "sudo bash /tmp/bootstrap-aliyun.sh --include-production /tmp/perspeak-github-actions.pub"
 
       - name: Upload and activate the release
         run: |
@@ -77,5 +90,7 @@ jobs:
           scp -q "$archive" "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_archive}"
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "sudo /usr/local/sbin/perspeak-deploy '${GITHUB_SHA}' '${remote_archive}'"
 
-      - name: Verify the active service
-        run: ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/ >/dev/null"
+      - name: Verify the active services
+        run: |
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/ >/dev/null"
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8787/api/health >/dev/null"

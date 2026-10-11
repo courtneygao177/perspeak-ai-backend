@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}PerspeakAI — Group Project{% endblock %}
+
+{% block content %}
+<div class="min-h-screen px-6 py-16" style="background:#F8FAFC">
+  <div class="max-w-3xl mx-auto bg-white border rounded-2xl p-8 md:p-12 animate-fade-in" style="border-color:#E2E8F0;box-shadow:0 8px 24px rgba(15,23,42,.05)">
+    <div class="w-12 h-12 flex items-center justify-center rounded-xl mb-7" style="background:#ECFDF5;color:#15803D">
+      <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+    </div>
+    <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#15803D">Group Project · Level 1</p>
+    <h1 class="text-3xl md:text-4xl font-extrabold mb-4" style="color:#0F172A">Run a clearer first meeting.</h1>
+    <p class="text-base leading-relaxed mb-8" style="color:#475569">在项目 Kickoff 中练习确定方向、澄清任务、邀请有用信息与确认承诺。你的个人表达和团队决策都会进入 Replay 复盘。</p>
+    {% if group_project_url %}
+    <a href="{{ group_project_url }}" class="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-lg" style="background:#0F172A;color:#FFFFFF">开始 Group Project <span>→</span></a>
+    {% else %}
+    <div class="p-4 rounded-lg border" style="border-color:#BBF7D0;background:#ECFDF5">
+      <p class="font-bold text-sm mb-1" style="color:#166534">Group Project 已准备好接入</p>
+      <p class="text-sm leading-relaxed" style="color:#475569">部署时配置 <code class="px-1 rounded" style="background:#FFFFFF">GROUP_PROJECT_URL</code> 即可把本入口连接至 Group Project 演练器。现有 Presentation 与 Thesis Defense 不会受到影响。</p>
+    </div>
+    {% endif %}
+    <a href="{{ url_for('home') }}" class="inline-block mt-7 text-sm font-bold" style="color:#475569">← 返回场景首页</a>
+  </div>
+</div>
+{% endblock %}

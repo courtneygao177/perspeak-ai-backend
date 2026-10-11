@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}PerspeakAI — Practice the Moment That Matters{% endblock %}
+
+{% block content %}
+<div class="min-h-screen px-6 py-14" style="background:linear-gradient(180deg,#F8FAFC 0%,#F1F5F9 100%)">
+  <div class="max-w-6xl mx-auto animate-fade-in">
+    <div class="max-w-3xl mb-12">
+      <div class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1.5 mb-5 border rounded-full" style="color:#15803D;background:#ECFDF5;border-color:#BBF7D0">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:#16A34A"></span>
+        PerspeakAI practice studio
+      </div>
+      <h1 class="text-4xl md:text-6xl font-extrabold leading-[1.08] tracking-tight mb-5" style="color:#0F172A;text-wrap:balance">
+        Practice the moment<br><span class="text-gradient">before it counts.</span>
+      </h1>
+      <p class="text-lg leading-relaxed max-w-[60ch]" style="color:#475569">
+        选择一个真实的英语沟通场景。先演练，再获得可执行的复盘与下一步训练建议。
+      </p>
+    </div>
+
+    <section aria-label="Choose a practice scenario" class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <a href="{{ url_for('presentation_entry') }}" class="group block p-7 bg-white border rounded-2xl transition-all hover:-translate-y-1" style="border-color:#E2E8F0;box-shadow:0 8px 24px rgba(15,23,42,.05)">
+        <div class="w-12 h-12 flex items-center justify-center mb-7 rounded-xl" style="background:#ECFDF5;color:#15803D">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 5h16v12H4zM8 21h8M12 17v4M8 9h8M8 13h5"/></svg>
+        </div>
+        <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#15803D">01 · Presentation</p>
+        <h2 class="text-2xl font-extrabold mb-3" style="color:#0F172A">Class Presentation</h2>
+        <p class="text-sm leading-relaxed mb-6" style="color:#64748B">上传课堂展示材料，在演讲、追问与复盘中练习清晰表达。</p>
+        <div class="flex items-center gap-2 text-sm font-bold" style="color:#0F172A">开始演练 <span class="transition-transform group-hover:translate-x-1">→</span></div>
+      </a>
+
+      <a href="{{ url_for('thesis_defense_entry') }}" class="group block p-7 bg-white border rounded-2xl transition-all hover:-translate-y-1" style="border-color:#E2E8F0;box-shadow:0 8px 24px rgba(15,23,42,.05)">
+        <div class="w-12 h-12 flex items-center justify-center mb-7 rounded-xl" style="background:#EFF6FF;color:#2563EB">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l9 5-9 5-9-5 9-5zM5 12v5c0 1.1 3.13 3 7 3s7-1.9 7-3v-5"/></svg>
+        </div>
+        <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#2563EB">02 · Thesis Defense</p>
+        <h2 class="text-2xl font-extrabold mb-3" style="color:#0F172A">Thesis Defense</h2>
+        <p class="text-sm leading-relaxed mb-6" style="color:#64748B">围绕你的研究材料，模拟答辩委员的学术追问与回应压力。</p>
+        <div class="flex items-center gap-2 text-sm font-bold" style="color:#0F172A">开始演练 <span class="transition-transform group-hover:translate-x-1">→</span></div>
+      </a>
+
+      <a href="{{ url_for('group_project_entry') }}" class="group block p-7 border rounded-2xl transition-all hover:-translate-y-1" style="background:#0F172A;border-color:#0F172A;box-shadow:0 8px 24px rgba(15,23,42,.14)">
+        <div class="w-12 h-12 flex items-center justify-center mb-7 rounded-xl" style="background:rgba(45,212,191,.18);color:#5EEAD4">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#5EEAD4">03 · Group Project</p>
+        <h2 class="text-2xl font-extrabold mb-3" style="color:#FFFFFF">Group Project</h2>
+        <p class="text-sm leading-relaxed mb-6" style="color:#CBD5E1">在多人协作中识别问题、表达立场、澄清任务并确认承诺。</p>
+        <div class="flex items-center gap-2 text-sm font-bold" style="color:#FFFFFF">进入协作模拟 <span class="transition-transform group-hover:translate-x-1">→</span></div>
+      </a>
+    </section>
+
+    <p class="mt-8 text-sm" style="color:#64748B">每次练习均保留你的表现记录；完成后可在“我的记录”查看复盘。</p>
+  </div>
+</div>
+{% endblock %}
