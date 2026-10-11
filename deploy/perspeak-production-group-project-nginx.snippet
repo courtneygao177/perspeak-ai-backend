@@ -30,6 +30,11 @@ location ^~ /group-project/api/ {
 
 location ^~ /group-project/ {
     auth_request /_perspeak_group_project_auth;
+    error_page 401 = @group_project_login;
     alias /opt/apps/perspeak-current/artifacts/group-project/dist/;
     try_files $uri $uri/ /group-project/index.html;
+}
+
+location @group_project_login {
+    return 302 /login?next=/group-project/;
 }
